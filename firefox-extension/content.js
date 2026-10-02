@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Section Loop (A-B repeat)
 // @namespace    yt-section-loop
-// @version      2.1.1
+// @version      1.0
 // @description  Repeat one or several sections of a YouTube video a chosen number of times. Drag the handles, type a timestamp, or grab the current time.
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -17,7 +17,7 @@
   if (window.top !== window.self && !/^\/embed\//.test(location.pathname)) return;
   // The marker lives in the DOM so the userscript and the extension never both attach to one page.
   if (document.documentElement.hasAttribute('data-ysl')) return;
-  document.documentElement.setAttribute('data-ysl', '2');
+  document.documentElement.setAttribute('data-ysl', '');
 
   const MIN_LEN = 0.5; // shortest section, in seconds
   const NEW_LOOP_LEN = 30;
@@ -87,6 +87,12 @@
     });
     return out;
   }
+
+  // DOM writes are skipped when the value is already there, so render() can be called freely.
+  const setText = (node, value) => { if (node.textContent !== value) node.textContent = value; };
+  const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
+  const setStyle = (node, name, value) => { if (node.style.getPropertyValue(name) !== value) node.style.setProperty(name, value); };
+  const pct = (x) => +x.toFixed(3) + '%';
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -215,6 +221,8 @@
     zoom: false,     // the slider shows only the area around the selected loop
     v0: 0,
     v1: 0,
+    laneW: 0,        // slider width in CSS pixels (measured when the panel is placed)
+    dpr: 1,
   };
 
   const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [] };
@@ -254,7 +262,7 @@
 
   function isAd() {
     const p = S.player;
-    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-streaming') || p.classList.contains('ad-interrupting'));
+    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'));
   }
 
   // What the player itself says is loaded. In a Firefox content script the page's
@@ -298,12 +306,11 @@
     saveSoon();
   }
 
-  // Reads a stored entry: { loops: [...] }, or the older single { a, b }.
+  // Reads a stored entry back into loops, dropping anything malformed.
   function loopsFromSaved(saved) {
-    if (!saved || typeof saved !== 'object') return null;
-    const list = Array.isArray(saved.loops) ? saved.loops : [saved];
+    if (!saved || !Array.isArray(saved.loops)) return null;
     const out = [];
-    for (const r of list) {
+    for (const r of saved.loops) {
       if (!r || !isNum(r.a) || !isNum(r.b) || !(r.b > r.a) || r.a < 0) continue;
       const l = newLoop(r.a, r.b, Number.isInteger(r.c) ? clamp(r.c, 0, PALETTE.length - 1) : out.length % PALETTE.length);
       if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
@@ -319,6 +326,7 @@
   /* ------------------------------------------------------------------ */
 
   const MEDIA_EVENTS = ['loadstart', 'emptied', 'loadedmetadata', 'durationchange'];
+  const WAKE_EVENTS = ['play', 'playing', 'pause', 'seeked', 'ratechange'];
   let syncTimer = 0;
 
   function scheduleSync() {
@@ -334,18 +342,28 @@
     scheduleSync();
   }
 
+  // A seek (by the user or by us) is never "playback running into the end of a loop".
+  function onSeeking() {
+    S.lastT = null;
+    wake();
+  }
+
   function bindVideo(v) {
     const old = S.video;
     if (old) {
       old.removeEventListener('timeupdate', check);
       old.removeEventListener('ended', onEnded);
+      old.removeEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) old.removeEventListener(t, onMediaEvent);
+      for (const t of WAKE_EVENTS) old.removeEventListener(t, wake);
     }
     S.video = v || null;
     if (v) {
       v.addEventListener('timeupdate', check);
       v.addEventListener('ended', onEnded);
+      v.addEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) v.addEventListener(t, onMediaEvent);
+      for (const t of WAKE_EVENTS) v.addEventListener(t, wake);
     }
   }
 
@@ -360,6 +378,8 @@
     S.zoom = false;
     S.loops = [];
     S.sel = 0;
+    cancelEdits();
+    hideTip();
     render();
   }
 
@@ -461,20 +481,24 @@
     try { v.currentTime = t; } catch (_) { /* ignore */ }
   }
 
-  // Where a loop really turns around. Near the end of the video we go back a
-  // little early so the player never reaches "ended" (which would trigger autoplay).
-  function loopEnd(l) {
+  // A loop that runs to the end of the video turns around this much early, so the player
+  // never reaches "ended" (which would trigger autoplay). Hidden tabs only get coarse timing.
+  function turnGuard() {
     const rate = (S.video && S.video.playbackRate) || 1;
-    const guard = document.hidden ? 0.1 + 0.3 * rate : 0.25;
+    return document.hidden ? 0.1 + 0.3 * rate : 0.25;
+  }
+
+  // Where a loop really turns around.
+  function loopEnd(l, guard = turnGuard()) {
     return Math.max(l.a + 0.2, Math.min(l.b, S.duration - guard));
   }
 
   // The loop the playhead is in. When loops overlap, the one that started last (the inner one) wins.
-  function loopAt(t) {
+  function loopAt(t, guard = turnGuard()) {
     let best = null;
     for (const l of S.loops) {
       if (S.active && exhausted(l)) continue;
-      if (t >= l.a - 0.3 && t < loopEnd(l) && (!best || l.a > best.a)) best = l;
+      if (t >= l.a - 0.3 && t < loopEnd(l, guard) && (!best || l.a > best.a)) best = l;
     }
     return best;
   }
@@ -497,22 +521,23 @@
     const t = v.currentTime;
     const prev = S.lastT;
     S.lastT = t;
-    if (prev === null || t <= prev || t - prev > Math.max(1, v.playbackRate * 0.75)) return;
+    // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
+    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
+    const guard = turnGuard();
     let crossed = null;
     for (const l of S.loops) {
       if (exhausted(l)) continue;
-      const end = loopEnd(l);
+      const end = loopEnd(l, guard);
       if (prev < end && t >= end) (crossed || (crossed = [])).push(l);
     }
     if (!crossed || turnAround(crossed, false)) return;
     // Those loops have played out. Carry on if another one is still ahead.
-    if (S.loops.some((l) => !exhausted(l) && loopEnd(l) > t)) {
-      if (P.after === 'next' && !loopAt(t)) {
+    if (S.loops.some((l) => !exhausted(l) && loopEnd(l, guard) > t)) {
+      if (P.after === 'next' && !loopAt(t, guard)) {
         const next = nextLoop(t); // skip whatever lies between the loops
         if (next) seekTo(next.a);
       }
       render();
-      renderLive();
     } else {
       finishRun();
     }
@@ -535,7 +560,6 @@
         seekTo(l.a);
         if (fromEnded) play();
         render();
-        renderLive();
         replay(ui.badge, 'ysl-pop');
         return true;
       }
@@ -551,7 +575,6 @@
     for (const l of S.loops) l.done = 0;
     if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
     render();
-    renderLive();
     toast(single ? `Loop finished · played ${single.count}×` : 'Loops finished');
   }
 
@@ -583,8 +606,7 @@
       if (v.paused || v.ended) play();
     }
     render();
-    renderLive();
-    kick();
+    wake();
     if (!S.open) {
       const l = S.loops[0];
       toast(S.loops.length > 1 ? `Looping ${S.loops.length} sections` : `Looping ${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`);
@@ -597,7 +619,6 @@
     S.lastT = null;
     for (const l of S.loops) l.done = 0;
     render();
-    renderLive();
     if (!S.open) toast('Loop off');
   }
 
@@ -665,22 +686,22 @@
     l.infinite = false;
     P.count = l.count;
     P.infinite = false;
+    S.finished = false;
     settleRun();
     rememberPrefs();
     rememberLoops();
     render();
-    renderLive();
   }
 
   function setInfinite(on) {
     if (!ready()) return;
     cur().infinite = !!on;
     P.infinite = !!on;
+    S.finished = false;
     settleRun();
     rememberPrefs();
     rememberLoops();
     render();
-    renderLive();
   }
 
   function setAfter(v) {
@@ -731,7 +752,6 @@
     if (S.zoom) fitView();
     rememberLoops();
     render();
-    renderLive();
     replay(ui.chips[S.sel].root, 'ysl-new');
   }
 
@@ -743,12 +763,12 @@
     }
     S.loops.splice(S.sel, 1);
     S.sel = Math.min(S.sel, S.loops.length - 1);
+    S.finished = false;
     hideTip();
     if (S.zoom) fitView();
     settleRun();
     rememberLoops();
     render();
-    renderLive();
   }
 
   function resetAll() {
@@ -763,41 +783,65 @@
       rememberLoops();
     }
     render();
-    renderLive();
   }
 
   /* ------------------------------------------------------------------ */
-  /* Frame loop (runs only while a run is on or the panel is open)      */
+  /* Scheduling                                                         */
   /* ------------------------------------------------------------------ */
 
+  // Per-frame work is only worth it while the picture is moving and either the panel is
+  // showing the playhead or a loop is about to turn around. The rest of the time a slow
+  // timer (plus the video's own events) keeps everything current.
+  const IDLE_MS = 250;
+  const TURN_LEAD = 0.75; // seconds of real time before a loop's end at which frames take over
   let raf = 0;
+  let idle = 0;
+
+  function wantsFrames() {
+    const v = S.video;
+    if (!v || v.paused || v.ended || document.hidden) return false;
+    if (S.open) return true;
+    if (!S.active) return false;
+    const t = v.currentTime;
+    const lead = TURN_LEAD * (v.playbackRate || 1);
+    const guard = turnGuard();
+    for (const l of S.loops) {
+      if (exhausted(l)) continue;
+      const left = loopEnd(l, guard) - t;
+      if (left >= 0 && left <= lead) return true;
+    }
+    return false;
+  }
 
   function kick() {
-    if (!raf && (S.active || S.open)) raf = requestAnimationFrame(frame);
+    if (raf || idle || !(S.active || S.open)) return;
+    if (wantsFrames()) raf = requestAnimationFrame(frame);
+    else idle = setTimeout(frame, IDLE_MS);
   }
 
   function frame() {
     raf = 0;
+    idle = 0;
     check();
     renderLive();
     kick();
+  }
+
+  // Something changed (play, pause, seek, panel opened…): don't wait for the slow timer.
+  function wake() {
+    if (raf || !(S.active || S.open)) return;
+    clearTimeout(idle);
+    frame();
   }
 
   /* ------------------------------------------------------------------ */
   /* Rendering                                                          */
   /* ------------------------------------------------------------------ */
 
-  let lastNotice = null;
-  let lastRun = null;
+  // What renderLive() last put on screen, so unchanged frames cost nothing.
+  const live = { notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
-  function setNotice(text) {
-    if (text === lastNotice) return;
-    lastNotice = text;
-    ui.notice.textContent = text;
-    ui.notice.classList.toggle('ysl-show', !!text);
-  }
-
-  // Cheap per-frame updates: playhead, run status, progress fill, transient notices.
+  // Cheap, frequent updates: playhead, run status, progress fill, transient notices.
   function renderLive() {
     const v = S.video;
     const ad = isAd();
@@ -805,35 +849,62 @@
     if (S.live) notice = 'Live streams can’t be looped.';
     else if (ad) notice = S.active ? 'Ad playing — the loops pick up right after.' : 'Ad playing…';
     else if (!S.ranged) notice = S.duration > 0 ? 'This video is too short to loop a section.' : 'Waiting for the video…';
-    setNotice(notice);
-    if (!v || !ready() || ad || !S.trusted) return;
+    if (notice !== live.notice) {
+      live.notice = notice;
+      ui.notice.textContent = notice;
+      ui.notice.classList.toggle('ysl-show', !!notice);
+    }
+    if (!v || !ready() || ad || !S.trusted) {
+      if (S.active && live.stale) setText(ui.mainText, 'Stop'); // no position to report yet
+      return;
+    }
+
     const t = v.currentTime;
     if (S.active) {
-      const l = loopAt(t);
-      let text;
-      let badge = '·';
-      let prog = 0;
-      if (l) {
-        const n = l.infinite ? `${l.done + 1} · ∞` : `${Math.min(l.done + 1, l.count)} / ${l.count}`;
-        text = S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1} · ${n}` : `Rep ${n}`;
-        badge = l.infinite ? '∞' : String(Math.max(1, l.count - l.done));
-        prog = clamp((t - l.a) / Math.max(0.01, loopEnd(l) - l.a), 0, 1);
-      } else {
-        const next = nextLoop(t);
-        if (!next) text = 'Past the loops';
-        else text = S.loops.length > 1 ? `Next: loop ${S.loops.indexOf(next) + 1}` : 'Loop ahead';
-      }
-      const key = text + '|' + badge;
-      if (key !== lastRun) {
-        lastRun = key;
+      const guard = turnGuard();
+      const l = loopAt(t, guard);
+      const next = l ? null : nextLoop(t);
+      const done = l ? l.done : -1;
+      if (live.stale || l !== live.loop || next !== live.next || done !== live.done) {
+        live.stale = false;
+        live.loop = l;
+        live.next = next;
+        live.done = done;
+        const many = S.loops.length > 1;
+        let text;
+        let badge = '·';
+        if (l) {
+          const n = l.infinite ? `${l.done + 1} · ∞` : `${Math.min(l.done + 1, l.count)} / ${l.count}`;
+          text = many ? `Loop ${S.loops.indexOf(l) + 1} · ${n}` : `Rep ${n}`;
+          badge = l.infinite ? '∞' : String(Math.max(1, l.count - l.done));
+        } else if (next) {
+          text = many ? `Next: loop ${S.loops.indexOf(next) + 1}` : 'Loop ahead';
+        } else {
+          text = 'Past the loops';
+        }
         ui.mainText.textContent = 'Stop · ' + text;
         ui.badge.textContent = badge;
       }
-      if (S.open) ui.main.style.setProperty('--prog', prog.toFixed(4));
+      if (S.open) {
+        const prog = l ? Math.round(clamp((t - l.a) / Math.max(0.01, loopEnd(l, guard) - l.a), 0, 1) * 500) : 0;
+        if (prog !== live.prog) {
+          live.prog = prog;
+          ui.mainFill.style.transform = `scaleX(${prog / 500})`;
+        }
+      }
     }
     if (S.open) {
-      ui.lane.style.setProperty('--p', toPct(t).toFixed(3) + '%');
-      ui.lane.classList.toggle('ysl-out', t < viewStart() - 0.05 || t > viewEnd() + 0.05);
+      const out = t < viewStart() - 0.05 || t > viewEnd() + 0.05;
+      if (out !== live.out) {
+        live.out = out;
+        ui.play.hidden = out;
+      }
+      // Whole device pixels: on a long video the playhead only needs repainting about once a second.
+      const px = Math.round((toPct(t) / 100) * S.laneW * S.dpr) / S.dpr;
+      if (px !== live.px) {
+        live.px = px;
+        ui.play.style.transform = `translateX(${px}px)`;
+      }
     }
   }
 
@@ -852,8 +923,8 @@
 
   function renderTip() {
     if (!tipWhich || !ready()) return;
-    ui.tip.textContent = fmtT(cur()[tipWhich]);
-    ui.lane.style.setProperty('--tip', toPct(cur()[tipWhich]) + '%');
+    setText(ui.tip, fmtT(cur()[tipWhich]));
+    setStyle(ui.lane, '--tip', pct(toPct(cur()[tipWhich])));
   }
 
   // Loops that overlap in time are drawn on separate rows.
@@ -909,36 +980,39 @@
       else meta = l.infinite ? `${l.done + 1}·∞` : `${Math.min(l.done + 1, l.count)}/${l.count}`;
 
       const chip = ui.chips[i];
-      chip.root.style.setProperty('--cv', rgb);
-      chip.root.setAttribute('aria-pressed', String(selected));
+      setStyle(chip.root, '--cv', rgb);
+      setAttr(chip.root, 'aria-pressed', String(selected));
       chip.root.classList.toggle('ysl-spent', spent);
-      chip.root.title = `Loop ${i + 1}: ${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}` + (selected ? '\nClick again to jump to its start' : '\nClick to edit');
-      chip.num.textContent = String(i + 1);
-      chip.meta.textContent = meta;
+      setAttr(chip.root, 'title', `Loop ${i + 1}: ${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
+      setText(chip.num, String(i + 1));
+      setText(chip.meta, meta);
 
       const ghost = ui.ghosts[i];
-      const ga = toPct(l.a);
-      const gb = toPct(l.b);
-      ghost.style.display = many && !selected && l.b > viewStart() && l.a < viewEnd() ? '' : 'none';
-      ghost.style.left = ga + '%';
-      ghost.style.width = Math.max(0, gb - ga) + '%';
-      ghost.style.setProperty('--cv', rgb);
-      ghost.style.setProperty('--lane', String(lanes[i] % 2));
+      const shown = many && !selected && l.b > viewStart() && l.a < viewEnd();
+      ghost.hidden = !shown;
+      if (shown) {
+        const ga = toPct(l.a);
+        setStyle(ghost, 'left', pct(ga));
+        setStyle(ghost, 'width', pct(Math.max(0, toPct(l.b) - ga)));
+        setStyle(ghost, '--cv', rgb);
+        setStyle(ghost, '--lane', String(lanes[i] % 2));
+      }
 
       const mark = ui.marks[i];
-      mark.style.left = (l.a / d) * 100 + '%';
-      mark.style.width = ((l.b - l.a) / d) * 100 + '%';
-      mark.style.setProperty('--cv', rgb);
-      mark.style.setProperty('--lane', String(Math.min(lanes[i], 3)));
+      setStyle(mark, 'left', pct((l.a / d) * 100));
+      setStyle(mark, 'width', pct(((l.b - l.a) / d) * 100));
+      setStyle(mark, '--cv', rgb);
+      setStyle(mark, '--lane', String(Math.min(lanes[i], 3)));
       mark.classList.toggle('ysl-sel', selected || !many);
       mark.classList.toggle('ysl-spent', spent);
     });
 
+    const trashTitle = many ? `Remove loop ${S.sel + 1}` : 'Reset this loop to the whole video';
     ui.add.hidden = !ok || loops.length >= MAX_LOOPS;
     ui.trash.hidden = !ok;
-    ui.trash.title = many ? `Remove loop ${S.sel + 1}` : 'Reset this loop to the whole video';
-    ui.trash.setAttribute('aria-label', ui.trash.title);
-    ui.markBox.style.display = ok && (S.active || !isDefaultSet()) ? '' : 'none';
+    setAttr(ui.trash, 'title', trashTitle);
+    setAttr(ui.trash, 'aria-label', trashTitle);
+    ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()));
     ui.markBox.classList.toggle('ysl-live', S.active);
   }
 
@@ -953,49 +1027,50 @@
     ui.body.disabled = !ok;
     ui.panel.classList.toggle('ysl-off', !ok);
     ui.panel.classList.toggle('ysl-running', S.active);
-    ui.panel.style.setProperty('--acv', PALETTE[ok ? l.c : 0]);
-    ui.lane.style.setProperty('--a', pa + '%');
-    ui.lane.style.setProperty('--b', pb + '%');
+    setStyle(ui.panel, '--acv', PALETTE[ok ? l.c : 0]);
+    setStyle(ui.lane, '--a', pct(pa));
+    setStyle(ui.lane, '--b', pct(pb));
 
     for (const w of ['a', 'b']) {
       const f = ui.field[w];
-      if (!f.editing) f.input.value = ok ? fmtT(l[w]) : '';
+      const shown = ok ? fmtT(l[w]) : '';
+      if (!f.editing && f.input.value !== shown) f.input.value = shown;
       const th = ui.thumb[w];
       th.tabIndex = ok ? 0 : -1;
-      th.setAttribute('aria-valuemin', '0');
-      th.setAttribute('aria-valuemax', String(Math.round(S.duration)));
-      th.setAttribute('aria-valuenow', ok ? String(round1(l[w])) : '0');
-      th.setAttribute('aria-valuetext', ok ? fmtT(l[w]) : '');
+      setAttr(th, 'aria-valuemax', String(Math.round(S.duration)));
+      setAttr(th, 'aria-valuenow', ok ? String(round1(l[w])) : '0');
+      setAttr(th, 'aria-valuetext', shown);
     }
-    ui.len.textContent = ok ? `Length ${fmt(l.b - l.a, false)}` : '';
-    ui.scaleStart.textContent = ok ? fmtT(viewStart()) : '0:00';
-    ui.scaleEnd.textContent = ok ? fmtT(viewEnd()) : '–:––';
-    ui.zoom.setAttribute('aria-pressed', String(S.zoom));
+    setText(ui.len, ok ? `Length ${fmt(l.b - l.a, false)}` : '');
+    setText(ui.scaleStart, ok ? fmtT(viewStart()) : '0:00');
+    setText(ui.scaleEnd, ok ? fmtT(viewEnd()) : '–:––');
+    setAttr(ui.zoom, 'aria-pressed', String(S.zoom));
     renderTip();
 
     const inf = ok && l.infinite;
-    if (!ui.countState.editing) ui.count.value = !ok ? '' : inf ? '∞' : String(l.count);
+    const count = !ok ? '' : inf ? '∞' : String(l.count);
+    if (!ui.countState.editing && ui.count.value !== count) ui.count.value = count;
     ui.count.readOnly = inf;
-    ui.inf.setAttribute('aria-pressed', String(inf));
-    ui.seg.dataset.v = P.after;
+    setAttr(ui.inf, 'aria-pressed', String(inf));
+    setAttr(ui.seg, 'data-v', P.after);
     ui.seg.classList.toggle('ysl-dim', ok && S.loops.every((x) => x.infinite));
-    for (const b of ui.segBtns) b.setAttribute('aria-pressed', String(b.dataset.v === P.after));
+    for (const b of ui.segBtns) setAttr(b, 'aria-pressed', String(b.dataset.v === P.after));
 
     ui.main.classList.toggle('ysl-on', S.active);
+    live.stale = true; // the run status below is rebuilt by renderLive()
     if (!S.active) {
-      lastRun = null;
-      ui.main.style.setProperty('--prog', '0');
-      if (S.finished) ui.mainText.textContent = 'Play again';
-      else ui.mainText.textContent = S.loops.length > 1 ? `Start ${S.loops.length} loops` : 'Start loop';
-    } else if (lastRun === null) {
-      ui.mainText.textContent = 'Stop';
+      live.prog = -1;
+      ui.mainFill.style.transform = '';
+      if (S.finished) setText(ui.mainText, 'Play again');
+      else setText(ui.mainText, S.loops.length > 1 ? `Start ${S.loops.length} loops` : 'Start loop');
     }
 
     ui.btn.classList.toggle('ysl-active', S.active);
-    ui.btn.setAttribute('aria-expanded', String(S.open));
-    ui.btn.setAttribute('aria-pressed', String(S.active));
+    setAttr(ui.btn, 'aria-expanded', String(S.open));
+    setAttr(ui.btn, 'aria-pressed', String(S.active));
 
     renderLoops(ok);
+    renderLive();
   }
 
   function replay(node, cls) {
@@ -1030,7 +1105,12 @@
       if (e.button !== 0) return;
       stop();
       fn(e);
-      delay = setTimeout(() => { repeat = setInterval(() => fn(e), 70); }, 380);
+      delay = setTimeout(() => {
+        repeat = setInterval(() => {
+          if (btn.matches(':disabled')) stop(); // the panel got disabled mid-hold: no pointerup will come
+          else fn(e);
+        }, 70);
+      }, 380);
     });
     for (const t of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) btn.addEventListener(t, stop);
     btn.addEventListener('keydown', (e) => {
@@ -1066,6 +1146,11 @@
     ui.field.a.commit();
     ui.field.b.commit();
     ui.commitCount();
+  }
+
+  // Throws away whatever is half-typed.
+  function cancelEdits() {
+    ui.field.a.editing = ui.field.b.editing = ui.countState.editing = false;
   }
 
   function makeField(which, label) {
@@ -1267,6 +1352,8 @@
     }
     ui.panel.style.bottom = bottom + 'px';
     ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - 10)) + 'px';
+    S.laneW = ui.lane.clientWidth;
+    S.dpr = window.devicePixelRatio || 1;
   }
 
   function openPanel() {
@@ -1275,9 +1362,8 @@
     S.open = true;
     place();
     render();
-    renderLive();
     ui.panel.classList.add('ysl-open');
-    kick();
+    wake();
   }
 
   function closePanel() {
@@ -1293,13 +1379,12 @@
   function buildUI() {
     ui.badge = el('span', { class: 'ysl-badge' });
     ui.btn = el('button', {
-      class: 'ytp-button ysl-btn', type: 'button', 'aria-label': 'Section loop', 'aria-haspopup': 'dialog',
-      'aria-expanded': 'false', 'data-tooltip-title': 'Section loop', 'data-title-no-tooltip': 'Section loop',
+      class: 'ytp-button ysl-btn', type: 'button', title: 'Section loop', 'aria-label': 'Section loop',
+      'aria-haspopup': 'dialog', 'aria-expanded': 'false',
     }, icon(I.loop, 24), ui.badge);
     ui.btn.addEventListener('click', () => (S.open ? closePanel() : openPanel()));
 
-    ui.markBox = el('div', { class: 'ysl-marks' });
-    ui.markBox.style.display = 'none';
+    ui.markBox = el('div', { class: 'ysl-marks', hidden: true });
     ui.toast = el('div', { class: 'ysl-toast', role: 'status', 'aria-live': 'polite' });
 
     // Header: one chip per loop
@@ -1314,12 +1399,13 @@
     ui.notice = el('div', { class: 'ysl-notice', role: 'status' });
 
     // Slider
-    ui.thumb.a = el('div', { class: 'ysl-thumb ysl-thumb-a', 'data-which': 'a', role: 'slider', tabindex: '0', 'aria-label': 'Loop start', text: 'A' });
-    ui.thumb.b = el('div', { class: 'ysl-thumb ysl-thumb-b', 'data-which': 'b', role: 'slider', tabindex: '0', 'aria-label': 'Loop end', text: 'B' });
+    ui.thumb.a = el('div', { class: 'ysl-thumb ysl-thumb-a', 'data-which': 'a', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop start', text: 'A' });
+    ui.thumb.b = el('div', { class: 'ysl-thumb ysl-thumb-b', 'data-which': 'b', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop end', text: 'B' });
     ui.tip = el('div', { class: 'ysl-tip' });
     ui.ghostBox = el('div', { class: 'ysl-ghosts' });
+    ui.play = el('div', { class: 'ysl-play' });
     ui.lane = el('div', { class: 'ysl-lane' },
-      el('div', { class: 'ysl-rail' }), ui.ghostBox, el('div', { class: 'ysl-fill' }), el('div', { class: 'ysl-play' }),
+      el('div', { class: 'ysl-rail' }), ui.ghostBox, el('div', { class: 'ysl-fill' }), ui.play,
       ui.thumb.a, ui.thumb.b, ui.tip);
     ui.track = el('div', { class: 'ysl-track', title: 'Drag A and B, or click to move the nearest one' }, ui.lane);
     ui.len = el('span', { class: 'ysl-len' });
@@ -1345,12 +1431,6 @@
       el('label', { class: 'ysl-label', for: 'ysl-count', text: 'Times to play' }),
       el('div', { class: 'ysl-box' }, cMinus, ui.count, cPlus, ui.inf));
 
-    const bumpCount = (dir, e) => {
-      if (!ready()) return;
-      ui.countState.editing = false;
-      if (cur().infinite) setInfinite(false);
-      else setCount(cur().count + dir * (e.shiftKey ? 10 : 1));
-    };
     const commitCount = () => {
       if (!ui.countState.editing) return;
       ui.countState.editing = false;
@@ -1362,6 +1442,12 @@
         shake(countField);
       }
     };
+    const bumpCount = (dir, e) => {
+      if (!ready()) return;
+      commitCount();
+      if (cur().infinite) setInfinite(false);
+      else setCount(cur().count + dir * (e.shiftKey ? 10 : 1));
+    };
     ui.commitCount = commitCount;
     holdRepeat(cMinus, (e) => bumpCount(-1, e));
     holdRepeat(cPlus, (e) => bumpCount(1, e));
@@ -1370,8 +1456,14 @@
       ui.countState.editing = false;
       setInfinite(!cur().infinite);
     });
+    // Clicking the "∞" turns it back into a number (tabbing through must not change anything).
+    ui.count.addEventListener('click', () => {
+      if (ready() && cur().infinite) {
+        setInfinite(false);
+        ui.count.select();
+      }
+    });
     ui.count.addEventListener('focus', () => {
-      if (ready() && cur().infinite) setInfinite(false);
       setTimeout(() => { if (document.activeElement === ui.count) ui.count.select(); }, 0);
     });
     ui.count.addEventListener('input', () => {
@@ -1417,12 +1509,13 @@
 
     // Actions
     ui.mainText = el('span', { text: 'Start loop' });
+    ui.mainFill = el('span', { class: 'ysl-main-fill' });
     ui.main = el('button', { class: 'ysl-main', type: 'button', title: 'Start / stop looping  (Shift+R)' },
-      el('span', { class: 'ysl-main-fill' }), icon(I.play, 18, 'ysl-ic-play'), icon(I.stop, 18, 'ysl-ic-stop'), ui.mainText);
+      ui.mainFill, icon(I.play, 18, 'ysl-ic-play'), icon(I.stop, 18, 'ysl-ic-stop'), ui.mainText);
     ui.main.addEventListener('click', () => (S.active ? stopRun() : startRun()));
     const reset = el('button', { class: 'ysl-reset', type: 'button', 'aria-label': 'Remove all loops', title: 'Remove all loops and start over' }, icon(I.reset, 18));
     reset.addEventListener('click', () => {
-      ui.field.a.editing = ui.field.b.editing = ui.countState.editing = false;
+      cancelEdits();
       resetAll();
     });
     const actions = el('div', { class: 'ysl-actions' }, ui.main, reset);
@@ -1510,6 +1603,7 @@
 .ysl-btn.ysl-active .ysl-badge.ysl-pop{animation:ysl-pop .4s}
 
 .ysl-marks{position:absolute;left:0;right:0;top:0;height:100%;z-index:44;pointer-events:none}
+.ysl-marks[hidden]{display:none}
 .ysl-mark{position:absolute;top:calc(-7px - var(--lane,0) * 5px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.6;transition:opacity .2s,box-shadow .2s}
 .ysl-mark::before,.ysl-mark::after{content:"";position:absolute;top:0;width:2px;height:calc(13px + var(--lane,0) * 5px);border-radius:1px;background:inherit}
 .ysl-mark::before{left:0}
@@ -1518,12 +1612,12 @@
 .ysl-marks.ysl-live .ysl-mark{opacity:1;box-shadow:0 0 6px rgba(var(--cv),.8)}
 .ysl-marks.ysl-live .ysl-mark.ysl-spent{opacity:.35;box-shadow:none}
 
-.ysl-toast{position:absolute;left:50%;top:12%;z-index:2200;max-width:90%;box-sizing:border-box;padding:8px 14px;border-radius:999px;background:rgba(20,20,22,.86);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;font:600 13px/1.25 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translate(-50%,-6px);pointer-events:none;transition:opacity .18s,transform .18s}
+.ysl-toast{position:absolute;left:50%;top:12%;z-index:2200;max-width:90%;box-sizing:border-box;padding:8px 14px;border-radius:999px;background:rgba(24,24,27,.94);color:#fff;font:600 13px/1.25 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translate(-50%,-6px);pointer-events:none;transition:opacity .18s,transform .18s}
 .ysl-toast.ysl-show{opacity:1;transform:translate(-50%,0)}
 
 .ysl-panel{--acv:62,166,255;--ac:rgb(var(--acv));--ac-ink:#06121f;--line:rgba(255,255,255,.12);--mute:rgba(255,255,255,.64);
 position:absolute;right:12px;bottom:62px;z-index:2200;width:344px;max-width:calc(100% - 24px);box-sizing:border-box;padding:10px 14px 14px;border-radius:14px;
-background:rgba(20,20,22,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
+background:rgba(24,24,27,.96);
 box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.08);
 color:#fff;font:400 13px/1.3 Roboto,"YouTube Noto",Arial,Helvetica,sans-serif;text-align:left;direction:ltr;cursor:default;-webkit-user-select:none;user-select:none;
 overflow:hidden auto;overscroll-behavior:contain;scrollbar-width:thin;
@@ -1562,13 +1656,13 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .ysl-panel.ysl-off .ysl-body{opacity:.38;pointer-events:none}
 
 .ysl-panel .ysl-track{position:relative;height:30px;cursor:pointer;touch-action:none}
-.ysl-panel .ysl-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--p:0%;--tip:0%}
+.ysl-panel .ysl-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
 .ysl-panel .ysl-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
 .ysl-panel .ysl-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
-.ysl-panel .ysl-fill{position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;background:var(--ac);background-size:24px 100%;transition:background-color .2s}
-.ysl-panel.ysl-running .ysl-fill{background-image:linear-gradient(90deg,rgba(255,255,255,0) 0,rgba(255,255,255,.45) 50%,rgba(255,255,255,0) 100%);animation:ysl-flow .9s linear infinite}
-.ysl-panel .ysl-play{position:absolute;left:var(--p);top:7px;bottom:7px;width:2px;margin-left:-1px;border-radius:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
-.ysl-panel.ysl-off .ysl-play,.ysl-panel .ysl-out .ysl-play{display:none}
+.ysl-panel .ysl-fill{position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;overflow:hidden;background:var(--ac);transition:background-color .2s}
+.ysl-panel.ysl-open.ysl-running .ysl-fill::after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:ysl-flow 1.4s linear infinite}
+.ysl-panel .ysl-play{position:absolute;left:0;top:7px;bottom:7px;width:2px;margin-left:-1px;border-radius:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
+.ysl-panel.ysl-off .ysl-play{display:none}
 .ysl-panel .ysl-thumb{position:absolute;top:50%;display:grid;place-items:center;width:18px;height:26px;margin-top:-13px;background:#fff;color:#0f0f0f;font-size:10px;font-weight:800;line-height:1;cursor:ew-resize;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:background .15s,color .15s,box-shadow .15s}
 .ysl-panel .ysl-thumb-a{left:var(--a);transform:translateX(-100%);border-radius:7px 2px 2px 7px}
 .ysl-panel .ysl-thumb-b{left:var(--b);border-radius:2px 7px 7px 2px}
@@ -1620,7 +1714,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .ysl-panel .ysl-main:active{transform:scale(.98)}
 .ysl-panel .ysl-main>*{position:relative}
 .ysl-panel .ysl-main.ysl-on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px var(--line)}
-.ysl-panel .ysl-main-fill{position:absolute;inset:0;background:rgba(var(--acv),.38);opacity:0;transform:scaleX(var(--prog,0));transform-origin:0 50%;pointer-events:none}
+.ysl-panel .ysl-main-fill{position:absolute;inset:0;background:rgba(var(--acv),.38);opacity:0;transform:scaleX(0);transform-origin:0 50%;pointer-events:none}
 .ysl-panel .ysl-main.ysl-on .ysl-main-fill{opacity:1}
 .ysl-panel .ysl-ic-stop,.ysl-panel .ysl-on .ysl-ic-play{display:none}
 .ysl-panel .ysl-on .ysl-ic-stop{display:block}
@@ -1630,7 +1724,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 
 @keyframes ysl-pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
 @keyframes ysl-in{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
-@keyframes ysl-flow{from{background-position:0 0}to{background-position:24px 0}}
+@keyframes ysl-flow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @keyframes ysl-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
 @keyframes ysl-ping{0%{box-shadow:0 0 0 0 rgba(var(--acv),.7)}100%{box-shadow:0 0 0 9px rgba(var(--acv),0)}}
 @media (prefers-reduced-motion:reduce){.ysl-panel,.ysl-panel *,.ysl-panel *::before,.ysl-btn *,.ysl-toast{animation:none!important;transition-duration:.01s!important}}
@@ -1650,11 +1744,20 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
   ensure();
   syncVideo();
 
+  // Safety net for whatever YouTube's events don't announce.
   setInterval(() => {
+    if (document.hidden && !S.active) return; // nothing to keep current in a tab nobody is watching
     ensure();
     syncVideo();
-    if (!raf && S.open) kick();
+    kick();
   }, 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    ensure();
+    S.dirty = true;
+    scheduleSync();
+    wake();
+  });
 
   for (const t of ['yt-navigate-start', 'yt-navigate-finish', 'yt-page-data-updated', 'yt-player-updated']) {
     document.addEventListener(t, () => {

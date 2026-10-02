@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YouTube Section Loop",
-  "version": "2.1.1",
+  "version": "1.0",
   "description": "Repeat one or several sections of a YouTube video a chosen number of times. Drag the handles, type a timestamp, or grab the current time.",
   "icons": {
     "48": "icon.svg",
@@ -9,8 +9,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://www.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }
@@ -20,7 +24,9 @@
       "id": "youtube-section-loop@userscript.local",
       "strict_min_version": "109.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   }
