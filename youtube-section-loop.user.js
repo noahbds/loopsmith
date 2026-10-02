@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Section Loop (A-B repeat)
 // @namespace    yt-section-loop
-// @version      2.1.0
+// @version      2.1.1
 // @description  Repeat one or several sections of a YouTube video a chosen number of times. Drag the handles, type a timestamp, or grab the current time.
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -211,7 +211,6 @@
     finished: false,
     lastT: null,     // previous playback position seen by the loop check
     open: false,
-    dragging: false, // a slider handle is being dragged and the video is following it
     sliding: false,  // a slider handle is held down
     zoom: false,     // the slider shows only the area around the selected loop
     v0: 0,
@@ -340,14 +339,12 @@
     if (old) {
       old.removeEventListener('timeupdate', check);
       old.removeEventListener('ended', onEnded);
-      old.removeEventListener('seeked', pumpPreview);
       for (const t of MEDIA_EVENTS) old.removeEventListener(t, onMediaEvent);
     }
     S.video = v || null;
     if (v) {
       v.addEventListener('timeupdate', check);
       v.addEventListener('ended', onEnded);
-      v.addEventListener('seeked', pumpPreview);
       for (const t of MEDIA_EVENTS) v.addEventListener(t, onMediaEvent);
     }
   }
@@ -488,7 +485,7 @@
     if (S.dirty || location.href !== S.href) syncVideo();
     const v = S.video;
     if (!S.active || !v) return;
-    if (!S.trusted || !S.ranged || S.dragging || isAd() || v.readyState < 1 || v.seeking || !(v.duration > 0)) {
+    if (!S.trusted || !S.ranged || isAd() || v.readyState < 1 || v.seeking || !(v.duration > 0)) {
       S.lastT = null;
       return;
     }
@@ -560,7 +557,7 @@
 
   // The video reached its very end before the regular check caught it.
   function onEnded() {
-    if (!S.active || S.dragging || !S.trusted || !S.ranged || isAd()) return;
+    if (!S.active || !S.trusted || !S.ranged || isAd()) return;
     const tail = S.loops.filter((l) => !exhausted(l) && l.b >= S.duration - 1);
     if (tail.length && turnAround(tail, true)) return;
     finishRun();
@@ -1171,25 +1168,7 @@
     return f;
   }
 
-  /* ---- Range slider ---- */
-
-  let pendingPreview = null;
-
-  function previewTo(t) {
-    pendingPreview = Math.min(t, S.duration - 0.3);
-    pumpPreview();
-  }
-
-  // Seeks are issued one at a time; the newest request wins.
-  function pumpPreview() {
-    const v = S.video;
-    if (pendingPreview === null || !v || v.seeking) return;
-    const t = pendingPreview;
-    pendingPreview = null;
-    if (Math.abs(v.currentTime - t) > 0.01) {
-      try { v.currentTime = t; } catch (_) { /* ignore */ }
-    }
-  }
+  /* ---- Range slider (edits the loop only; it never moves the video) ---- */
 
   function bindSlider() {
     const track = ui.track;
@@ -1200,26 +1179,13 @@
       return r.width > 0 ? clamp((x - r.left) / r.width, 0, 1) : 0;
     };
 
-    const startPreview = () => {
-      if (!drag || drag.previewing) return;
-      const v = S.video;
-      if (!v || isAd() || !S.trusted) return;
-      drag.previewing = true;
-      drag.t0 = v.currentTime;
-      drag.wasPlaying = !v.paused && !v.ended;
-      S.dragging = true;
-      if (drag.wasPlaying) v.pause();
-    };
-
     const move = (e) => {
       if (!drag || e.pointerId !== drag.id || !ready()) return;
       if (!drag.moved) {
         if (Math.abs(e.clientX - drag.x0) < 3) return;
         drag.moved = true;
       }
-      startPreview();
       setPoint(drag.which, fromFrac(laneFrac(e.clientX - drag.off)), false);
-      if (drag.previewing) previewTo(cur()[drag.which]);
     };
 
     const end = (e) => {
@@ -1230,18 +1196,7 @@
       track.classList.remove('ysl-dragging');
       ui.thumb[d.which].classList.remove('ysl-grab');
       if (!ui.thumb[d.which].matches(':focus-visible')) hideTip();
-      if (d.previewing) {
-        // Put playback back where it was.
-        pendingPreview = null;
-        const v = S.video;
-        if (v) {
-          try { v.currentTime = clamp(d.t0, 0, Math.max(0, S.duration - 0.3)); } catch (_) { /* ignore */ }
-          if (d.wasPlaying) play();
-        }
-      }
-      S.dragging = false;
       S.sliding = false;
-      S.lastT = null;
       render();
     };
 
@@ -1259,7 +1214,7 @@
         const t = fromFrac(laneFrac(e.clientX));
         which = Math.abs(t - l.a) <= Math.abs(t - l.b) ? 'a' : 'b';
       }
-      drag = { which, id: e.pointerId, off, x0: e.clientX, moved: !th, previewing: false, t0: 0, wasPlaying: false };
+      drag = { which, id: e.pointerId, off, x0: e.clientX, moved: !th };
       S.sliding = true;
       try { track.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       track.classList.add('ysl-dragging');
@@ -1366,7 +1321,7 @@
     ui.lane = el('div', { class: 'ysl-lane' },
       el('div', { class: 'ysl-rail' }), ui.ghostBox, el('div', { class: 'ysl-fill' }), el('div', { class: 'ysl-play' }),
       ui.thumb.a, ui.thumb.b, ui.tip);
-    ui.track = el('div', { class: 'ysl-track', title: 'Drag A and B — the video follows so you can see where you are' }, ui.lane);
+    ui.track = el('div', { class: 'ysl-track', title: 'Drag A and B, or click to move the nearest one' }, ui.lane);
     ui.len = el('span', { class: 'ysl-len' });
     ui.scaleStart = el('span', { text: '0:00' });
     ui.scaleEnd = el('span');
