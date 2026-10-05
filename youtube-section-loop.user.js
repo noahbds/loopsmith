@@ -34,7 +34,7 @@
   const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
   const round1 = (x) => Math.round(x * 10) / 10;
   const pad2 = (n) => String(n).padStart(2, '0');
-  const isNum = (x) => typeof x === 'number' && isFinite(x);
+  const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
   function fmt(sec, withHours) {
     const tenthsTotal = Math.max(0, Math.round(sec * 10));
@@ -310,12 +310,16 @@
   }
 
   // Reads a stored entry back into loops, dropping anything malformed.
-  function loopsFromSaved(saved) {
+  function loopsFromSaved(saved, duration) {
     if (!saved || !Array.isArray(saved.loops)) return null;
+    const cap = isNum(duration) && duration > 0 ? duration : Infinity;
     const out = [];
     for (const r of saved.loops) {
       if (!r || !isNum(r.a) || !isNum(r.b) || !(r.b > r.a) || r.a < 0) continue;
-      const l = newLoop(r.a, r.b, Number.isInteger(r.c) ? clamp(r.c, 0, PALETTE.length - 1) : out.length % PALETTE.length);
+      // Clamp before materialising so callers don't briefly see an out-of-range loop.
+      const a = clamp(r.a, 0, Math.max(0, cap - MIN_LEN));
+      const b = clamp(r.b, a + MIN_LEN, cap);
+      const l = newLoop(a, b, Number.isInteger(r.c) ? clamp(r.c, 0, PALETTE.length - 1) : out.length % PALETTE.length);
       if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
       if (typeof r.inf === 'boolean') l.infinite = r.inf;
       if (typeof r.on === 'boolean') l.on = r.on;
@@ -388,7 +392,7 @@
 
   function applyDuration(d) {
     const wasDefault = !S.ranged || isDefaultSet();
-    const saved = loopsFromSaved(S.videoId ? store.videos[S.videoId] : null);
+    const saved = loopsFromSaved(S.videoId ? store.videos[S.videoId] : null, d);
     S.duration = d;
     S.ranged = d >= MIN_LEN * 2;
     if (!S.ranged) {
@@ -488,7 +492,7 @@
   // never reaches "ended" (which would trigger autoplay). Hidden tabs only get coarse timing.
   function turnGuard() {
     const rate = (S.video && S.video.playbackRate) || 1;
-    return document.hidden ? 0.1 + 0.3 * rate : 0.25;
+    return document.hidden ? 0.1 + 0.3 * rate : Math.max(0.25, 0.2 * rate);
   }
 
   // Where a loop really turns around.
@@ -525,7 +529,7 @@
     const prev = S.lastT;
     S.lastT = t;
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
-    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
+    if (prev === null || t <= prev || t - prev > Math.max(1, v.playbackRate * 1.5)) return;
     const guard = turnGuard();
     let crossed = null;
     for (const l of S.loops) {
@@ -584,6 +588,8 @@
   // The video reached its very end before the regular check caught it.
   function onEnded() {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
+    const v = S.video;
+    if (!v || v.seeking) return;
     const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
     if (tail.length && turnAround(tail, true)) return;
     finishRun();
@@ -1190,6 +1196,9 @@
   // Throws away whatever is half-typed.
   function cancelEdits() {
     ui.field.a.editing = ui.field.b.editing = ui.countState.editing = false;
+    for (const f of [ui.field.a, ui.field.b, ui.count]) {
+      if (document.activeElement === f) f.blur();
+    }
   }
 
   function makeField(which, label) {
@@ -1621,6 +1630,7 @@
   }
 
   function onHotkey(e) {
+    if (e.isComposing) return;
     if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (isTyping(e)) return;
     const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : String(e.code || '').replace(/^Key/, '').toLowerCase();
