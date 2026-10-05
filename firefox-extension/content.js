@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Section Loop (A-B repeat)
 // @namespace    yt-section-loop
-// @version      1.0
+// @version      1.1
 // @description  Repeat one or several sections of a YouTube video a chosen number of times. Drag the handles, type a timestamp, or grab the current time.
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -136,6 +136,7 @@
     zoom: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm.5-7H9v2H7v1h2v2h1v-2h2V9h-2z',
     trash: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5-1-1h-5l-1 1H5v2h14V4h-3.5z',
     reset: 'M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
+    power: 'M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.97 6.97 0 0 1 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17A8.96 8.96 0 0 0 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z',
   };
 
   /* ------------------------------------------------------------------ */
@@ -211,10 +212,9 @@
     duration: 0,
     ranged: false,   // the loops are valid for the current video
     live: false,
-    loops: [],       // [{ a, b, count, infinite, c (palette index), done (plays completed this run) }]
+    loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
-    active: false,
-    finished: false,
+    active: false,   // looping is on: the loops that are switched on turn playback around
     lastT: null,     // previous playback position seen by the loop check
     open: false,
     sliding: false,  // a slider handle is held down
@@ -231,11 +231,14 @@
   const cur = () => S.loops[S.sel];
   const fmtT = (sec) => fmt(sec, S.duration >= 3600);
   const exhausted = (l) => !l.infinite && l.done >= l.count;
+  // Loops the engine passes over: switched off, or played out in this run.
+  const skipped = (l) => !l.on || exhausted(l);
+  const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
   // A single loop covering the whole video is the untouched default: nothing worth saving or marking.
   const isDefaultSet = () => S.loops.length === 1 && S.loops[0].a <= 0.001 && S.loops[0].b >= S.duration - 0.05;
 
   function newLoop(a, b, c) {
-    return { a, b, c, count: P.count, infinite: P.infinite, done: 0 };
+    return { a, b, c, count: P.count, infinite: P.infinite, on: true, done: 0 };
   }
 
   function freeColor() {
@@ -292,7 +295,7 @@
       delete store.videos[S.videoId];
     } else {
       store.videos[S.videoId] = {
-        loops: S.loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, c: l.c })),
+        loops: S.loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c })),
         t: Date.now(),
       };
     }
@@ -315,6 +318,7 @@
       const l = newLoop(r.a, r.b, Number.isInteger(r.c) ? clamp(r.c, 0, PALETTE.length - 1) : out.length % PALETTE.length);
       if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
       if (typeof r.inf === 'boolean') l.infinite = r.inf;
+      if (typeof r.on === 'boolean') l.on = r.on;
       out.push(l);
       if (out.length >= MAX_LOOPS) break;
     }
@@ -370,7 +374,6 @@
   function switchVideo(id) {
     S.videoId = id;
     S.active = false;
-    S.finished = false;
     S.lastT = null;
     S.duration = 0;
     S.ranged = false;
@@ -497,14 +500,14 @@
   function loopAt(t, guard = turnGuard()) {
     let best = null;
     for (const l of S.loops) {
-      if (S.active && exhausted(l)) continue;
+      if (skipped(l)) continue;
       if (t >= l.a - 0.3 && t < loopEnd(l, guard) && (!best || l.a > best.a)) best = l;
     }
     return best;
   }
 
-  // Loops are markers on the timeline: when playback runs into the end of one that
-  // still has repeats left, it goes back to that loop's start. Seeking by hand never counts.
+  // Loops are markers on the timeline: when playback runs into the end of one that is switched on
+  // and still has repeats left, it goes back to that loop's start. Seeking by hand never counts.
   function check() {
     if (S.dirty || location.href !== S.href) syncVideo();
     const v = S.video;
@@ -526,13 +529,13 @@
     const guard = turnGuard();
     let crossed = null;
     for (const l of S.loops) {
-      if (exhausted(l)) continue;
+      if (skipped(l)) continue;
       const end = loopEnd(l, guard);
       if (prev < end && t >= end) (crossed || (crossed = [])).push(l);
     }
     if (!crossed || turnAround(crossed, false)) return;
     // Those loops have played out. Carry on if another one is still ahead.
-    if (S.loops.some((l) => !exhausted(l) && loopEnd(l, guard) > t)) {
+    if (S.loops.some((l) => !skipped(l) && loopEnd(l, guard) > t)) {
       if (P.after === 'next' && !loopAt(t, guard)) {
         const next = nextLoop(t); // skip whatever lies between the loops
         if (next) seekTo(next.a);
@@ -546,7 +549,7 @@
   // The closest loop that starts after `t` and still has plays left.
   function nextLoop(t) {
     let next = null;
-    for (const l of S.loops) if (!exhausted(l) && l.a > t && (!next || l.a < next.a)) next = l;
+    for (const l of S.loops) if (!skipped(l) && l.a > t && (!next || l.a < next.a)) next = l;
     return next;
   }
 
@@ -568,9 +571,9 @@
   }
 
   function finishRun() {
-    const single = S.loops.length === 1 ? S.loops[0] : null;
+    const on = S.loops.filter((l) => l.on);
+    const single = on.length === 1 ? on[0] : null;
     S.active = false;
-    S.finished = true;
     S.lastT = null;
     for (const l of S.loops) l.done = 0;
     if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
@@ -581,36 +584,53 @@
   // The video reached its very end before the regular check caught it.
   function onEnded() {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
-    const tail = S.loops.filter((l) => !exhausted(l) && l.b >= S.duration - 1);
+    const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
     if (tail.length && turnAround(tail, true)) return;
     finishRun();
   }
 
-  function startRun() {
+  // Turns looping on, every count starting over. At least one loop has to be switched on:
+  // the selected one is, when `needSel` asks for it or when none are.
+  function arm(needSel) {
     commitEdits();
     syncVideo();
     if (!ready()) {
       toast(S.live ? 'Live streams can’t be looped' : 'The video isn’t ready yet');
-      return;
+      return false;
     }
-    const v = S.video;
+    if ((needSel || !S.loops.some((l) => l.on)) && !cur().on) {
+      cur().on = true;
+      rememberLoops();
+    }
     for (const l of S.loops) l.done = 0;
     S.active = true;
-    S.finished = false;
     S.lastT = null;
+    return true;
+  }
+
+  // Enabling: looping is on from here, but playback is left alone. The loops act
+  // when the playhead runs into them.
+  function armRun() {
+    if (!arm(false)) return;
+    render();
+    wake();
+    if (!S.open) {
+      const on = S.loops.filter((l) => l.on);
+      toast(on.length > 1 ? `Looping ${on.length} sections` : `Looping ${describe(on[0])}`);
+    }
+  }
+
+  // Starting: plays the selected loop from its beginning (which needs looping to be on).
+  function startLoop() {
+    if (!arm(true)) return;
+    const v = S.video;
     if (S.trusted && !isAd()) {
-      // Already inside a loop: stay there. Otherwise begin with the earliest one.
-      if (v.ended || !loopAt(v.currentTime + 0.05)) {
-        seekTo(S.loops.reduce((m, l) => (l.a < m.a ? l : m)).a);
-      }
+      seekTo(cur().a);
       if (v.paused || v.ended) play();
     }
     render();
     wake();
-    if (!S.open) {
-      const l = S.loops[0];
-      toast(S.loops.length > 1 ? `Looping ${S.loops.length} sections` : `Looping ${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`);
-    }
+    if (!S.open) toast(`${S.loops.length > 1 ? `Loop ${S.sel + 1}` : 'Loop'} · ${describe(cur())}`);
   }
 
   function stopRun() {
@@ -619,14 +639,13 @@
     S.lastT = null;
     for (const l of S.loops) l.done = 0;
     render();
-    if (!S.open) toast('Loop off');
+    if (!S.open) toast('Looping off');
   }
 
-  // After an edit during a run: if nothing is left to play, the run is over.
+  // After an edit during a run: if nothing is left to play, looping turns itself off.
   function settleRun() {
-    if (S.active && !S.loops.some((l) => !exhausted(l))) {
+    if (S.active && !S.loops.some((l) => !skipped(l))) {
       S.active = false;
-      S.finished = true;
       for (const l of S.loops) l.done = 0;
     }
   }
@@ -661,7 +680,6 @@
     if (a !== l.a || b !== l.b) {
       l.a = a;
       l.b = b;
-      S.finished = false;
       S.lastT = null;
       rememberLoops();
     }
@@ -686,7 +704,6 @@
     l.infinite = false;
     P.count = l.count;
     P.infinite = false;
-    S.finished = false;
     settleRun();
     rememberPrefs();
     rememberLoops();
@@ -697,7 +714,6 @@
     if (!ready()) return;
     cur().infinite = !!on;
     P.infinite = !!on;
-    S.finished = false;
     settleRun();
     rememberPrefs();
     rememberLoops();
@@ -707,6 +723,18 @@
   function setAfter(v) {
     P.after = AFTER.includes(v) ? v : 'continue';
     rememberPrefs();
+    render();
+  }
+
+  // A loop that is switched off stays in the list (and stays saved) but is never played.
+  // Switching one back on only arms it: the video doesn't move.
+  function toggleLoop() {
+    if (!ready()) return;
+    const l = cur();
+    l.on = !l.on;
+    l.done = 0;
+    settleRun();
+    rememberLoops();
     render();
   }
 
@@ -747,7 +775,6 @@
     added.infinite = false; // an endless loop would keep the ones after it from ever playing
     S.loops.push(added);
     S.sel = S.loops.length - 1;
-    S.finished = false;
     hideTip();
     if (S.zoom) fitView();
     rememberLoops();
@@ -763,7 +790,6 @@
     }
     S.loops.splice(S.sel, 1);
     S.sel = Math.min(S.sel, S.loops.length - 1);
-    S.finished = false;
     hideTip();
     if (S.zoom) fitView();
     settleRun();
@@ -773,7 +799,6 @@
 
   function resetAll() {
     S.active = false;
-    S.finished = false;
     S.lastT = null;
     S.zoom = false;
     S.sel = 0;
@@ -806,7 +831,7 @@
     const lead = TURN_LEAD * (v.playbackRate || 1);
     const guard = turnGuard();
     for (const l of S.loops) {
-      if (exhausted(l)) continue;
+      if (skipped(l)) continue;
       const left = loopEnd(l, guard) - t;
       if (left >= 0 && left <= lead) return true;
     }
@@ -855,7 +880,7 @@
       ui.notice.classList.toggle('ysl-show', !!notice);
     }
     if (!v || !ready() || ad || !S.trusted) {
-      if (S.active && live.stale) setText(ui.mainText, 'Stop'); // no position to report yet
+      if (S.active && live.stale) setText(ui.mainText, 'Turn off'); // no position to report yet
       return;
     }
 
@@ -882,7 +907,7 @@
         } else {
           text = 'Past the loops';
         }
-        ui.mainText.textContent = 'Stop · ' + text;
+        ui.mainText.textContent = 'Turn off · ' + text;
         ui.badge.textContent = badge;
       }
       if (S.open) {
@@ -973,9 +998,10 @@
     loops.forEach((l, i) => {
       const rgb = PALETTE[l.c];
       const selected = i === S.sel;
-      const spent = S.active && exhausted(l);
+      const spent = S.active && l.on && exhausted(l);
       let meta;
-      if (!S.active) meta = l.infinite ? '∞' : `×${l.count}`;
+      if (!l.on) meta = 'off';
+      else if (!S.active) meta = l.infinite ? '∞' : `×${l.count}`;
       else if (spent) meta = '✓';
       else meta = l.infinite ? `${l.done + 1}·∞` : `${Math.min(l.done + 1, l.count)}/${l.count}`;
 
@@ -983,13 +1009,15 @@
       setStyle(chip.root, '--cv', rgb);
       setAttr(chip.root, 'aria-pressed', String(selected));
       chip.root.classList.toggle('ysl-spent', spent);
-      setAttr(chip.root, 'title', `Loop ${i + 1}: ${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
+      chip.root.classList.toggle('ysl-muted', !l.on);
+      setAttr(chip.root, 'title', `Loop ${i + 1}: ${describe(l)}${l.on ? '' : ' · switched off'}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
       setText(chip.num, String(i + 1));
       setText(chip.meta, meta);
 
       const ghost = ui.ghosts[i];
       const shown = many && !selected && l.b > viewStart() && l.a < viewEnd();
       ghost.hidden = !shown;
+      ghost.classList.toggle('ysl-muted', !l.on);
       if (shown) {
         const ga = toPct(l.a);
         setStyle(ghost, 'left', pct(ga));
@@ -1005,13 +1033,23 @@
       setStyle(mark, '--lane', String(Math.min(lanes[i], 3)));
       mark.classList.toggle('ysl-sel', selected || !many);
       mark.classList.toggle('ysl-spent', spent);
+      mark.classList.toggle('ysl-muted', !l.on);
     });
 
+    const which = many ? `loop ${S.sel + 1}` : 'this loop';
+    const on = ok && cur().on;
     const trashTitle = many ? `Remove loop ${S.sel + 1}` : 'Reset this loop to the whole video';
     ui.add.hidden = !ok || loops.length >= MAX_LOOPS;
     ui.trash.hidden = !ok;
     setAttr(ui.trash, 'title', trashTitle);
     setAttr(ui.trash, 'aria-label', trashTitle);
+    ui.power.hidden = !ok;
+    setAttr(ui.power, 'aria-pressed', String(on));
+    setAttr(ui.power, 'title', on ? `Switch ${which} off — it is kept, just not played` : `Switch ${which} back on`);
+    setAttr(ui.power, 'aria-label', many ? `Loop ${S.sel + 1} switched on` : 'Loop switched on');
+    const startTitle = `Play ${which} from its start`;
+    setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
+    setAttr(ui.start, 'aria-label', startTitle);
     ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()));
     ui.markBox.classList.toggle('ysl-live', S.active);
   }
@@ -1027,6 +1065,7 @@
     ui.body.disabled = !ok;
     ui.panel.classList.toggle('ysl-off', !ok);
     ui.panel.classList.toggle('ysl-running', S.active);
+    ui.panel.classList.toggle('ysl-muted', ok && !l.on);
     setStyle(ui.panel, '--acv', PALETTE[ok ? l.c : 0]);
     setStyle(ui.lane, '--a', pct(pa));
     setStyle(ui.lane, '--b', pct(pb));
@@ -1053,16 +1092,16 @@
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setAttr(ui.seg, 'data-v', P.after);
-    ui.seg.classList.toggle('ysl-dim', ok && S.loops.every((x) => x.infinite));
+    ui.seg.classList.toggle('ysl-dim', ok && S.loops.every((x) => !x.on || x.infinite));
     for (const b of ui.segBtns) setAttr(b, 'aria-pressed', String(b.dataset.v === P.after));
 
     ui.main.classList.toggle('ysl-on', S.active);
+    setAttr(ui.main, 'aria-pressed', String(S.active));
     live.stale = true; // the run status below is rebuilt by renderLive()
     if (!S.active) {
       live.prog = -1;
       ui.mainFill.style.transform = '';
-      if (S.finished) setText(ui.mainText, 'Play again');
-      else setText(ui.mainText, S.loops.length > 1 ? `Start ${S.loops.length} loops` : 'Start loop');
+      setText(ui.mainText, 'Turn looping on');
     }
 
     ui.btn.classList.toggle('ysl-active', S.active);
@@ -1393,9 +1432,11 @@
     ui.chipRow = el('div', { class: 'ysl-chips', role: 'group', 'aria-label': 'Loops' }, ui.add);
     ui.trash = el('button', { class: 'ysl-hb', type: 'button' }, icon(I.trash, 15));
     ui.trash.addEventListener('click', removeLoop);
+    ui.power = el('button', { class: 'ysl-hb ysl-power', type: 'button', 'aria-pressed': 'true' }, icon(I.power, 15));
+    ui.power.addEventListener('click', toggleLoop);
     const close = el('button', { class: 'ysl-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
     close.addEventListener('click', closePanel);
-    const head = el('div', { class: 'ysl-head' }, ui.chipRow, ui.trash, close);
+    const head = el('div', { class: 'ysl-head' }, ui.chipRow, ui.power, ui.trash, close);
     ui.notice = el('div', { class: 'ysl-notice', role: 'status' });
 
     // Slider
@@ -1508,17 +1549,20 @@
     const opts = el('div', { class: 'ysl-row ysl-opts' }, countField, afterField);
 
     // Actions
-    ui.mainText = el('span', { text: 'Start loop' });
+    // Turning looping on and starting a loop are separate: the first leaves the video where it is.
+    ui.start = el('button', { class: 'ysl-start', type: 'button' }, icon(I.play, 18));
+    ui.start.addEventListener('click', startLoop);
+    ui.mainText = el('span', { text: 'Turn looping on' });
     ui.mainFill = el('span', { class: 'ysl-main-fill' });
-    ui.main = el('button', { class: 'ysl-main', type: 'button', title: 'Start / stop looping  (Shift+R)' },
-      ui.mainFill, icon(I.play, 18, 'ysl-ic-play'), icon(I.stop, 18, 'ysl-ic-stop'), ui.mainText);
-    ui.main.addEventListener('click', () => (S.active ? stopRun() : startRun()));
+    ui.main = el('button', { class: 'ysl-main', type: 'button', 'aria-pressed': 'false', title: 'Turn looping on / off  (Shift+R)\nThe video stays where it is' },
+      ui.mainFill, icon(I.loop, 18, 'ysl-ic-idle'), icon(I.stop, 18, 'ysl-ic-stop'), ui.mainText);
+    ui.main.addEventListener('click', () => (S.active ? stopRun() : armRun()));
     const reset = el('button', { class: 'ysl-reset', type: 'button', 'aria-label': 'Remove all loops', title: 'Remove all loops and start over' }, icon(I.reset, 18));
     reset.addEventListener('click', () => {
       cancelEdits();
       resetAll();
     });
-    const actions = el('div', { class: 'ysl-actions' }, ui.main, reset);
+    const actions = el('div', { class: 'ysl-actions' }, ui.start, ui.main, reset);
 
     ui.body = el('fieldset', { class: 'ysl-body' }, slider, fields, opts, actions);
     ui.panel = el('div', { class: 'ysl-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.notice, ui.body);
@@ -1580,13 +1624,15 @@
     if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (isTyping(e)) return;
     const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : String(e.code || '').replace(/^Key/, '').toLowerCase();
-    if (k !== 'a' && k !== 'b' && k !== 'r') return;
+    if (k !== 'a' && k !== 'b' && k !== 'r' && k !== 's') return;
     if (!S.player || !S.player.isConnected || !S.player.getClientRects().length) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (k === 'r') {
       if (S.active) stopRun();
-      else startRun();
+      else armRun();
+    } else if (k === 's') {
+      startLoop();
     } else {
       markNow(k);
     }
@@ -1611,6 +1657,7 @@
 .ysl-mark.ysl-sel{opacity:.95}
 .ysl-marks.ysl-live .ysl-mark{opacity:1;box-shadow:0 0 6px rgba(var(--cv),.8)}
 .ysl-marks.ysl-live .ysl-mark.ysl-spent{opacity:.35;box-shadow:none}
+.ysl-mark.ysl-muted,.ysl-marks.ysl-live .ysl-mark.ysl-muted{opacity:.25;box-shadow:none}
 
 .ysl-toast{position:absolute;left:50%;top:12%;z-index:2200;max-width:90%;box-sizing:border-box;padding:8px 14px;border-radius:999px;background:rgba(24,24,27,.94);color:#fff;font:600 13px/1.25 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translate(-50%,-6px);pointer-events:none;transition:opacity .18s,transform .18s}
 .ysl-toast.ysl-show{opacity:1;transform:translate(-50%,0)}
@@ -1642,11 +1689,15 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .ysl-panel .ysl-chip:active{transform:scale(.95)}
 .ysl-panel .ysl-chip[aria-pressed="true"]{background:rgba(var(--cv),.2);box-shadow:inset 0 0 0 1.5px rgb(var(--cv));color:#fff}
 .ysl-panel .ysl-chip.ysl-spent{opacity:.5}
+.ysl-panel .ysl-chip.ysl-muted{opacity:.55}
+.ysl-panel .ysl-chip.ysl-muted i{background:none;box-shadow:inset 0 0 0 1.5px rgb(var(--cv))}
+.ysl-panel .ysl-chip.ysl-muted b{text-decoration:line-through}
 .ysl-panel .ysl-chip.ysl-new{animation:ysl-in .28s cubic-bezier(.3,1.4,.5,1)}
 .ysl-panel .ysl-hb{flex:none;width:26px;height:26px;border-radius:50%;color:var(--mute);transition:background .12s,color .12s,transform .08s}
 .ysl-panel .ysl-hb:hover{background:rgba(255,255,255,.12);color:#fff}
 .ysl-panel .ysl-hb:active{transform:scale(.9)}
 .ysl-panel .ysl-add{box-shadow:inset 0 0 0 1px var(--line)}
+.ysl-panel .ysl-power[aria-pressed="true"]{color:var(--ac)}
 .ysl-panel .ysl-head>.ysl-hb:last-child{margin-right:-5px}
 
 .ysl-panel .ysl-notice{display:none;margin-bottom:8px;padding:6px 10px;border-radius:8px;background:rgba(255,200,60,.14);color:#ffd874;font-size:12px}
@@ -1659,7 +1710,9 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .ysl-panel .ysl-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
 .ysl-panel .ysl-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
 .ysl-panel .ysl-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
-.ysl-panel .ysl-fill{position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;overflow:hidden;background:var(--ac);transition:background-color .2s}
+.ysl-panel .ysl-ghost.ysl-muted{opacity:.3}
+.ysl-panel .ysl-fill{position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;overflow:hidden;background:var(--ac);transition:background-color .2s,opacity .2s}
+.ysl-panel.ysl-muted .ysl-fill{opacity:.35}
 .ysl-panel.ysl-open.ysl-running .ysl-fill::after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:ysl-flow 1.4s linear infinite}
 .ysl-panel .ysl-play{position:absolute;left:0;top:7px;bottom:7px;width:2px;margin-left:-1px;border-radius:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
 .ysl-panel.ysl-off .ysl-play{display:none}
@@ -1716,8 +1769,11 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .ysl-panel .ysl-main.ysl-on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px var(--line)}
 .ysl-panel .ysl-main-fill{position:absolute;inset:0;background:rgba(var(--acv),.38);opacity:0;transform:scaleX(0);transform-origin:0 50%;pointer-events:none}
 .ysl-panel .ysl-main.ysl-on .ysl-main-fill{opacity:1}
-.ysl-panel .ysl-ic-stop,.ysl-panel .ysl-on .ysl-ic-play{display:none}
+.ysl-panel .ysl-ic-stop,.ysl-panel .ysl-on .ysl-ic-idle{display:none}
 .ysl-panel .ysl-on .ysl-ic-stop{display:block}
+.ysl-panel .ysl-start{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(var(--acv),.18);color:var(--ac);box-shadow:inset 0 0 0 1px rgba(var(--acv),.5);transition:background .12s,color .12s,transform .08s}
+.ysl-panel .ysl-start:hover{background:var(--ac);color:var(--ac-ink)}
+.ysl-panel .ysl-start:active{transform:scale(.92)}
 .ysl-panel .ysl-reset{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--mute);box-shadow:inset 0 0 0 1px var(--line);transition:background .12s,color .12s,transform .3s}
 .ysl-panel .ysl-reset:hover{background:rgba(255,255,255,.14);color:#fff}
 .ysl-panel .ysl-reset:active{transform:rotate(-120deg)}
