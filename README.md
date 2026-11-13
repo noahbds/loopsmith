@@ -27,8 +27,14 @@ root is open. **Not yet:** Deezer, Tidal, Apple Music, Amazon Music. See the pla
 ```bash
 npm install
 npm run build   # dist/firefox, dist/chrome, dist/loopsmith.user.js (+ .xpi / .zip)
-npm test        # unit tests for the loop engine and storage
+npm test        # unit tests: loop rules, whole playback scenarios, storage, site mapping
+npm run e2e     # browser tests on local test pages (real playback in Chromium)
+npm run e2e:live  # browser tests on YouTube, SoundCloud, Bandcamp with the built extension
 ```
+
+The browser tests need `npx playwright install chromium` once, and ffmpeg for the test media.
+Spotify and YouTube Music can't be tested this way (DRM, and YouTube Music refuses automated
+browsers): check them by hand after changes that touch them.
 
 - **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → `dist/firefox/manifest.json`
 - **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load unpacked → `dist/chrome`

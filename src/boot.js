@@ -30,7 +30,8 @@ export async function boot(backend) {
   root.setAttribute('data-ysl', '');
 
   // Most pages never have media: on those, wait quietly instead of starting anything.
-  if (adapter.floating && !allMedia().length) await firstMedia();
+  // (Music sites start right away: their loop button shows before anything plays.)
+  if (adapter.floating && !adapter.dockOnly && !allMedia().length) await firstMedia();
 
   const store = createStore(backend);
   await store.load();

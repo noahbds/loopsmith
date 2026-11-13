@@ -31,12 +31,20 @@ export function loopEnd(l, duration, guard) {
   return Math.max(l.a + 0.2, Math.min(l.b, duration - guard));
 }
 
-// The loop the playhead is in. When loops overlap, the one that started last (the inner one) wins.
+// The loop in charge at the playhead: of the loops it is in, the one whose turn-around point comes
+// first, since that is the one that will send playback back (an inner loop inside an outer one;
+// the earlier of two loops that overlap partly). Same end: the one that starts later.
 export function loopAt(loops, t, duration, guard) {
   let best = null;
+  let bestEnd = Infinity;
   for (const l of loops) {
     if (skipped(l)) continue;
-    if (t >= l.a - 0.3 && t < loopEnd(l, duration, guard) && (!best || l.a > best.a)) best = l;
+    const end = loopEnd(l, duration, guard);
+    if (t < l.a - 0.3 || t >= end) continue;
+    if (!best || end < bestEnd - 1e-6 || (Math.abs(end - bestEnd) <= 1e-6 && l.a > best.a)) {
+      best = l;
+      bestEnd = end;
+    }
   }
   return best;
 }
@@ -73,6 +81,31 @@ export function countCrossed(crossed) {
     if (!exhausted(l)) return l;
   }
   return null;
+}
+
+// One step of the loop engine, for forward playback from `prev` to `t`. Counts the plays of the
+// loops whose end was just reached and says what to do:
+//   null                      nothing happened
+//   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
+//   { seek, next: loop }      "Next loop": the loops just played out; jump to the next one's start
+//   { carryOn: true }         those loops are done, others remain: keep playing
+//   { finish: true }          nothing left to play
+// "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
+// them and playback is already inside it: it is played from its own start.
+export function advance(loops, prev, t, { duration, guard, after = 'continue' }) {
+  const crossed = crossedLoops(loops, prev, t, duration, guard);
+  if (!crossed) return null;
+  const finishedA = Math.max(...crossed.map((l) => l.a));
+  const back = countCrossed(crossed);
+  if (back) return { seek: back.a, repeat: back };
+  if (!anyAhead(loops, t, duration, guard)) return { finish: true };
+  if (after === 'next') {
+    let next = null;
+    for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
+    if (next) return { seek: next.a, next };
+    // Only a loop around the finished one is left: carry on inside it.
+  }
+  return { carryOn: true };
 }
 
 // Moves one end of a loop. push=true: the other end moves out of the way.

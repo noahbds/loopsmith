@@ -1,4 +1,6 @@
 .DS_Store
 node_modules/
 dist/
-.DS_Store
+test/e2e/fixtures/*.mp4
+test/e2e/fixtures/*.mp3
+test/e2e/out/

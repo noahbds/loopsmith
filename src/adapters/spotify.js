@@ -51,6 +51,7 @@ export default {
   dockOnly: true,
   dockInset: 80, // the now-playing bar
   engaged: () => true,
+  waitingText: 'Press play to load the track, then set your loops.',
 
   isAd: () => adPlaying(),
 

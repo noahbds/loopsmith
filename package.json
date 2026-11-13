@@ -7,11 +7,14 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "vitest run",
-    "check": "node --check dist/firefox/content.js && node --check dist/chrome/content.js && node --check dist/loopsmith.user.js"
+    "check": "node --check dist/firefox/content.js && node --check dist/chrome/content.js && node --check dist/loopsmith.user.js",
+    "e2e": "node test/e2e/run.mjs",
+    "e2e:live": "node test/e2e/live.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.4",
+    "playwright": "^1.65.0",
     "vitest": "^5.1.0"
   },
   "allowScripts": {

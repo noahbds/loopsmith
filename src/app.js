@@ -278,19 +278,15 @@ export function start(adapter, store) {
     S.lastT = t;
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
     if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
-    const guard = turnGuard();
-    const crossed = E.crossedLoops(S.loops, prev, t, S.duration, guard);
-    if (!crossed || turnAround(crossed, false)) return;
-    // Those loops have played out. Carry on if another one is still ahead.
-    if (E.anyAhead(S.loops, t, S.duration, guard)) {
-      if (P.after === 'next' && !loopAt(t, guard)) {
-        const next = nextLoop(t); // skip whatever lies between the loops
-        if (next) seekTo(next.a);
-      }
-      render();
-    } else {
+    const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
+    if (!step) return;
+    if (step.finish) {
       finishRun();
+      return;
     }
+    if (step.seek != null) seekTo(step.seek);
+    render();
+    if (step.repeat) replay(ui.badge, 'ysl-pop');
   }
 
   // Counts one play for each loop that just ended; goes back to the start of the
@@ -590,7 +586,7 @@ export function start(adapter, store) {
     let notice = '';
     if (S.live) notice = 'Live streams can’t be looped.';
     else if (ad) notice = S.active ? 'Ad playing — the loops pick up right after.' : 'Ad playing…';
-    else if (!S.ranged) notice = S.duration > 0 ? 'This video is too short to loop a section.' : 'Waiting for the video…';
+    else if (!S.ranged) notice = S.duration > 0 ? 'This video is too short to loop a section.' : adapter.waitingText || 'Waiting for the video…';
     if (notice !== live.notice) {
       live.notice = notice;
       ui.notice.textContent = notice;
@@ -1322,18 +1318,19 @@ export function start(adapter, store) {
 
   function layoutHost() {
     if (!floating) return;
-    const p = S.player;
-    if (!p || !p.isConnected) {
+    const p = S.player && S.player.isConnected ? S.player : null;
+    // Music sites keep their button even before anything has played: the audio only appears then.
+    if (!p && !adapter.dockOnly) {
       if (ui.host.isConnected) ui.host.remove();
       return;
     }
     const fs = document.fullscreenElement;
     const parent = fs && !(fs instanceof HTMLMediaElement) ? fs : document.body || document.documentElement;
     if (ui.host.parentNode !== parent) parent.appendChild(ui.host);
-    const r = p.getBoundingClientRect();
+    const r = p ? p.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const over = !adapter.dockOnly && p.tagName === 'VIDEO' && r.width >= 360 && r.height >= 220 && visibleArea(r, vw, vh) >= 0.5 * r.width * r.height;
+    const over = !adapter.dockOnly && !!p && p.tagName === 'VIDEO' && r.width >= 360 && r.height >= 220 && visibleArea(r, vw, vh) >= 0.5 * r.width * r.height;
     const next = over
       ? { l: Math.round(r.left) + 'px', t: Math.round(r.top) + 'px', w: Math.round(r.width) + 'px', h: Math.round(r.height) + 'px' }
       : { l: '0px', t: '0px', w: vw + 'px', h: Math.max(200, vh - (adapter.dockInset || 0)) + 'px' }; // above the site's player bar
@@ -1393,7 +1390,8 @@ export function start(adapter, store) {
   function updatePill() {
     if (!floating) return;
     const p = S.player;
-    const show = S.open || S.active || (dock ? !!p && (engaged(p) || (!!S.video && !S.video.paused)) : Date.now() < hoverUntil);
+    const show = S.open || S.active || adapter.dockOnly
+      || (dock ? !!p && (engaged(p) || (!!S.video && !S.video.paused)) : Date.now() < hoverUntil);
     ui.btn.classList.toggle('ysl-show', show);
   }
 
@@ -1431,7 +1429,8 @@ export function start(adapter, store) {
   function ensure() {
     const p = adapter.findPlayer(S.active || S.open);
     if (!p) {
-      if (floating && S.player && !S.player.isConnected) {
+      if (floating && adapter.dockOnly) layoutHost();
+      else if (floating && S.player && !S.player.isConnected) {
         if (S.open) closePanel();
         layoutHost();
       }

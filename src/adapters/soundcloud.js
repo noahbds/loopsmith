@@ -18,6 +18,7 @@ export default {
   dockInset: 56, // the player bar
   progressBar: () => document.querySelector('.playbackTimeline__progressBackground'),
   engaged: () => true,
+  waitingText: 'Press play to load the track, then set your loops.',
 
   // The media playing (or last played) in the hidden box.
   findPlayer(keep) {
