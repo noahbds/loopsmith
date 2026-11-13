@@ -1,7 +1,6 @@
 // Builds every target from src/:
 //   dist/firefox/          Firefox extension (MV3, 128+)  + dist/loopsmith-firefox.xpi
 //   dist/chrome/           Chrome / Edge / Brave (MV3)    + dist/loopsmith-chrome.zip
-//   dist/loopsmith.user.js Tampermonkey / Violentmonkey
 //
 // Usage: npm run build
 
@@ -100,30 +99,7 @@ async function chrome() {
   zip(out, join(dist, 'loopsmith-chrome.zip'));
 }
 
-async function userscript() {
-  const header = [
-    '// ==UserScript==',
-    '// @name         Loopsmith (A-B loop)',
-    '// @namespace    loopsmith',
-    `// @version      ${pkg.version}`,
-    `// @description  ${DESCRIPTION}`,
-    // Every site: the generic adapter stays idle on pages without media. Narrow it with your
-    // userscript manager's own include/exclude settings if you prefer.
-    '// @match        *://*/*',
-    '// @run-at       document-start',
-    '// @grant        GM_getValue',
-    '// @grant        GM_setValue',
-    '// @grant        GM_deleteValue',
-    '// @grant        GM_listValues',
-    '// ==/UserScript==',
-    '',
-    '// Built from https://github.com/noahbds/loopsmith (src/). Edit the sources, not this file.',
-    '',
-  ].join('\n');
-  await bundle('src/entries/userscript.js', join(dist, 'loopsmith.user.js'), { target: 'es2020', banner: { js: header } });
-}
-
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
-await Promise.all([firefox(), chrome(), userscript()]);
+await Promise.all([firefox(), chrome()]);
 console.log(`Built Loopsmith ${pkg.version} into dist/`);

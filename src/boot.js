@@ -24,7 +24,8 @@ function adapterFor(hostname) {
 export async function boot(backend) {
   const adapter = adapterFor(location.hostname);
   if (!adapter.shouldRun()) return;
-  // The marker lives in the DOM so two copies (extension + userscript) never both attach to one page.
+  // The marker lives in the DOM so the script never attaches twice to one page (it can be injected
+  // both by the manifest and when a site is turned on in an open tab).
   const root = document.documentElement;
   if (root.hasAttribute('data-ysl')) return;
   root.setAttribute('data-ysl', '');

@@ -16,7 +16,6 @@ to now, Shift+S plays the selected loop, Shift+R turns looping on or off.
   icon → *Turn on for this site* (or *for every website*). A loop button appears when you hover the
   video; for audio and small videos it sits in the bottom-right corner. The hotkeys work there once
   you have played the media.
-- The userscript runs on every site; narrow it with your userscript manager's include/exclude rules.
 
 Players built as web components (media inside shadow DOM) are found too, as long as their shadow
 root is open. **Not yet:** Deezer, Tidal, Apple Music, Amazon Music. See the plan in
@@ -26,19 +25,11 @@ root is open. **Not yet:** Deezer, Tidal, Apple Music, Amazon Music. See the pla
 
 ```bash
 npm install
-npm run build   # dist/firefox, dist/chrome, dist/loopsmith.user.js (+ .xpi / .zip)
-npm test        # unit tests: loop rules, whole playback scenarios, storage, site mapping
-npm run e2e     # browser tests on local test pages (real playback in Chromium)
-npm run e2e:live  # browser tests on YouTube, SoundCloud, Bandcamp with the built extension
+npm run build   # dist/firefox, dist/chrome (+ .xpi / .zip)
 ```
-
-The browser tests need `npx playwright install chromium` once, and ffmpeg for the test media.
-Spotify and YouTube Music can't be tested this way (DRM, and YouTube Music refuses automated
-browsers): check them by hand after changes that touch them.
 
 - **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → `dist/firefox/manifest.json`
 - **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load unpacked → `dist/chrome`
-- **Userscript:** install `dist/loopsmith.user.js` in Tampermonkey or Violentmonkey
 
 Loops saved by YouTube Section Loop 1.x are copied over automatically the first time Loopsmith
 runs on youtube.com.
@@ -55,6 +46,6 @@ src/sites.js    sites with a dedicated adapter (they run without asking for a pe
 src/background.js, src/popup/   per-site on/off: optional permissions + a registered content script
 src/page/       tiny scripts that run in the page's own JS world: YouTube player data, and a hook
                 that brings out-of-page audio (SoundCloud, Spotify) into the page
-src/platform/   storage backends: extension storage, userscript storage
+src/platform/   extension storage
 scripts/build.mjs
 ```

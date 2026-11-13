@@ -1,6 +1,6 @@
 // Saved loops and preferences.
 //
-// Layout in the backend (extension storage, userscript storage, …), one key per item so that
+// Layout in the backend (extension storage), one key per item so that
 // tabs never overwrite each other's entries:
 //   "prefs"            { count, infinite, after }
 //   "m:<media key>"    { loops: [...], t: last change (ms), title?, url? }   e.g. "m:yt:dQw4w9WgXcQ"

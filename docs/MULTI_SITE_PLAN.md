@@ -23,7 +23,7 @@ later polish.
 | Browsers | Firefox + Chrome (and so Edge, Brave, Opera, Vivaldi) from one codebase |
 | Already on AMO? | No, so the Firefox ID, name and storage key can all change freely |
 | Main use case | **Music practice.** Music sites move up, including **Spotify Web** and the other music web apps |
-| Userscript | Kept, built from the same source |
+| Userscript | Kept at first, then dropped (2026-11-13): Loopsmith is extension-only |
 | DRM sites | Spotify yes (music phase). Netflix, Disney+, Prime stay a "maybe later" |
 | Name | **Loopsmith** |
 

@@ -35,6 +35,6 @@ export default {
   controlsTop: () => null,
 
   seek(v, t) {
-    if (!seekViaPlayer(t)) v.currentTime = t; // no page-world helper (userscript): the element
+    if (!seekViaPlayer(t)) v.currentTime = t; // no page-world helper answered: seek the element
   },
 };

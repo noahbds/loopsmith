@@ -28,7 +28,7 @@ function askPage() {
 }
 
 // What the player itself says is loaded. Without the page-world helper: Firefox content scripts
-// reach the page's own methods through wrappedJSObject; userscripts usually run in the page.
+// reach the page's own methods through wrappedJSObject.
 function apiData(p) {
   const fromPage = askPage();
   if (fromPage !== undefined) return fromPage;
