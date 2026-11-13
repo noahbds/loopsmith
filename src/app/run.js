@@ -1,0 +1,207 @@
+// Running the loops: turning playback around, arming and stopping, and the frame scheduling.
+
+import * as E from '../core/engine.js';
+
+export function createRun(A) {
+  const { S, P, ui, adapter, cur, describe, isAd, ready, rememberLoops, skipped } = A;
+
+  function play() {
+    const v = S.video;
+    if (!v) return;
+    try {
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* ignore */ }
+  }
+
+  function seekTo(t) {
+    const v = S.video;
+    if (!v) return;
+    S.lastT = null;
+    try {
+      // Some players (Spotify) must seek through their own controls to stay in step.
+      if (adapter.seek) adapter.seek(v, t, S.player);
+      else v.currentTime = t;
+    } catch (_) { /* ignore */ }
+  }
+
+  // A loop that runs to the end of the video turns around this much early, so the player
+  // never reaches "ended" (which would trigger autoplay). Hidden tabs only get coarse timing.
+  function turnGuard() {
+    const rate = (S.video && S.video.playbackRate) || 1;
+    const base = document.hidden ? 0.1 + 0.3 * rate : 0.25;
+    // Music sites move on to the next track a little before the real end (gapless playback).
+    return Math.max(base, adapter.endGuard || 0);
+  }
+
+  const loopEnd = (l, guard = turnGuard()) => E.loopEnd(l, S.duration, guard);
+  const loopAt = (t, guard = turnGuard()) => E.loopAt(S.loops, t, S.duration, guard);
+  const nextLoop = (t) => E.nextLoop(S.loops, t);
+
+  // Loops are markers on the timeline: when playback runs into the end of one that is switched on
+  // and still has repeats left, it goes back to that loop's start. Seeking by hand never counts.
+  function check() {
+    if (S.dirty || location.href !== S.href) A.syncVideo();
+    const v = S.video;
+    if (!S.active || !v) return;
+    if (!S.trusted || !S.ranged || isAd() || v.readyState < 1 || v.seeking || !(v.duration > 0)) {
+      S.lastT = null;
+      return;
+    }
+    if (Math.abs(v.duration - S.duration) > 0.5) { // different media than expected: re-identify first
+      S.dirty = true;
+      S.lastT = null;
+      return;
+    }
+    const t = v.currentTime;
+    const prev = S.lastT;
+    S.lastT = t;
+    // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
+    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
+    const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
+    if (!step) return;
+    if (step.finish) {
+      finishRun();
+      return;
+    }
+    if (step.seek != null) seekTo(step.seek);
+    A.render();
+    if (step.repeat) A.replay(ui.badge, 'lsm-pop');
+  }
+
+  // Counts one play for each loop that just ended; goes back to the start of the
+  // first one (inner loops first) that still has plays left.
+  function turnAround(crossed, fromEnded) {
+    const l = E.countCrossed(crossed);
+    if (!l) return false;
+    seekTo(l.a);
+    if (fromEnded) play();
+    A.render();
+    A.replay(ui.badge, 'lsm-pop');
+    return true;
+  }
+
+  function finishRun() {
+    const on = S.loops.filter((l) => l.on);
+    const single = on.length === 1 ? on[0] : null;
+    S.active = false;
+    S.lastT = null;
+    for (const l of S.loops) l.done = 0;
+    if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
+    A.render();
+    A.toast(single ? `Loop finished · played ${single.count}×` : 'Loops finished');
+  }
+
+  // The video reached its very end before the regular check caught it.
+  function onEnded() {
+    if (!S.active || !S.trusted || !S.ranged || isAd()) return;
+    const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
+    if (tail.length && turnAround(tail, true)) return;
+    finishRun();
+  }
+
+  // Turns looping on, every count starting over. At least one loop has to be switched on:
+  // the selected one is, when `needSel` asks for it or when none are.
+  function arm(needSel) {
+    A.commitEdits();
+    A.syncVideo();
+    if (!ready()) {
+      A.toast(S.live ? 'Live streams can’t be looped' : 'The video isn’t ready yet');
+      return false;
+    }
+    if ((needSel || !S.loops.some((l) => l.on)) && !cur().on) {
+      cur().on = true;
+      rememberLoops();
+    }
+    for (const l of S.loops) l.done = 0;
+    S.active = true;
+    S.lastT = null;
+    return true;
+  }
+
+  // Enabling: looping is on from here, but playback is left alone. The loops act
+  // when the playhead runs into them.
+  function armRun() {
+    if (!arm(false)) return;
+    A.render();
+    wake();
+    if (!S.open) {
+      const on = S.loops.filter((l) => l.on);
+      A.toast(on.length > 1 ? `Looping ${on.length} sections` : `Looping ${describe(on[0])}`);
+    }
+  }
+
+  // Starting: plays the selected loop from its beginning (which needs looping to be on).
+  function startLoop() {
+    if (!arm(true)) return;
+    const v = S.video;
+    if (S.trusted && !isAd()) {
+      seekTo(cur().a);
+      if (v.paused || v.ended) play();
+    }
+    A.render();
+    wake();
+    if (!S.open) A.toast(`${S.loops.length > 1 ? `Loop ${S.sel + 1}` : 'Loop'} · ${describe(cur())}`);
+  }
+
+  function stopRun() {
+    if (!S.active) return;
+    S.active = false;
+    S.lastT = null;
+    for (const l of S.loops) l.done = 0;
+    A.render();
+    if (!S.open) A.toast('Looping off');
+  }
+
+  // After an edit during a run: if nothing is left to play, looping turns itself off.
+  function settleRun() {
+    if (S.active && !S.loops.some((l) => !skipped(l))) {
+      S.active = false;
+      for (const l of S.loops) l.done = 0;
+    }
+  }
+
+  const IDLE_MS = 250;
+  const TURN_LEAD = 0.75; // seconds of real time before a loop's end at which frames take over
+  let raf = 0;
+  let idle = 0;
+
+  function wantsFrames() {
+    const v = S.video;
+    if (!v || v.paused || v.ended || document.hidden) return false;
+    if (S.open) return true;
+    if (!S.active) return false;
+    const t = v.currentTime;
+    const lead = TURN_LEAD * (v.playbackRate || 1);
+    const guard = turnGuard();
+    for (const l of S.loops) {
+      if (skipped(l)) continue;
+      const left = loopEnd(l, guard) - t;
+      if (left >= 0 && left <= lead) return true;
+    }
+    return false;
+  }
+
+  function kick() {
+    if (raf || idle || !(S.active || S.open)) return;
+    if (wantsFrames()) raf = requestAnimationFrame(frame);
+    else idle = setTimeout(frame, IDLE_MS);
+  }
+
+  function frame() {
+    raf = 0;
+    idle = 0;
+    check();
+    A.renderLive();
+    kick();
+  }
+
+  // Something changed (play, pause, seek, panel opened…): don't wait for the slow timer.
+  function wake() {
+    if (raf || !(S.active || S.open)) return;
+    clearTimeout(idle);
+    frame();
+  }
+
+  return { IDLE_MS, TURN_LEAD, arm, armRun, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
+}
