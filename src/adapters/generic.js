@@ -9,9 +9,11 @@
 
 import { mediaKey, pickMedia } from '../core/mediakey.js';
 import { allMedia, mediaOf, PLAY_EVENT } from '../core/deepmedia.js';
+import { findProgressBar } from '../core/findbar.js';
 
 let lastPlayed = null;
 let current = null;
+const bar = { media: null, el: null, at: 0 };
 
 function snapshot() {
   const items = [];
@@ -61,5 +63,16 @@ export default {
   },
 
   controlsTop: () => null,
+
+  // The site's own seek bar, found by looking (re-checked every 2 s: players build controls late).
+  progressBar(p) {
+    const now = Date.now();
+    if (p !== bar.media || (bar.el && !bar.el.isConnected) || now - bar.at > 2000) {
+      bar.media = p;
+      bar.el = findProgressBar(p);
+      bar.at = now;
+    }
+    return bar.el;
+  },
   navEvents: [],
 };

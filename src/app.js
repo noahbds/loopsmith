@@ -6,6 +6,7 @@ import { MIN_LEN, NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, PALETTE, AFTER } from './c
 import { clamp, round1, fmt, parseTime, segments } from './core/util.js';
 import * as E from './core/engine.js';
 import { visibleArea } from './core/mediakey.js';
+import { shown } from './core/findbar.js';
 import { el, icon, I, setText, setAttr, setStyle, pct } from './ui/dom.js';
 import { LIGHT_CSS, SHADOW_CSS } from './ui/styles.js';
 
@@ -1366,7 +1367,8 @@ export function start(adapter, store) {
     const br = bar && bar.getBoundingClientRect();
     let next = null;
     if (br && br.width > 20 && br.bottom > 0 && br.top < window.innerHeight) {
-      next = { l: br.left, t: br.top + br.height / 2 - 2, w: br.width };
+      // On the bar, and only while the site shows its controls (like YouTube's own markers).
+      next = shown(bar) ? { l: br.left, t: br.top + br.height / 2 - 2, w: br.width } : null;
     } else if (videoRect) {
       next = { l: videoRect.left + 12, t: videoRect.bottom - 4, w: videoRect.width - 24 };
     }
@@ -1408,7 +1410,9 @@ export function start(adapter, store) {
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
         hoverUntil = Date.now() + 2500;
         clearTimeout(hoverTimer);
-        hoverTimer = setTimeout(updatePill, 2600);
+        // Players show their controls on mouse moves and hide them a moment later: the markers follow.
+        hoverTimer = setTimeout(() => { updatePill(); queueLayout(); }, 2600);
+        queueLayout();
       }
       updatePill();
     });
