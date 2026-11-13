@@ -146,7 +146,7 @@ const mainT = () => ({
   const w = await watch(page, mainT, 9000);
   check(w.jumps.length === 1 && near(w.jumps[0], 5), 'Shift+S plays 0:05→0:09 twice (one jump back to 0:05)', JSON.stringify(w.jumps));
   check(w.ts[w.ts.length - 1] > 9.5, 'then playback carries on', String(w.ts[w.ts.length - 1]));
-  check((await shadow(page, (sr) => sr.querySelector('.lsm-toast').textContent)) === 'Loop finished · played 2×', 'toast says the loop finished');
+  check((await shadow(page, (sr) => sr.querySelector('.lsm-toast span').textContent)) === 'Loop finished · played 2×', 'toast says the loop finished');
 
   await page.reload();
   await page.waitForTimeout(1200);
@@ -218,6 +218,101 @@ for (const mode of ['next', 'continue']) {
   await L(page, '.lsm-start').click();
   const w = await watch(page, mainT, 13000);
   check(w.jumps.length === 2 && near(w.jumps[0], 6) && near(w.jumps[1], 2), 'inner loop twice, then the outer one again', JSON.stringify(w.jumps));
+  await ctx.close();
+}
+
+// Skipping and going back: loop 1 0:05→0:10 ×5, loop 2 0:20→0:25 ×2.
+{
+  const { ctx, page } = await open('Skip, previous, restart and go-to', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:10');
+  await setField(page, '#lsm-count', '5');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:20');
+  await setField(page, '#lsm-time-b', '0:25');
+  await setField(page, '#lsm-count', '2');
+  await L(page, '.lsm-chip-main').first().click();
+  await L(page, '.lsm-start').click();
+  const t = () => page.evaluate(() => document.getElementById('main').currentTime);
+  const status = () => shadow(page, (sr) => sr.querySelector('.lsm-main span:last-child').textContent);
+  await page.waitForTimeout(1500);
+  check(near(await t(), 6.5, 1.2), 'playing loop 1 from 0:05', String(await t()));
+
+  await page.keyboard.press('Shift+BracketRight');
+  await page.waitForTimeout(500);
+  check(near(await t(), 20.5, 1), 'Shift+] skips to loop 2 at 0:20', String(await t()));
+  check(/Loop 2/.test(await status()), 'the status says loop 2', await status());
+
+  await page.keyboard.press('Shift+BracketLeft');
+  await page.waitForTimeout(500);
+  check(near(await t(), 5.5, 1), 'Shift+[ early in the repetition goes back to loop 1', String(await t()));
+
+  await page.waitForTimeout(3000); // well into the repetition (> 2 s)
+  await page.keyboard.press('Shift+BracketLeft');
+  await page.waitForTimeout(400);
+  check(near(await t(), 5.4, 1), 'Shift+[ later in a repetition restarts it', String(await t()));
+
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('Shift+Backslash');
+  await page.waitForTimeout(400);
+  const rep = await shadow(page, (sr) => sr.querySelector('.lsm-chip-main span').textContent);
+  check(/^2\/5$/.test(rep), 'Shift+\\ skips a repetition: it counts as played', rep);
+
+  await page.keyboard.press('Shift+Digit2');
+  await page.waitForTimeout(500);
+  check(near(await t(), 20.5, 1), 'Shift+2 goes to loop 2', String(await t()));
+
+  await page.keyboard.press('Shift+BracketRight'); // loop 2 is the last one: nothing left
+  await page.waitForTimeout(500);
+  check(/Loops? finished/.test(await shadow(page, (sr) => sr.querySelector('.lsm-toast span').textContent)), 'skipping the last loop finishes the run');
+  const again = L(page, '.lsm-toast-btn');
+  check((await again.textContent()) === 'Run again', 'the finished toast offers Run again');
+  await again.click();
+  await page.waitForTimeout(500);
+  check(near(await t(), 5.5, 1), 'Run again starts from the first loop', String(await t()));
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-main').classList.contains('lsm-on')), 'and looping is on');
+  await ctx.close();
+}
+
+// A click in the panel must not take the keyboard from the player.
+{
+  const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');
+  await page.evaluate(() => {
+    window.__space = 0;
+    document.addEventListener('keydown', (e) => { if (e.key === ' ') window.__space++; });
+    document.getElementById('main').play();
+  });
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-main').click();
+  await page.keyboard.press('Space');
+  check((await page.evaluate(() => window.__space)) === 1, 'Space after clicking a panel button reaches the page');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-main').getAttribute('aria-pressed') === 'true'), 'and does not press the button again');
+  await ctx.close();
+}
+
+// Undo.
+{
+  const { ctx, page } = await open('Delete and undo', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-add').click();
+  const chips = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-chip').length);
+  check((await chips()) === 2, 'two loops');
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi', { }).filter({ hasText: 'Delete loop 2' }).click();
+  check((await chips()) === 1, 'Delete loop removes it');
+  await L(page, '.lsm-toast-btn').click();
+  check((await chips()) === 2, 'Undo brings it back');
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'Remove all loops' }).click();
+  check((await chips()) === 1, 'Remove all loops leaves the whole video');
+  await L(page, '.lsm-toast-btn').click();
+  check((await chips()) === 2, 'and that can be undone too');
+  // the dot on a chip switches a loop off and on
+  await L(page, '.lsm-dot').nth(1).click();
+  check(await shadow(page, (sr) => sr.querySelectorAll('.lsm-chip')[1].classList.contains('lsm-muted')), 'the dot switches a loop off');
   await ctx.close();
 }
 

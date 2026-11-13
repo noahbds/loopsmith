@@ -7,6 +7,7 @@
 //   on        false = switched off: kept and saved, never played
 //   c         palette index
 //   done      plays completed in the current run
+//   skip      skipped by the user in the current run (runtime only, never saved)
 
 import { MIN_LEN, MAX_LOOPS, MAX_COUNT, PALETTE } from './constants.js';
 import { clamp, round1, isNum } from './util.js';
@@ -20,7 +21,18 @@ export const exhausted = (l) => !l.infinite && l.done >= l.count;
 
 // Loops the engine passes over: switched off, or played out in this run.
 /** @param {Loop} l */
-export const skipped = (l) => !l.on || exhausted(l);
+export const skipped = (l) => !l.on || !!l.skip || exhausted(l);
+
+/** A loop that took part in this run and is over: played out, or skipped by the user. @param {Loop} l */
+export const finished = (l) => !!l.skip || exhausted(l);
+
+/** Every count starts over. @param {Loop[]} loops */
+export function resetRun(loops) {
+  for (const l of loops) {
+    l.done = 0;
+    l.skip = false;
+  }
+}
 
 /**
  * @param {number} a
@@ -30,7 +42,7 @@ export const skipped = (l) => !l.on || exhausted(l);
  * @returns {Loop}
  */
 export function newLoop(a, b, c, defaults) {
-  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0 };
+  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
 }
 
 // A single loop covering the whole media is the untouched default: nothing worth saving or marking.
@@ -148,18 +160,15 @@ export function countCrossed(crossed) {
 // "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
 // them and playback is already inside it: it is played from its own start.
 /**
+ * What happens once the loops in `finishedLoops` are played out: nothing left (finish), jump to the
+ * next loop ("Next loop"), or carry on.
  * @param {Loop[]} loops
- * @param {number} prev
- * @param {number} t
+ * @param {number} finishedA start of the latest-starting loop that just finished
+ * @param {number} t playhead
  * @param {{ duration: number, guard: number, after?: string }} opts
  * @returns {Step}
  */
-export function advance(loops, prev, t, { duration, guard, after = 'continue' }) {
-  const crossed = crossedLoops(loops, prev, t, duration, guard);
-  if (!crossed) return null;
-  const finishedA = Math.max(...crossed.map((l) => l.a));
-  const back = countCrossed(crossed);
-  if (back) return { seek: back.a, repeat: back };
+function settle(loops, finishedA, t, { duration, guard, after = 'continue' }) {
   if (!anyAhead(loops, t, duration, guard)) return { finish: true };
   if (after === 'next') {
     /** @type {Loop | null} */
@@ -169,6 +178,107 @@ export function advance(loops, prev, t, { duration, guard, after = 'continue' })
     // Only a loop around the finished one is left: carry on inside it.
   }
   return { carryOn: true };
+}
+
+/**
+ * @param {Loop[]} loops
+ * @param {number} prev
+ * @param {number} t
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
+export function advance(loops, prev, t, opts) {
+  const crossed = crossedLoops(loops, prev, t, opts.duration, opts.guard);
+  if (!crossed) return null;
+  const finishedA = Math.max(...crossed.map((l) => l.a));
+  const back = countCrossed(crossed);
+  if (back) return { seek: back.a, repeat: back };
+  return settle(loops, finishedA, t, opts);
+}
+
+/**
+ * Restart the repetition the playhead is in: back to its start, no play counted.
+ * @param {Loop | null} target
+ * @returns {Step}
+ */
+export function restartRep(target) {
+  return target ? { seek: target.a, restart: target } : null;
+}
+
+/**
+ * Skip the rest of the repetition the playhead is in: it counts as played. With plays left, go
+ * back to the start; if it was the last one, apply the "when done" rule from the loop's end.
+ * An endless loop can't be played out: skipping a repetition just starts the next one.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
+export function skipRep(loops, target, opts) {
+  if (!target) return null;
+  target.done += 1;
+  if (!exhausted(target)) return { seek: target.a, repeat: target };
+  const end = loopEnd(target, opts.duration, opts.guard);
+  const step = settle(loops, target.a, end, opts);
+  // Carrying on from the middle of a repetition that was skipped: carry on from its end.
+  return step && 'carryOn' in step && !('seek' in step) ? { seek: end, carryOn: true } : step;
+}
+
+/**
+ * Skip the rest of the loop the playhead is in (or the gap before the next one): its remaining
+ * plays are dropped for this run, and playback jumps to the next loop's start. If no loop starts
+ * later but one still surrounds the skipped loop, playback carries on from the skipped loop's end.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target loop in charge at the playhead, or null between loops
+ * @param {number} t playhead
+ * @param {{ duration: number, guard: number }} opts
+ * @returns {Step}
+ */
+export function skipLoop(loops, target, t, opts) {
+  const from = target ? target.a : t;
+  if (target) target.skip = true;
+  /** @type {Loop | null} */
+  let next = null;
+  for (const l of loops) if (!skipped(l) && l.a > from && (!next || l.a < next.a)) next = l;
+  if (next) return { seek: next.a, next };
+  const end = target ? loopEnd(target, opts.duration, opts.guard) : t;
+  if (anyAhead(loops, end, opts.duration, opts.guard)) return { seek: end, carryOn: true };
+  return { finish: true };
+}
+
+/**
+ * The "previous" button, as on a music player: more than `restartAfter` seconds into the
+ * repetition it restarts it; otherwise it goes back to the loop that starts before this one (or
+ * before the playhead, between loops), playing it afresh. Nothing before: restart.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target
+ * @param {number} t playhead
+ * @param {number} [restartAfter]
+ * @returns {Step}
+ */
+export function prevLoop(loops, target, t, restartAfter = 2) {
+  if (target && t - target.a > restartAfter) return { seek: target.a, restart: target };
+  const from = target ? target.a : t;
+  /** @type {Loop | null} */
+  let prev = null;
+  for (const l of loops) if (l.on && l !== target && l.a < from - 1e-6 && (!prev || l.a > prev.a)) prev = l;
+  if (!prev) return target ? { seek: target.a, restart: target } : null;
+  prev.skip = false;
+  prev.done = 0;
+  return { seek: prev.a, prev };
+}
+
+/**
+ * Jump to a given loop and play it afresh, whatever it did before in this run.
+ * @param {Loop | undefined} loop
+ * @returns {Step}
+ */
+export function gotoLoop(loop) {
+  if (!loop) return null;
+  loop.on = true;
+  loop.skip = false;
+  loop.done = 0;
+  return { seek: loop.a, goto: loop };
 }
 
 // Moves one end of a loop. push=true: the other end moves out of the way.

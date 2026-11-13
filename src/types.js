@@ -10,6 +10,7 @@
  * @property {boolean} on      false = switched off: kept and saved, never played
  * @property {number} c        palette index
  * @property {number} done     plays completed in the current run
+ * @property {boolean} [skip]  skipped by the user in the current run (never saved)
  */
 
 /**
@@ -21,7 +22,7 @@
 
 /**
  * Result of one step of the loop engine.
- * @typedef {{ seek: number, repeat: Loop } | { seek: number, next: Loop } | { carryOn: true } | { finish: true } | null} Step
+ * @typedef {{ seek: number, repeat: Loop } | { seek: number, next: Loop } | { seek: number, restart: Loop } | { seek: number, prev: Loop } | { seek: number, goto: Loop } | { seek: number, carryOn: true } | { carryOn: true } | { finish: true } | null} Step
  */
 
 export {};

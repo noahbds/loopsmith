@@ -6,7 +6,7 @@ import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, exhausted, fitView, fmtT, isAd, isDefaultSet, ready, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, ready, toPct, viewEnd, viewStart } = A;
 
   const live = { notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
@@ -105,14 +105,29 @@ export function createRender(A) {
     while (list.length < n) list.push(create());
   }
 
+  // A chip is two buttons: the dot switches the loop on or off, the rest selects it.
   function makeChip() {
     const num = el('b');
     const meta = el('span');
-    const root = el('button', { class: 'lsm-chip', type: 'button' }, el('i'), num, meta);
-    const chip = { root, num, meta };
-    root.addEventListener('click', () => A.selectLoop(ui.chips.indexOf(chip)));
+    const dot = el('button', { class: 'lsm-dot', type: 'button' }, el('i'));
+    const main = el('button', { class: 'lsm-chip-main', type: 'button' }, num, meta);
+    const root = el('div', { class: 'lsm-chip', role: 'group' }, dot, main);
+    const chip = { root, num, meta, dot, main };
+    dot.addEventListener('click', () => A.toggleLoopAt(ui.chips.indexOf(chip)));
+    main.addEventListener('click', () => A.selectLoop(ui.chips.indexOf(chip)));
+    root.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const i = ui.chips.indexOf(chip);
+      if (i !== S.sel) A.selectLoop(i);
+      A.openMenu();
+    });
     ui.chipRow.insertBefore(root, ui.add);
     return chip;
+  }
+
+  // Open menu: a click on the page or Escape closes it (see controls.js).
+  function setMenuOpen(open) {
+    setAttr(ui.more, 'aria-expanded', String(open));
   }
 
   function renderLoops(ok) {
@@ -128,7 +143,7 @@ export function createRender(A) {
     loops.forEach((l, i) => {
       const rgb = PALETTE[l.c];
       const selected = i === S.sel;
-      const spent = S.active && l.on && exhausted(l);
+      const spent = S.active && l.on && finished(l);
       let meta;
       if (!l.on) meta = 'off';
       else if (!S.active) meta = l.infinite ? '∞' : `×${l.count}`;
@@ -137,10 +152,14 @@ export function createRender(A) {
 
       const chip = ui.chips[i];
       setStyle(chip.root, '--cv', rgb);
-      setAttr(chip.root, 'aria-pressed', String(selected));
+      setAttr(chip.main, 'aria-pressed', String(selected));
+      setAttr(chip.dot, 'aria-pressed', String(l.on));
+      setAttr(chip.dot, 'aria-label', `Loop ${i + 1} ${l.on ? 'switched on' : 'switched off'}`);
+      setAttr(chip.dot, 'title', l.on ? `Switch loop ${i + 1} off. It is kept, just not played.` : `Switch loop ${i + 1} back on`);
+      chip.root.classList.toggle('lsm-sel', selected);
       chip.root.classList.toggle('lsm-spent', spent);
       chip.root.classList.toggle('lsm-muted', !l.on);
-      setAttr(chip.root, 'title', `Loop ${i + 1}: ${describe(l)}${l.on ? '' : ' · switched off'}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
+      setAttr(chip.main, 'title', `Loop ${i + 1}: ${describe(l)}${l.on ? '' : ' · switched off'}${l.skip ? ' · skipped' : ''}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
       setText(chip.num, String(i + 1));
       setText(chip.meta, meta);
 
@@ -167,16 +186,9 @@ export function createRender(A) {
     });
 
     const which = many ? `loop ${S.sel + 1}` : 'this loop';
-    const on = ok && cur().on;
-    const trashTitle = many ? `Remove loop ${S.sel + 1}` : 'Reset this loop to the whole video';
     ui.add.hidden = !ok || loops.length >= MAX_LOOPS;
-    ui.trash.hidden = !ok;
-    setAttr(ui.trash, 'title', trashTitle);
-    setAttr(ui.trash, 'aria-label', trashTitle);
-    ui.power.hidden = !ok;
-    setAttr(ui.power, 'aria-pressed', String(on));
-    setAttr(ui.power, 'title', on ? `Switch ${which} off — it is kept, just not played` : `Switch ${which} back on`);
-    setAttr(ui.power, 'aria-label', many ? `Loop ${S.sel + 1} switched on` : 'Loop switched on');
+    ui.more.hidden = !ok;
+    if (!ok) A.closeMenu();
     const startTitle = `Play ${which} from its start`;
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
@@ -251,12 +263,23 @@ export function createRender(A) {
 
   let toastTimer = 0;
 
-  function toast(msg) {
-    ui.toast.textContent = msg;
+  // A short message over the video. With an action ({ label, run }) it stays a little longer and
+  // shows a button, e.g. "Undo".
+  function toast(msg, action) {
+    ui.toast.replaceChildren(el('span', { text: msg }));
+    ui.toast.classList.toggle('lsm-act', !!action);
+    if (action) {
+      const b = el('button', { class: 'lsm-toast-btn', type: 'button', text: action.label });
+      b.addEventListener('click', () => {
+        ui.toast.classList.remove('lsm-show');
+        action.run();
+      });
+      ui.toast.append(b);
+    }
     ui.toast.classList.add('lsm-show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ui.toast.classList.remove('lsm-show'), 1900);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('lsm-show'), action ? 6000 : 1900);
   }
 
-  return { hideTip, live, makeChip, render, renderLive, renderLoops, renderTip, replay, resize, showTip, toast };
+  return { hideTip, live, makeChip, setMenuOpen, render, renderLive, renderLoops, renderTip, replay, resize, showTip, toast };
 }

@@ -59,6 +59,7 @@ export function createTracking(A) {
     S.zoom = false;
     S.loops = [];
     S.sel = 0;
+    S.undo = [];
     A.cancelEdits();
     A.hideTip();
     A.render();

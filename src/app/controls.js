@@ -252,6 +252,70 @@ export function createControls(A) {
     }
   }
 
+  const keyTarget = (e) => (e.composedPath && e.composedPath()[0]) || e.target;
+  const isField = (e) => { const t = keyTarget(e); return !!t && t.tagName === 'INPUT'; };
+
+  // Whether the control that has the focus makes use of this key.
+  function usesKey(e) {
+    const t = keyTarget(e);
+    if (!t || t.nodeType !== 1) return false;
+    if (e.key === 'Escape' || t.tagName === 'INPUT') return true;
+    if (t.tagName === 'BUTTON') return e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar';
+    if (t.getAttribute('role') === 'slider') return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key);
+    return false;
+  }
+
+  // The "more" menu: actions that are used less often than the buttons in the panel.
+  function buildMenu() {
+    const item = (label, run, hint) => {
+      const b = el('button', { class: 'lsm-mi', type: 'button', role: 'menuitem' }, el('span', { text: label }), hint ? el('kbd', { text: hint }) : null);
+      b.addEventListener('click', () => { A.closeMenu(); run(); });
+      return b;
+    };
+    ui.miDelete = item('Delete loop', () => A.removeLoop());
+    const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
+      item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\'),
+      item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z'),
+      ui.miDelete,
+      item('Remove all loops', () => A.clearAll()),
+      item('Keyboard shortcuts', () => A.toggleHelp()));
+    return menu;
+  }
+
+  // The shortcut sheet (opened from the menu).
+  function buildHelp() {
+    const rows = [
+      ['Shift+A / Shift+B', 'Start / end at the current time'],
+      ['Shift+S', 'Play the selected loop'],
+      ['Shift+R', 'Looping on / off'],
+      ['Shift+]  /  Shift+[', 'Next / previous loop'],
+      ['Shift+\\', 'Skip this repetition'],
+      ['Shift+Z', 'Restart this repetition'],
+      ['Shift+1 … 9', 'Go to loop 1 … 9'],
+    ];
+    const list = el('div', { class: 'lsm-help-rows' });
+    for (const [k, v] of rows) list.append(el('kbd', { text: k }), el('span', { text: v }));
+    return el('div', { class: 'lsm-help', hidden: true }, el('div', { class: 'lsm-label', text: 'Keyboard shortcuts' }), list);
+  }
+
+  function openMenu() {
+    if (!ready()) return;
+    const many = S.loops.length > 1;
+    ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
+    ui.menu.hidden = false;
+    A.setMenuOpen(true);
+  }
+
+  function closeMenu() {
+    if (ui.menu.hidden) return;
+    ui.menu.hidden = true;
+    A.setMenuOpen(false);
+  }
+
+  function toggleHelp() {
+    ui.help.hidden = !ui.help.hidden;
+  }
+
   function buildUI() {
     ui.badge = el('span', { class: 'lsm-badge' });
     ui.btn = el('button', {
@@ -271,13 +335,12 @@ export function createControls(A) {
     ui.add = el('button', { class: 'lsm-hb lsm-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time' }, icon(I.plus, 14));
     ui.add.addEventListener('click', A.addLoop);
     ui.chipRow = el('div', { class: 'lsm-chips', role: 'group', 'aria-label': 'Loops' }, ui.add);
-    ui.trash = el('button', { class: 'lsm-hb', type: 'button' }, icon(I.trash, 15));
-    ui.trash.addEventListener('click', A.removeLoop);
-    ui.power = el('button', { class: 'lsm-hb lsm-power', type: 'button', 'aria-pressed': 'true' }, icon(I.power, 15));
-    ui.power.addEventListener('click', A.toggleLoop);
+    ui.more = el('button', { class: 'lsm-hb lsm-more', type: 'button', 'aria-label': 'More', title: 'More', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon(I.more, 16));
+    ui.more.addEventListener('click', () => (ui.menu.hidden ? A.openMenu() : A.closeMenu()));
     const close = el('button', { class: 'lsm-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
     close.addEventListener('click', A.closePanel);
-    const head = el('div', { class: 'lsm-head' }, ui.chipRow, ui.power, ui.trash, close);
+    const head = el('div', { class: 'lsm-head' }, ui.chipRow, ui.more, close);
+    ui.menu = buildMenu();
     ui.notice = el('div', { class: 'lsm-notice', role: 'status' });
 
     // Slider
@@ -338,13 +401,6 @@ export function createControls(A) {
       ui.countState.editing = false;
       A.setInfinite(!cur().infinite);
     });
-    // Clicking the "∞" turns it back into a number (tabbing through must not change anything).
-    ui.count.addEventListener('click', () => {
-      if (ready() && cur().infinite) {
-        A.setInfinite(false);
-        ui.count.select();
-      }
-    });
     ui.count.addEventListener('focus', () => {
       setTimeout(() => { if (focused() === ui.count) ui.count.select(); }, 0);
     });
@@ -398,15 +454,15 @@ export function createControls(A) {
     ui.main = el('button', { class: 'lsm-main', type: 'button', 'aria-pressed': 'false', title: 'Turn looping on / off  (Shift+R)\nThe video stays where it is' },
       ui.mainFill, icon(I.loop, 18, 'lsm-ic-idle'), icon(I.stop, 18, 'lsm-ic-stop'), ui.mainText);
     ui.main.addEventListener('click', () => (S.active ? A.stopRun() : A.armRun()));
-    const reset = el('button', { class: 'lsm-reset', type: 'button', 'aria-label': 'Remove all loops', title: 'Remove all loops and start over' }, icon(I.reset, 18));
-    reset.addEventListener('click', () => {
-      cancelEdits();
-      A.resetAll();
-    });
-    const actions = el('div', { class: 'lsm-actions' }, ui.start, ui.main, reset);
+    ui.prev = el('button', { class: 'lsm-skip', type: 'button', 'aria-label': 'Previous loop', title: 'Previous loop  (Shift+[)\nLater in a repetition: restart it' }, icon(I.prev, 16));
+    ui.prev.addEventListener('click', () => A.navigate('prev'));
+    ui.next = el('button', { class: 'lsm-skip', type: 'button', 'aria-label': 'Next loop', title: 'Skip to the next loop  (Shift+])' }, icon(I.next, 16));
+    ui.next.addEventListener('click', () => A.navigate('skipLoop'));
+    const actions = el('div', { class: 'lsm-actions' }, ui.prev, ui.start, ui.main, ui.next);
 
     ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, actions);
-    ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.notice, ui.body);
+    ui.help = buildHelp();
+    ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.notice, ui.body, ui.help);
 
     // The panel and the toast live in a shadow root: the site's CSS can't reach them.
     // Open, so focus and composedPath() still see which field is being typed in.
@@ -428,20 +484,37 @@ export function createControls(A) {
       if (!e.target || e.target.tagName !== 'INPUT') commitEdits();
     }, true);
 
-    // Keep the player from reacting to anything that happens inside the panel
-    // (hotkeys while typing, click-to-pause, double-click fullscreen…).
+    // Keep the player from reacting to anything that happens inside the panel (click-to-pause,
+    // double-click fullscreen…), and to the keys a control in the panel uses (typing in a field,
+    // Space on a button, arrows on a slider handle). Every other key still reaches the player,
+    // so Space pauses and the arrows seek even after a click in the panel.
     ui.panel.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        A.closePanel();
+        if (!ui.menu.hidden) A.closeMenu();
+        else A.closePanel();
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && !isField(e)) {
+        e.preventDefault();
+        A.undo();
       }
     });
     const stop = (e) => e.stopPropagation();
-    for (const t of ['keydown', 'keyup', 'keypress', 'click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu']) {
-      ui.panel.addEventListener(t, stop);
+    for (const t of ['keydown', 'keyup', 'keypress']) {
+      ui.panel.addEventListener(t, (e) => { if (usesKey(e)) e.stopPropagation(); });
     }
+    for (const t of ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu']) {
+      ui.panel.addEventListener(t, stop);
+      ui.toast.addEventListener(t, stop);
+    }
+    // After a mouse click the focus goes back to the page (a keyboard press keeps it, for Tab).
+    ui.panel.addEventListener('click', (e) => {
+      if (e.detail === 0 || !e.target.closest) return;
+      const b = e.target.closest('button');
+      if (b && focused() === b) b.blur(); // the button's own handler has already run
+      if (!e.target.closest('.lsm-menu, .lsm-more')) A.closeMenu();
+    });
     for (const t of ['wheel', 'touchstart', 'touchend']) ui.panel.addEventListener(t, stop, { passive: true });
   }
 
-  return { bindSlider, buildUI, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
+  return { bindSlider, buildUI, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
 }

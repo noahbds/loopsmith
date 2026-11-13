@@ -326,18 +326,21 @@ Goal: make the rest safe to build.
 
 Fixes your two stated problems.
 
-- [ ] **E1** Implement `skipRep`, `skipLoop`, `prevLoop`, `gotoLoop` and the `skip` flag (3.2),
+- [x] **E1** Implement `skipRep`, `skipLoop`, `prevLoop`, `gotoLoop` and the `skip` flag (3.2),
   with scenario tests: skip on an infinite loop, skip the last loop, skip inside nested and
   overlapping loops, previous loop within and after 2 s, "Next loop" with a skipped middle loop.
-- [ ] **U6** Return focus to the player after pointer use on non-text controls; let non-modifier
+- [x] **U6** Return focus to the player after pointer use on non-text controls; let non-modifier
   keys through to the site unless an input is focused. Test: click Turn on, press Space, the video
   pauses and looping stays on.
-- [ ] **U1 / U2 / U3** Apply the control model (3.1): remove header power, trash and ↻; per-chip
-  on/off and delete; single count stepper with ∞ as its top value.
-- [ ] **U2** Undo toast for delete and clear (3.5).
-- [ ] **U13** "Run again" on the finished toast; optional "keep looping set armed" setting.
-- [ ] Hotkeys from 3.3, after the collision audit; show them in the panel's help sheet (U12).
-- [ ] Minimal ⏮ / ⏭ buttons added to the existing panel (the full redesign comes in Phase 2).
+- [x] **U1 / U2 / U3** Apply the control model (3.1): header power, trash and ↻ removed; per-chip
+  on/off (the dot); delete and clear-all in a ⋯ menu (also by right-clicking a chip). *Not done:* the
+  count stepper still has a separate ∞ button; only the click-the-∞-field duplicate was removed.
+- [x] **U2** Undo toast for delete and clear (3.5).
+- [x] **U13** "Run again" on the finished toast. *Not done:* the optional "keep looping set armed" setting.
+- [~] Hotkeys from 3.3, with a shortcut sheet in the ⋯ menu (U12). *Not done:* the collision audit
+  against each built-in site's own shortcuts. Only YouTube's Shift keys that I know of are covered
+  (`test/keys.test.js`); check the others by hand before release.
+- [x] Minimal ⏮ / ⏭ buttons added to the existing panel (the full redesign comes in Phase 2).
 
 *Done when:* from a running 3-loop set you can skip a repetition, skip a loop, go back, and jump to
 loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and on a generic page.

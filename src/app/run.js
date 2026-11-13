@@ -86,10 +86,10 @@ export function createRun(A) {
     const single = on.length === 1 ? on[0] : null;
     S.active = false;
     S.lastT = null;
-    for (const l of S.loops) l.done = 0;
+    E.resetRun(S.loops);
     if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
     A.render();
-    A.toast(single ? `Loop finished · played ${single.count}×` : 'Loops finished');
+    A.toast(single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
   }
 
   // The video reached its very end before the regular check caught it.
@@ -113,7 +113,7 @@ export function createRun(A) {
       cur().on = true;
       rememberLoops();
     }
-    for (const l of S.loops) l.done = 0;
+    E.resetRun(S.loops);
     S.active = true;
     S.lastT = null;
     return true;
@@ -148,16 +148,101 @@ export function createRun(A) {
     if (!S.active) return;
     S.active = false;
     S.lastT = null;
-    for (const l of S.loops) l.done = 0;
+    E.resetRun(S.loops);
     A.render();
     if (!S.open) A.toast('Looping off');
+  }
+
+  // The loop the skip / previous / restart actions work on: the one in charge at the playhead.
+  const inCharge = () => (S.trusted && S.video ? loopAt(S.video.currentTime) : null);
+
+  // Carries out what an engine action decided: seek, show which loop is now in play, say what happened.
+  function follow(step, { play: andPlay = false, say = '' } = {}) {
+    if (step.finish) {
+      finishRun();
+      return;
+    }
+    if (step.seek != null) seekTo(step.seek);
+    const l = step.repeat || step.next || step.prev || step.goto || step.restart || null;
+    if (l) {
+      const i = S.loops.indexOf(l);
+      if (i >= 0 && i !== S.sel) {
+        S.sel = i;
+        A.hideTip();
+        if (S.zoom) A.fitView();
+      }
+    }
+    if (andPlay && S.video && (S.video.paused || S.video.ended)) play();
+    A.render();
+    wake();
+    if (step.repeat || step.restart) A.replay(ui.badge, 'lsm-pop');
+    if (say) A.toast(say);
+  }
+
+  const loopNo = (l) => (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
+
+  // Skip a repetition or a loop, go back, restart, or jump to loop `arg` (an index). Looping is
+  // turned on first if it is off, since these act on the run.
+  function navigate(kind, arg) {
+    A.commitEdits();
+    A.syncVideo();
+    if (!ready() || !S.trusted || isAd()) {
+      A.toast('Not available right now');
+      return;
+    }
+    if (!S.active && !arm(false)) return;
+    const t = S.video.currentTime;
+    const opts = { duration: S.duration, guard: turnGuard(), after: P.after };
+    const target = inCharge();
+    let step = null;
+    let say = '';
+    let miss = 'Not inside a loop';
+    switch (kind) {
+      case 'skipRep':
+        step = E.skipRep(S.loops, target, opts);
+        say = 'Repetition skipped';
+        break;
+      case 'skipLoop':
+        step = E.skipLoop(S.loops, target, t, opts);
+        say = step && step.next ? `${loopNo(step.next)} · ${describe(step.next)}` : 'Loop skipped';
+        break;
+      case 'prev':
+        step = E.prevLoop(S.loops, target, t);
+        say = step && step.prev ? `Back to ${loopNo(step.prev).toLowerCase()}` : 'Restarted';
+        miss = 'Nothing before this';
+        break;
+      case 'restart':
+        step = E.restartRep(target);
+        say = 'Restarted';
+        break;
+      case 'goto':
+        step = E.gotoLoop(S.loops[arg]);
+        if (step) say = `${loopNo(step.goto)} · ${describe(step.goto)}`;
+        miss = `No loop ${Number(arg) + 1}`;
+        break;
+    }
+    if (!step) {
+      A.toast(miss);
+      return;
+    }
+    if (kind === 'goto') rememberLoops(); // it may have switched the loop on
+    follow(step, { play: kind === 'goto', say: S.open && kind !== 'goto' ? '' : say });
+  }
+
+  // From the top: every count starts over, playback goes to the first loop that is switched on.
+  function runAgain() {
+    if (!arm(false)) return;
+    const first = S.loops.filter((l) => l.on).sort((x, y) => x.a - y.a)[0];
+    const step = E.gotoLoop(first);
+    if (step && S.trusted && !isAd()) follow(step, { play: true });
+    else A.render();
   }
 
   // After an edit during a run: if nothing is left to play, looping turns itself off.
   function settleRun() {
     if (S.active && !S.loops.some((l) => !skipped(l))) {
       S.active = false;
-      for (const l of S.loops) l.done = 0;
+      E.resetRun(S.loops);
     }
   }
 
@@ -203,5 +288,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { IDLE_MS, TURN_LEAD, arm, armRun, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
+  return { IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
 }

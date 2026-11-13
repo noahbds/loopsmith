@@ -4,6 +4,20 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+- Skipping: next loop, previous loop (restarts the repetition when you are more than 2 s into it),
+  skip a repetition, restart a repetition, and go to loop 1–9. Buttons for next / previous in the
+  panel; shortcuts `Shift+]`, `Shift+[`, `Shift+\`, `Shift+Z`, `Shift+1`…`9`, none of them used by
+  YouTube.
+- "Run again" on the *Loop finished* message.
+- Deleting a loop or removing all loops can be undone (button on the message, or Ctrl/Cmd+Z in the
+  panel).
+- Panel: the on/off switch for a loop is now the dot on its chip; the trash and reset buttons are
+  replaced by a ⋯ menu (delete loop, remove all loops, skip / restart a repetition, shortcut list);
+  the ∞ field no longer turns back into a number when clicked (use the ∞ button or −).
+- Fixed: after clicking a button in the panel, Space and the other player keys went to the panel
+  instead of the video (and Space pressed the button again). Keys the focused control doesn't use
+  now reach the player, and a mouse click gives the focus back to the page.
+
 - Popup: *Copy diagnostics for a bug report* shows and copies the version, browser, site and what
   Loopsmith found on the page. Nothing is sent anywhere.
 - Internal: the tests are now part of the repository and run in CI (unit tests on every push, browser

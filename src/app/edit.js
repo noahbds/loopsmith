@@ -67,9 +67,17 @@ export function createEdit(A) {
     const l = cur();
     l.on = !l.on;
     l.done = 0;
+    l.skip = false;
     A.settleRun();
     rememberLoops();
     A.render();
+  }
+
+  // The dot on a chip: switches that loop on or off.
+  function toggleLoopAt(i) {
+    if (!ready() || i < 0 || i >= S.loops.length) return;
+    if (i !== S.sel) selectLoop(i);
+    toggleLoop();
   }
 
   function setZoom(on) {
@@ -116,12 +124,43 @@ export function createEdit(A) {
     A.replay(ui.chips[S.sel].root, 'lsm-new');
   }
 
+  /* Undo: what a delete or clear took away comes back. Kept per video, newest last. */
+
+  function snapshot() {
+    S.undo.push({ loops: E.serializeLoops(S.loops), sel: S.sel });
+    if (S.undo.length > 20) S.undo.shift();
+  }
+
+  function undo() {
+    const snap = S.undo.pop();
+    const loops = snap && E.loopsFromSaved({ loops: snap.loops }, P);
+    if (!loops || !S.ranged) {
+      A.toast('Nothing to undo');
+      return;
+    }
+    E.clampLoops(loops, S.duration);
+    S.loops = loops;
+    S.sel = clamp(snap.sel, 0, loops.length - 1);
+    S.lastT = null;
+    A.hideTip();
+    if (S.zoom) fitView();
+    A.settleRun();
+    rememberLoops();
+    A.render();
+    A.toast('Undone');
+  }
+
+  const UNDO = { label: 'Undo', run: () => undo() };
+
+  // Deletes the selected loop. The last one left goes back to the whole video.
   function removeLoop() {
     if (!ready()) return;
     if (S.loops.length === 1) {
-      resetAll();
+      clearAll();
       return;
     }
+    const n = S.sel + 1;
+    snapshot();
     S.loops.splice(S.sel, 1);
     S.sel = Math.min(S.sel, S.loops.length - 1);
     A.hideTip();
@@ -129,6 +168,7 @@ export function createEdit(A) {
     A.settleRun();
     rememberLoops();
     A.render();
+    A.toast(`Loop ${n} removed`, UNDO);
   }
 
   function resetAll() {
@@ -144,5 +184,14 @@ export function createEdit(A) {
     A.render();
   }
 
-  return { addLoop, markNow, removeLoop, resetAll, selectLoop, setAfter, setCount, setInfinite, setPoint, setZoom, toggleLoop };
+  // Removes every loop (back to the whole video, looping off). Can be undone.
+  function clearAll() {
+    if (!ready()) return;
+    const had = S.loops.length;
+    snapshot();
+    resetAll();
+    A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
+  }
+
+  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setPoint, setZoom, toggleLoop, toggleLoopAt };
 }

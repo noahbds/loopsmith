@@ -1,6 +1,6 @@
-// Keyboard shortcuts.
+// Keyboard shortcuts (which key is which action: src/core/keys.js).
 
-
+import { hotkeyAction } from '../core/keys.js';
 
 export function createHotkeys(A) {
   const { S, floating, engaged } = A;
@@ -11,22 +11,24 @@ export function createHotkeys(A) {
   }
 
   function onHotkey(e) {
-    if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-    if (isTyping(e)) return;
-    const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : String(e.code || '').replace(/^Key/, '').toLowerCase();
-    if (k !== 'a' && k !== 'b' && k !== 'r' && k !== 's') return;
+    if (e.repeat || isTyping(e)) return;
+    const hit = hotkeyAction(e);
+    if (!hit) return;
     if (!S.player || !S.player.isConnected) return;
     // On an arbitrary page, only once the user has played that media (or opened the panel).
     if (floating ? !(S.open || engaged(S.player)) : !S.player.getClientRects().length) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (k === 'r') {
-      if (S.active) A.stopRun();
-      else A.armRun();
-    } else if (k === 's') {
-      A.startLoop();
-    } else {
-      A.markNow(k);
+    switch (hit.action) {
+      case 'toggle': if (S.active) A.stopRun(); else A.armRun(); break;
+      case 'start': A.startLoop(); break;
+      case 'markA': A.markNow('a'); break;
+      case 'markB': A.markNow('b'); break;
+      case 'next': A.navigate('skipLoop'); break;
+      case 'prev': A.navigate('prev'); break;
+      case 'skipRep': A.navigate('skipRep'); break;
+      case 'restart': A.navigate('restart'); break;
+      case 'goto': A.navigate('goto', hit.index); break;
     }
   }
 

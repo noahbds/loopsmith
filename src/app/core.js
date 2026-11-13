@@ -26,6 +26,7 @@ export function createCore(adapter, store) {
     live: false,
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
+    undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
     lastT: null,     // previous playback position seen by the loop check
     open: false,
@@ -48,7 +49,7 @@ export function createCore(adapter, store) {
   const ready = () => !!S.video && S.ranged && !S.live && S.loops.length > 0;
   const cur = () => S.loops[S.sel];
   const fmtT = (sec) => fmt(sec, S.duration >= 3600);
-  const { exhausted, skipped } = E;
+  const { exhausted, finished, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
   const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
   const newLoop = (a, b, c) => E.newLoop(a, b, c, P);
@@ -111,5 +112,5 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, engaged, exhausted, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs, skipped, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs, skipped, toPct, viewEnd, viewStart };
 }

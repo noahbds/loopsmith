@@ -35,9 +35,13 @@ for keeping your favourite part of a song on repeat.
 - Several loops per video or track, overlapping or nested; switch one off without deleting it.
 - When a loop is done: play on, jump to the next loop, or pause after the last one.
 - Loops show on the site's own progress bar, and are saved per video or track.
+- Skip ahead without waiting: next / previous loop, skip a repetition, restart it, or jump to loop 1–9.
+  Deleting loops can be undone.
 - Shortcuts: <kbd>Shift</kbd>+<kbd>A</kbd> / <kbd>Shift</kbd>+<kbd>B</kbd> set start / end to now,
   <kbd>Shift</kbd>+<kbd>S</kbd> plays the selected loop, <kbd>Shift</kbd>+<kbd>R</kbd> turns looping
-  on or off.
+  on or off, <kbd>Shift</kbd>+<kbd>]</kbd> / <kbd>[</kbd> next / previous loop,
+  <kbd>Shift</kbd>+<kbd>\</kbd> skips a repetition, <kbd>Shift</kbd>+<kbd>Z</kbd> restarts it,
+  <kbd>Shift</kbd>+<kbd>1</kbd>…<kbd>9</kbd> goes to that loop.
 
 ## Where it works
 
