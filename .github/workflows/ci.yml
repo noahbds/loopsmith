@@ -23,7 +23,7 @@ jobs:
         run: npm run check
       - name: Validate the Firefox package (Mozilla's linter)
         run: npx --yes web-ext@8 lint --source-dir dist/firefox --self-hosted=false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: loopsmith-packages
           path: |
