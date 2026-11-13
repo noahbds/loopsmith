@@ -86,7 +86,30 @@ export function createCore(adapter, store) {
     store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after });
   }
 
+  // What a bug report needs to know about this page. Nothing here leaves the browser unless the
+  // user copies it from the popup (see src/popup/popup.js).
+  function diagnostics() {
+    let ad = false;
+    try { ad = !!S.player && isAd(); } catch (_) { /* adapter can't tell */ }
+    return {
+      adapter: adapter.id,
+      mode: floating ? 'floating' : 'in-player',
+      frame: window.top === window.self ? 'top' : 'iframe',
+      hasPlayer: !!S.player,
+      hasMedia: !!S.video,
+      mediaKey: S.videoId,
+      duration: Math.round(S.duration * 10) / 10,
+      trusted: S.trusted,
+      ranged: S.ranged,
+      live: S.live,
+      ad,
+      loops: S.loops.length,
+      running: S.active,
+      after: P.after,
+    };
+  }
+
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, cur, describe, engaged, exhausted, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs, skipped, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, engaged, exhausted, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs, skipped, toPct, viewEnd, viewStart };
 }

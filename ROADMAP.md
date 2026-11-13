@@ -295,21 +295,21 @@ Goal: make the rest safe to build.
   `test/e2e/make-media.mjs` instead of committing them. Remove the `.gitignore` line. Add
   `npm test` to `ci.yml`; run e2e in a second job (Playwright, Chromium) that may be marked
   non-blocking at first.
-- [ ] **C2** Split `app.js`:
+- [~] **C2** Split `app.js` *(structural split done: `src/app/` has core, tracking, run, edit, render, controls, layout, hotkeys. Still to do: make the run actions testable without a browser, by injecting the player and clock; do that at the start of Phase 1, before adding skip actions)*. Original plan:
   - `core/session.js`: the state `S`, the run actions (arm, stop, skip, seek) and the check loop,
     with the player and clock injected so it runs under happy-dom or plain mocks.
   - `ui/panel.js`, `ui/slider.js`, `ui/fields.js`, `ui/chips.js`, `ui/compact.js`: DOM only,
     driven by a `render(state)` call.
   - `core/hotkeys.js`, `platform/layout.js` (floating overlay and docking).
   Do it behind the existing tests and the e2e suite, one extraction per commit.
-- [x] **C3** Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
+- [~] **C3** *(done: ESLint, `tsc` on `src/core/{engine,store,util,constants}.js`, `Loop`/`Step` typedefs in `src/types.js`. Left: a formatter, typing `Adapter`, the adapter README, widening `tsc` beyond the core.)* Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
   `Adapter`, `Store`. Move the adapter contract out of `youtube.js` into `src/adapters/README.md`
   plus a typedef.
 - [x] **C5** `npm run dev` (esbuild watch plus `web-ext run`). Replace the `zip` shell call with a
   Node zip so Windows works.
 - [ ] *(deferred to Phase 4)* **D7 / R3** Load only `prefs` and the current media key at boot (`storage.local.get([...])`),
   not the whole store. Library views load lazily.
-- [ ] **C6** "Copy diagnostics" button (popup, later panel menu): version, browser, adapter, media
+- [x] **C6** "Copy diagnostics" button (popup, later panel menu): version, browser, adapter, media
   key, duration, loop count. Nothing is sent anywhere.
 - [x] **C4** Rename the legacy names for **1.3** (owner decision): CSS prefix `ysl-` → `lsm-` (a longer prefix than `ls-`, because the marker and button CSS lives in the site's own DOM),
   `data-ysl*` attributes, `ysl:` events, `ysl-style` id. The content script, the page-world scripts
@@ -317,7 +317,7 @@ Goal: make the rest safe to build.
   names. **Keep reading the old `ysl:v1` localStorage key** (the v1 migration needs it). Check: a tab
   already open before the update must not end up with two attached copies (the attach guard is the
   `data-ysl` attribute, so the new guard has to also respect the old one for one release).
-- [ ] **C7** Fill `CHANGELOG.md` per change from now on; add a PR-template checkbox.
+- [x] **C7** Fill `CHANGELOG.md` per change from now on; add a PR-template checkbox.
 
 *Done when:* CI fails on a broken engine test; `app.js` is under about 400 lines; coverage of
 `session.js` includes the three run actions.

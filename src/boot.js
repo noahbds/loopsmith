@@ -21,6 +21,7 @@ function adapterFor(hostname) {
   return (site && ADAPTERS[site.adapter]) || generic;
 }
 
+/** Starts Loopsmith on this page. Resolves to the running app, or undefined when it has nothing to do here. */
 export async function boot(backend) {
   const adapter = adapterFor(location.hostname);
   if (!adapter.shouldRun()) return;
@@ -42,7 +43,7 @@ export async function boot(backend) {
     try { raw = JSON.parse(localStorage.getItem(adapter.legacyStoreKey)); } catch (_) { /* blocked or corrupt */ }
     migrateV1(store, raw, adapter.keyPrefix);
   }
-  start(adapter, store);
+  return start(adapter, store);
 }
 
 function firstMedia() {

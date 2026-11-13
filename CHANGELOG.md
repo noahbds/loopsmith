@@ -4,6 +4,15 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+- Popup: *Copy diagnostics for a bug report* shows and copies the version, browser, site and what
+  Loopsmith found on the page. Nothing is sent anywhere.
+- Internal: the tests are now part of the repository and run in CI (unit tests on every push, browser
+  tests in a separate job); ESLint and a type check on the loop rules; `npm run dev` rebuilds on
+  change; packages are zipped in Node (no `zip` command needed) and are the same on every build.
+- Internal: the player code is split into parts under `src/app/`.
+- Internal: the page-facing names that began with `ysl-` (CSS classes, data attributes, events) now
+  begin with `lsm-`. Loops saved by version 1.x are still migrated.
+
 ## 1.2.0 (2026-11-13)
 
 First release as **Loopsmith** (previously *YouTube Section Loop*).

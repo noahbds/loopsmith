@@ -86,4 +86,6 @@ export function start(adapter, store) {
   }
   window.addEventListener('keydown', onHotkey, true);
   window.addEventListener('pagehide', () => { store.flush(); });
+
+  return { diagnostics: A.diagnostics };
 }

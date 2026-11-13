@@ -24,12 +24,16 @@ npm run build
 Load `dist/chrome` (`chrome://extensions` → Developer mode → *Load unpacked*) or
 `dist/firefox/manifest.json` (`about:debugging` → *Load Temporary Add-on*). After each
 `npm run build`, click the reload button on the extension and reload the page you test on.
+`npm run dev` rebuilds on every change to `src/`.
 
 ## How the code is organised
 
 ```
 src/core/        loop rules (engine.js), storage, timestamps, media detection: no site specifics
-src/app.js       the player: state, playback control, panel, markers, hotkeys
+src/app.js       wires the parts of the player together (about 90 lines)
+src/app/         the player, in parts: state, video tracking, running the loops, editing, drawing,
+                 panel controls, layout, hotkeys
+test/            unit tests (vitest) and browser tests (Playwright) on local pages
 src/adapters/    one file per site; generic.js handles any other page
 src/sites.js     the built-in sites: which adapter, which pages, which page-world scripts
 src/page/        small scripts that run in the page's own JavaScript world
@@ -49,7 +53,19 @@ scripts/build.mjs   builds both browsers from the same sources (esbuild, no mini
 
 ## Testing your change
 
-Please check by hand, in the browser, at least:
+Run these before opening a pull request (the CI runs the first four on every push):
+
+```bash
+npm run lint        # ESLint
+npm run typecheck   # tsc on the pure core (src/core/engine.js, store.js, util.js), types in src/types.js
+npm test            # unit tests (vitest)
+npm run build
+npm run e2e         # real Chromium on local test pages; needs ffmpeg and `npx playwright install chromium`
+```
+
+New loop rules go in `src/core/engine.js` as pure functions with a test in `test/`.
+
+Please also check by hand, in the browser, at least:
 
 - a loop set to play twice jumps back once, then playback carries on;
 - the markers sit on the site's progress bar;
@@ -57,7 +73,7 @@ Please check by hand, in the browser, at least:
 - two overlapping loops in "Next loop" mode: the first plays its count, then the second plays from
   its own start;
 - the Shift shortcuts work, and don't fire while typing in a text field on the page;
-- YouTube still works if you touched shared code (`src/app.js`, `src/core/`).
+- YouTube still works if you touched shared code (`src/app/`, `src/core/`).
 
 For Firefox, `npx web-ext lint --source-dir dist/firefox` runs Mozilla's validator; the CI runs it
 on every push.
@@ -67,7 +83,7 @@ on every push.
 - **No network requests, analytics or tracking**, ever. Loopsmith's privacy promise depends on it.
 - No runtime dependencies: everything ships in the bundle, nothing is loaded remotely.
 - No `innerHTML` with dynamic content (some sites enforce Trusted Types); build DOM nodes instead.
-- Keep site-specific code in adapters; `src/app.js` and `src/core/` stay site-agnostic.
+- Keep site-specific code in adapters; `src/app/` and `src/core/` stay site-agnostic.
 - Match the existing style (2-space indent, semicolons, single quotes); `.editorconfig` covers the basics.
 
 ## Pull requests
