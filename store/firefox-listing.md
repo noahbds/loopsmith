@@ -44,6 +44,8 @@ Live streams can't be looped, since there is nothing to go back to. Loopsmith is
 
 **E-mail d'assistance:** optional (shown publicly). **Site d'assistance:** `https://github.com/noahbds/loopsmith/issues`
 
+**Licence:** Licence MIT.
+
 **Politique de confidentialité:** yes, paste the text of `PRIVACY.md`.
 
 **Source code:** upload `dist/loopsmith-source.zip` (made with `git archive --format=zip -o dist/loopsmith-source.zip HEAD`).

@@ -49,3 +49,7 @@ src/page/       tiny scripts that run in the page's own JS world: YouTube player
 src/platform/   extension storage
 scripts/build.mjs
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
