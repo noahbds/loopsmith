@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Fixture: custom player</title>
+<style>
+  body{margin:0;background:#111;font-family:sans-serif}
+  .player{position:relative;width:960px;height:540px;margin:40px auto;background:#000}
+  .player video{width:100%;height:100%;display:block}
+  .controls{position:absolute;left:0;right:0;bottom:0;height:110px;padding:0 20px;box-sizing:border-box;transition:opacity .1s}
+  .controls.hidden{opacity:0}
+  .bar{position:absolute;left:20px;right:20px;top:20px;height:6px;margin:0;background:#444}
+  .row{position:absolute;left:20px;bottom:20px;display:flex;gap:12px;align-items:center;color:#fff}
+  input.vol{width:90px}
+</style></head>
+<body>
+<div class="player" id="player">
+  <video id="main" src="main.mp4" preload="metadata" muted></video>
+  <div class="controls" id="controls">
+    <div id="barSlot"></div>
+    <div class="row"><button>play</button><span>0:00 / 1:00</span><input class="vol" type="range" min="0" max="1" step="0.1" aria-label="Volume"></div>
+  </div>
+</div>
+<script>
+  const kind = new URLSearchParams(location.search).get('kind');
+  const slot = document.getElementById('barSlot');
+  const v = document.getElementById('main');
+  let bar;
+  if (kind === 'range') { bar = document.createElement('input'); bar.type = 'range'; bar.min = 0; bar.step = 0.1; }
+  else if (kind === 'aria') { bar = document.createElement('div'); bar.setAttribute('role', 'slider'); bar.tabIndex = 0; }
+  else { bar = document.createElement('div'); bar.className = 'vjs-progress-holder'; }
+  bar.classList.add('bar'); bar.id = 'bar';
+  // SoundCloud's pattern: the controls are visibility:hidden, the bar turns itself back on.
+  if (new URLSearchParams(location.search).has('visover')) { document.getElementById('controls').style.visibility = 'hidden'; bar.style.visibility = 'visible'; }
+  slot.appendChild(bar);
+  v.addEventListener('loadedmetadata', () => {
+    if (kind === 'range') bar.max = v.duration;
+    if (kind === 'aria') bar.setAttribute('aria-valuemax', String(Math.round(v.duration * 1000)));
+  });
+</script>
+</body></html>
