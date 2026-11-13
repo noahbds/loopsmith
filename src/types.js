@@ -10,6 +10,7 @@
  * @property {boolean} on      false = switched off: kept and saved, never played
  * @property {number} c        palette index
  * @property {number} done     plays completed in the current run
+ * @property {string} [name]   optional label
  * @property {boolean} [skip]  skipped by the user in the current run (never saved)
  */
 

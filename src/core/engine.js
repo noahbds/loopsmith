@@ -6,11 +6,12 @@
 //   count     how many times it plays (ignored when infinite)
 //   on        false = switched off: kept and saved, never played
 //   c         palette index
+//   name      optional label, at most NAME_MAX characters
 //   done      plays completed in the current run
 //   skip      skipped by the user in the current run (runtime only, never saved)
 
-import { MIN_LEN, MAX_LOOPS, MAX_COUNT, PALETTE } from './constants.js';
-import { clamp, round1, isNum } from './util.js';
+import { MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, NAME_MAX, PALETTE } from './constants.js';
+import { clamp, roundT, isNum } from './util.js';
 
 /** @typedef {import('../types.js').Loop} Loop */
 /** @typedef {import('../types.js').LoopDefaults} LoopDefaults */
@@ -284,37 +285,61 @@ export function gotoLoop(loop) {
 // Moves one end of a loop. push=true: the other end moves out of the way.
 // push=false: this end stops against the other one. Returns the new { a, b }.
 /**
+ * Moves one end of a loop. push=true: the other end moves out of the way. push=false: this end
+ * stops against it. `digits` is how finely times are kept (1 = tenths, 2 = hundredths).
  * @param {Loop} l
  * @param {'a' | 'b'} which
  * @param {number} value
  * @param {boolean} push
  * @param {number} duration
+ * @param {number} [digits]
  * @returns {{ a: number, b: number }}
  */
-export function movePoint(l, which, value, push, duration) {
+export function movePoint(l, which, value, push, duration, digits = 1) {
   const d = duration;
+  const minLen = digits > 1 ? FINE_MIN_LEN : MIN_LEN;
   let a = l.a;
   let b = l.b;
-  const len = Math.max(MIN_LEN, b - a);
+  const len = Math.max(minLen, b - a);
   if (which === 'a') {
-    a = clamp(round1(value), 0, d - MIN_LEN);
-    if (a > b - MIN_LEN) {
+    a = clamp(roundT(value, digits), 0, d - minLen);
+    if (a > b - minLen) {
       if (push) b = Math.min(d, a + len);
-      else a = b - MIN_LEN;
+      else a = b - minLen;
     }
   } else {
-    b = round1(value);
+    b = roundT(value, digits);
     if (b > d - 0.1) b = d;
-    b = clamp(b, MIN_LEN, d);
-    if (b < a + MIN_LEN) {
+    b = clamp(b, minLen, d);
+    if (b < a + minLen) {
       if (push) a = Math.max(0, b - len);
-      else b = Math.min(d, a + MIN_LEN);
+      else b = Math.min(d, a + minLen);
     }
   }
+  return { a: roundT(a, digits), b: roundT(b, digits) };
+}
+
+/**
+ * Moves the whole loop so it starts at `start`, keeping its length; it stops at the ends of the media.
+ * @param {Loop} l
+ * @param {number} start
+ * @param {number} duration
+ * @param {number} [digits]
+ * @returns {{ a: number, b: number }}
+ */
+export function moveLoop(l, start, duration, digits = 1) {
+  const len = l.b - l.a;
+  const a = clamp(roundT(start, digits), 0, Math.max(0, duration - len));
+  const b = Math.min(duration, roundT(a + len, digits));
   return { a, b };
 }
 
-// Keeps every loop inside [0, duration] and at least MIN_LEN long.
+/**
+ * The loops in play order (by start; the shorter first when they start together). A new array.
+ * @param {Loop[]} loops
+ */
+export const sortedByStart = (loops) => [...loops].sort((x, y) => x.a - y.a || x.b - y.b);
+
 /**
  * @param {Loop[]} loops
  * @param {number} duration
@@ -348,7 +373,7 @@ export function lanesOf(loops) {
 // The stored form of a set of loops.
 /** @param {Loop[]} loops */
 export function serializeLoops(loops) {
-  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c }));
+  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c, ...(l.name ? { name: l.name } : {}) }));
 }
 
 // Reads a stored entry back into loops, dropping anything malformed. Null when nothing usable.
@@ -367,6 +392,7 @@ export function loopsFromSaved(saved, defaults) {
     if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
     if (typeof r.inf === 'boolean') l.infinite = r.inf;
     if (typeof r.on === 'boolean') l.on = r.on;
+    if (typeof r.name === 'string' && r.name.trim()) l.name = r.name.trim().slice(0, NAME_MAX);
     out.push(l);
     if (out.length >= MAX_LOOPS) break;
   }

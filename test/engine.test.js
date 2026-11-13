@@ -114,7 +114,7 @@ describe('saving and restoring', () => {
   it('drops malformed entries', () => {
     const back = E.loopsFromSaved({ loops: [null, { a: 5, b: 2 }, { a: -1, b: 3 }, { a: 'x', b: 3 }, { a: 1, b: 4, n: 0, c: 99 }] }, D);
     expect(back).toHaveLength(1);
-    expect(back[0]).toMatchObject({ a: 1, b: 4, count: 3, c: 5 });
+    expect(back[0]).toMatchObject({ a: 1, b: 4, count: 3, c: 11 }) // an unknown colour index is clamped to the last of the 12;
     expect(E.loopsFromSaved({ loops: [] }, D)).toBe(null);
     expect(E.loopsFromSaved(null, D)).toBe(null);
   });
