@@ -5,9 +5,9 @@
 // Usage: npm run build
 
 import { build } from 'esbuild';
-import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { zipSync } from 'fflate';
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUILT_IN } from '../src/sites.js';
 
@@ -36,9 +36,18 @@ async function bundle(entry, outfile, extra = {}) {
 
 const json = (file, obj) => writeFileSync(file, JSON.stringify(obj, null, 2) + '\n');
 
+// Zips a folder with a fixed timestamp and sorted entries, so the same sources give the same package.
 function zip(dir, out) {
-  rmSync(out, { force: true });
-  execFileSync('zip', ['-qr', '-X', out, '.'], { cwd: dir });
+  const files = {};
+  const walk = (d) => {
+    for (const name of readdirSync(d).sort()) {
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else files[relative(dir, p).split(sep).join('/')] = [new Uint8Array(readFileSync(p)), { mtime: new Date(2020, 0, 1) }];
+    }
+  };
+  walk(dir);
+  writeFileSync(out, zipSync(files, { level: 9 }));
 }
 
 // The parts both extension builds share.
@@ -99,7 +108,28 @@ async function chrome() {
   zip(out, join(dist, 'loopsmith-chrome.zip'));
 }
 
-rmSync(dist, { recursive: true, force: true });
-mkdirSync(dist, { recursive: true });
-await Promise.all([firefox(), chrome()]);
-console.log(`Built Loopsmith ${pkg.version} into dist/`);
+async function buildAll() {
+  rmSync(dist, { recursive: true, force: true });
+  mkdirSync(dist, { recursive: true });
+  await Promise.all([firefox(), chrome()]);
+  console.log(`Built Loopsmith ${pkg.version} into dist/`);
+}
+
+await buildAll();
+
+// `npm run dev`: rebuild when a source file changes. Load dist/chrome as an unpacked extension, or run
+// `npx web-ext run --source-dir dist/firefox`, and reload the extension after a rebuild.
+if (process.argv.includes('--watch')) {
+  let timer = 0;
+  let running = false;
+  watch(join(root, 'src'), { recursive: true }, () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      if (running) return;
+      running = true;
+      try { await buildAll(); } catch (e) { console.error(e.message); }
+      running = false;
+    }, 150);
+  });
+  console.log('Watching src/ for changes (Ctrl+C to stop).');
+}

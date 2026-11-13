@@ -1,23 +1,35 @@
 // Small helpers and timestamp formatting/parsing. No DOM.
 
+/** @param {number} x @param {number} lo @param {number} hi */
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+/** @param {number} x */
 export const round1 = (x) => Math.round(x * 10) / 10;
+/** Rounds to `digits` decimals (1 = tenths, 2 = hundredths). @param {number} x @param {number} [digits] */
+export const roundT = (x, digits = 1) => { const k = 10 ** digits; return Math.round(x * k) / k; };
+/** @param {number} n */
 export const pad2 = (n) => String(n).padStart(2, '0');
+/** @param {unknown} x @returns {x is number} */
 export const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
-export function fmt(sec, withHours) {
-  const tenthsTotal = Math.max(0, Math.round(sec * 10));
-  const whole = Math.floor(tenthsTotal / 10);
-  const tenths = tenthsTotal % 10;
+/**
+ * 1:02:03.5. Tenths by default, hundredths with digits = 2; trailing zeros are dropped.
+ * @param {number} sec @param {boolean} withHours @param {number} [digits]
+ */
+export function fmt(sec, withHours, digits = 1) {
+  const k = 10 ** digits;
+  const total = Math.max(0, Math.round(sec * k));
+  const whole = Math.floor(total / k);
+  const frac = total % k;
   const h = Math.floor(whole / 3600);
   const m = Math.floor((whole % 3600) / 60);
   const s = whole % 60;
   let out = h > 0 || withHours ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
-  if (tenths) out += '.' + tenths;
+  if (frac) out += '.' + String(frac).padStart(digits, '0').replace(/0+$/, '');
   return out;
 }
 
 // Accepts 9:00, 1:02:03.5, 540, 90s, 9m30s, 1h2m, "9 30". Returns seconds or null.
+/** @param {unknown} raw @returns {number | null} */
 export function parseTime(raw) {
   const s = String(raw).trim().toLowerCase().replace(/,/g, '.');
   if (!s) return null;
@@ -39,7 +51,13 @@ export function parseTime(raw) {
 }
 
 // Splits a formatted time into its editable parts: [{start, end, unit}]
-export function segments(val) {
+/**
+ * @param {string} val
+ * @param {number} [digits] decimals shown in the seconds part
+ * @returns {{ start: number, end: number, unit: number }[]}
+ */
+export function segments(val, digits = 1) {
+  /** @type {{ start: number, end: number, unit: number }[]} */
   const out = [];
   const parts = val.split(':');
   let pos = 0;
@@ -48,7 +66,7 @@ export function segments(val) {
     const dot = p.indexOf('.');
     if (i === parts.length - 1 && dot >= 0) {
       out.push({ start: pos, end: pos + dot, unit });
-      out.push({ start: pos + dot + 1, end: pos + p.length, unit: 0.1 });
+      out.push({ start: pos + dot + 1, end: pos + p.length, unit: 10 ** -digits });
     } else {
       out.push({ start: pos, end: pos + p.length, unit });
     }

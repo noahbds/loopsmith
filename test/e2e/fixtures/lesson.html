@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Fixture: lesson page</title>
+<style>
+  body{font-family:sans-serif;margin:0;background:#f4f4f4}
+  .hero{position:relative;height:220px;overflow:hidden}
+  .hero video{width:100%;height:100%;object-fit:cover}
+  /* hostile CSS: should not leak into Loopsmith */
+  div{border:3px dashed red !important;font-family:"Comic Sans MS" !important}
+  button{background:yellow !important;font-size:30px !important}
+  main{max-width:960px;margin:20px auto}
+  #main{width:960px;height:540px;background:#000;display:block}
+  .thumbs video{width:120px;height:68px}
+  .spacer{height:1200px}
+</style></head>
+<body>
+  <section class="hero"><video id="bg" src="bg.mp4" muted loop autoplay playsinline></video></section>
+  <main>
+    <h1>Lesson 12</h1>
+    <video id="main" src="main.mp4" controls preload="metadata"></video>
+    <p class="thumbs"><video id="thumb" src="main.mp4" preload="metadata"></video></p>
+    <input id="notes" placeholder="Notes">
+    <div class="spacer"></div>
+    <audio id="song" src="song.mp3" controls preload="metadata"></audio>
+  </main>
+</body></html>

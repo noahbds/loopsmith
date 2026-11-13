@@ -1,0 +1,15 @@
+{
+  // Type-checks the pure core with JSDoc types. Widen "include" as more files get typed.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "lib": ["ES2023", "DOM"],
+    "skipLibCheck": true
+  },
+  "include": ["src/core/engine.js", "src/core/store.js", "src/core/util.js", "src/core/constants.js", "src/types.js"]
+}

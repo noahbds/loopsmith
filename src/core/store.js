@@ -11,17 +11,39 @@
 
 import { MAX_SAVED } from './constants.js';
 
+/**
+ * @typedef {object} Backend
+ * @property {() => Promise<Record<string, any>>} getAll
+ * @property {(obj: Record<string, any>) => Promise<any>} set
+ * @property {(keys: string[]) => Promise<any>} remove
+ * @property {(cb: (changes: Record<string, any>) => void) => void} [onChange]
+ */
+
+/** @typedef {{ loops: any[], t?: number, title?: string, url?: string }} Entry */
+
+
 const PREFS = 'prefs';
 const MEDIA = 'm:';
+/** @param {unknown} x @returns {x is Record<string, any>} */
 const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 
+/**
+ * @param {Backend} backend
+ * @param {{ maxSaved?: number, delay?: number }} [opts]
+ */
 export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {}) {
+  /** @type {Record<string, any>} */
   let prefs = {};
+  /** @type {Map<string, Entry>} */
   const media = new Map();
+  /** @type {Map<string, any>} */
   const meta = new Map();
+  /** @type {Map<string, any>} */
   const pending = new Map(); // backend key -> value to write (undefined = remove)
+  /** @type {ReturnType<typeof setTimeout> | 0} */
   let timer = 0;
 
+  /** @param {string} key @param {any} value */
   function take(key, value) {
     if (key === PREFS) {
       prefs = isObj(value) ? value : {};
@@ -33,7 +55,7 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
       }
       // An echo of an older write must not replace something newer made here meanwhile.
       const mine = media.get(id);
-      if (!mine || (value.t || 0) >= (mine.t || 0)) media.set(id, value);
+      if (!mine || (value.t || 0) >= (mine.t || 0)) media.set(id, /** @type {Entry} */ (value));
     } else if (value === undefined) {
       meta.delete(key);
     } else {
@@ -46,6 +68,7 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     timer = setTimeout(flush, delay);
   }
 
+  /** @param {string} key @param {any} value */
   function queue(key, value) {
     pending.set(key, value);
     if (delay) schedule();
@@ -54,7 +77,7 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
   // Drops the oldest entries above the limit.
   function prune() {
     if (media.size <= maxSaved) return;
-    const ids = [...media.keys()].sort((x, y) => (media.get(x).t || 0) - (media.get(y).t || 0));
+    const ids = [...media.keys()].sort((x, y) => ((media.get(x) || {}).t || 0) - ((media.get(y) || {}).t || 0));
     for (const id of ids.slice(0, media.size - maxSaved)) {
       media.delete(id);
       pending.set(MEDIA + id, undefined);
@@ -62,11 +85,13 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
   }
 
   function flush() {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     timer = 0;
     prune();
     if (!pending.size) return Promise.resolve();
+    /** @type {Record<string, any>} */
     const set = {};
+    /** @type {string[]} */
     const gone = [];
     for (const [k, v] of pending) {
       if (v === undefined) gone.push(k);
@@ -93,11 +118,14 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
       }
     },
 
+    /** @param {string} id */
     get: (id) => media.get(id) || null,
+    /** @param {string} id */
     has: (id) => media.has(id),
     ids: () => [...media.keys()],
 
     // entry = null removes it.
+    /** @param {string} id @param {Entry | null} entry */
     put(id, entry) {
       if (entry) media.set(id, entry);
       else media.delete(id);
@@ -105,12 +133,15 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     },
 
     getPrefs: () => prefs,
+    /** @param {Record<string, any>} p */
     setPrefs(p) {
       prefs = p;
       queue(PREFS, p);
     },
 
+    /** @param {string} k */
     getMeta: (k) => meta.get(k),
+    /** @param {string} k @param {any} v */
     setMeta(k, v) {
       meta.set(k, v);
       queue(k, v);
@@ -126,6 +157,11 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
 export const V1_KEY = 'ysl:v1';
 const V1_DONE = 'mig:v1';
 
+/**
+ * @param {ReturnType<typeof createStore>} store
+ * @param {any} raw
+ * @param {string} [prefix]
+ */
 export function migrateV1(store, raw, prefix = 'yt') {
   if (store.getMeta(V1_DONE)) return 0;
   let copied = 0;

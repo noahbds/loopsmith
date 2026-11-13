@@ -291,33 +291,33 @@ Each phase is shippable on its own. Item IDs link back to findings.
 
 Goal: make the rest safe to build.
 
-- [ ] **C1** Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
+- [x] **C1** Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
   `test/e2e/make-media.mjs` instead of committing them. Remove the `.gitignore` line. Add
   `npm test` to `ci.yml`; run e2e in a second job (Playwright, Chromium) that may be marked
   non-blocking at first.
-- [ ] **C2** Split `app.js`:
+- [~] **C2** Split `app.js` *(structural split done: `src/app/` has core, tracking, run, edit, render, controls, layout, hotkeys. Still to do: make the run actions testable without a browser, by injecting the player and clock; do that at the start of Phase 1, before adding skip actions)*. Original plan:
   - `core/session.js`: the state `S`, the run actions (arm, stop, skip, seek) and the check loop,
     with the player and clock injected so it runs under happy-dom or plain mocks.
   - `ui/panel.js`, `ui/slider.js`, `ui/fields.js`, `ui/chips.js`, `ui/compact.js`: DOM only,
     driven by a `render(state)` call.
   - `core/hotkeys.js`, `platform/layout.js` (floating overlay and docking).
   Do it behind the existing tests and the e2e suite, one extraction per commit.
-- [ ] **C3** Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
+- [~] **C3** *(done: ESLint, `tsc` on `src/core/{engine,store,util,constants}.js`, `Loop`/`Step` typedefs in `src/types.js`. Left: a formatter, typing `Adapter`, the adapter README, widening `tsc` beyond the core.)* Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
   `Adapter`, `Store`. Move the adapter contract out of `youtube.js` into `src/adapters/README.md`
   plus a typedef.
-- [ ] **C5** `npm run dev` (esbuild watch plus `web-ext run`). Replace the `zip` shell call with a
+- [x] **C5** `npm run dev` (esbuild watch plus `web-ext run`). Replace the `zip` shell call with a
   Node zip so Windows works.
-- [ ] **D7 / R3** Load only `prefs` and the current media key at boot (`storage.local.get([...])`),
+- [ ] *(deferred to Phase 4)* **D7 / R3** Load only `prefs` and the current media key at boot (`storage.local.get([...])`),
   not the whole store. Library views load lazily.
-- [ ] **C6** "Copy diagnostics" button (popup, later panel menu): version, browser, adapter, media
+- [x] **C6** "Copy diagnostics" button (popup, later panel menu): version, browser, adapter, media
   key, duration, loop count. Nothing is sent anywhere.
-- [ ] **C4** Rename the legacy names for **1.3** (owner decision): CSS prefix `ysl-` → `ls-`,
+- [x] **C4** Rename the legacy names for **1.3** (owner decision): CSS prefix `ysl-` → `lsm-` (a longer prefix than `ls-`, because the marker and button CSS lives in the site's own DOM),
   `data-ysl*` attributes, `ysl:` events, `ysl-style` id. The content script, the page-world scripts
   (`src/page/*.js`) and the adapters must change in the same commit, since they talk through those
   names. **Keep reading the old `ysl:v1` localStorage key** (the v1 migration needs it). Check: a tab
   already open before the update must not end up with two attached copies (the attach guard is the
   `data-ysl` attribute, so the new guard has to also respect the old one for one release).
-- [ ] **C7** Fill `CHANGELOG.md` per change from now on; add a PR-template checkbox.
+- [x] **C7** Fill `CHANGELOG.md` per change from now on; add a PR-template checkbox.
 
 *Done when:* CI fails on a broken engine test; `app.js` is under about 400 lines; coverage of
 `session.js` includes the three run actions.
@@ -326,39 +326,45 @@ Goal: make the rest safe to build.
 
 Fixes your two stated problems.
 
-- [ ] **E1** Implement `skipRep`, `skipLoop`, `prevLoop`, `gotoLoop` and the `skip` flag (3.2),
+- [x] **E1** Implement `skipRep`, `skipLoop`, `prevLoop`, `gotoLoop` and the `skip` flag (3.2),
   with scenario tests: skip on an infinite loop, skip the last loop, skip inside nested and
   overlapping loops, previous loop within and after 2 s, "Next loop" with a skipped middle loop.
-- [ ] **U6** Return focus to the player after pointer use on non-text controls; let non-modifier
+- [x] **U6** Return focus to the player after pointer use on non-text controls; let non-modifier
   keys through to the site unless an input is focused. Test: click Turn on, press Space, the video
   pauses and looping stays on.
-- [ ] **U1 / U2 / U3** Apply the control model (3.1): remove header power, trash and ↻; per-chip
-  on/off and delete; single count stepper with ∞ as its top value.
-- [ ] **U2** Undo toast for delete and clear (3.5).
-- [ ] **U13** "Run again" on the finished toast; optional "keep looping set armed" setting.
-- [ ] Hotkeys from 3.3, after the collision audit; show them in the panel's help sheet (U12).
-- [ ] Minimal ⏮ / ⏭ buttons added to the existing panel (the full redesign comes in Phase 2).
+- [x] **U1 / U2 / U3** Apply the control model (3.1): header power, trash and ↻ removed; per-chip
+  on/off (the dot); delete and clear-all in a ⋯ menu (also by right-clicking a chip). *Not done:* the
+  count stepper still has a separate ∞ button; only the click-the-∞-field duplicate was removed.
+- [x] **U2** Undo toast for delete and clear (3.5).
+- [x] **U13** "Run again" on the finished toast. *Not done:* the optional "keep looping set armed" setting.
+- [~] Hotkeys from 3.3, with a shortcut sheet in the ⋯ menu (U12). *Not done:* the collision audit
+  against each built-in site's own shortcuts. Only YouTube's Shift keys that I know of are covered
+  (`test/keys.test.js`); check the others by hand before release.
+- [x] Minimal ⏮ / ⏭ buttons added to the existing panel (the full redesign comes in Phase 2).
 
 *Done when:* from a running 3-loop set you can skip a repetition, skip a loop, go back, and jump to
 loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and on a generic page.
 
-### Phase 2: Panel redesign (target 1.4)
+### Phase 2: Panel redesign (target 1.4) *(built on branch `phase-1-skipping`)*
 
-- [ ] **U5 / U7** Compact run strip plus draggable full editor; remember position and mode (U14).
-- [ ] **U8** Loop names (inline rename), reorder by drag, 12 distinct colours (or colour plus
-  shape/number badge), collapse chips into a scrollable row.
-- [ ] **U9** Drag the filled bar to move a loop; click on the empty track moves nothing unless it
-  is within a few px of a handle; **auto-zoom** on drag, with manual lock.
-- [ ] **U10 / E5** Optional fine precision (0.01 s, shown only when you opt in), minimum loop
-  length 0.1 s when fine mode is on.
-- [ ] **U11 / A1 / A2 / A3** 28 px minimum targets, 12px minimum text, focus moved into the panel
-  on open, roving tabindex on chips, focus trap with Escape to close.
-- [ ] **A5** `forced-colors` styles; **A4** use `rem`-friendly sizes where it doesn't fight the host.
-- [ ] **U12** One-time first-run hint; shortcuts sheet under ⋯.
-- [ ] Re-shoot store screenshots and a short demo GIF (L1).
-
-*Done when:* a new user can set a loop, loop it five times and move to the next without opening
-any tooltip, and a keyboard-only user can do the same.
+- [x] **U5 / U7** Compact run strip plus draggable editor; position remembered per site; run status
+  on its own line. The strip can be turned off from ⋯. *Not done:* a separate "mode" setting.
+- [~] **U8** Loop names (double-click or ⋯), 12 distinct colours. Instead of drag-to-reorder
+  (numbers would no longer match the play order, which is by start time), ⋯ has *Number loops by
+  start time*. *Not done:* collapsing chips into a scrollable row.
+- [~] **U9** Drag the bar to move the whole loop; a stray click moves nothing. *Not done:*
+  auto-zoom while dragging.
+- [x] **U10 / E5** Fine timing (⋯): hundredths of a second, loops down to 0.2 s (not 0.1 s: a loop
+  never turns around sooner than 0.2 s after its start).
+- [~] **U11 / A1 / A2 / A3** Targets are at least 24 px, labels 11.5 px; chip row is one Tab stop with
+  arrow keys; keyboard-opening moves focus inside. *Not done:* a focus trap, 12 px labels.
+- [~] **A5** `forced-colors` styles are in, but **not tested** on Windows. *Not done:* A4 (text
+  scaling, RTL).
+- [x] **U12** One-time tip and the shortcut sheet (⋯).
+- [ ] Re-shoot store screenshots and a short demo GIF (L1). Needs real sites; not done.
+- [x] *Added at your request:* **Play all loops** (rounds): 2 to 99 times or again and again.
+- *Known gap:* on a small video the editor is taller than the space and scrolls, so the action row
+  can be partly hidden. A sticky action row would fix it.
 
 ### Phase 3: Practice features (target 1.5)
 

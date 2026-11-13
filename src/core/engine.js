@@ -6,27 +6,62 @@
 //   count     how many times it plays (ignored when infinite)
 //   on        false = switched off: kept and saved, never played
 //   c         palette index
+//   name      optional label, at most NAME_MAX characters
 //   done      plays completed in the current run
+//   skip      skipped by the user in the current run (runtime only, never saved)
 
-import { MIN_LEN, MAX_LOOPS, MAX_COUNT, PALETTE } from './constants.js';
-import { clamp, round1, isNum } from './util.js';
+import { MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, NAME_MAX, PALETTE } from './constants.js';
+import { clamp, roundT, isNum } from './util.js';
 
+/** @typedef {import('../types.js').Loop} Loop */
+/** @typedef {import('../types.js').LoopDefaults} LoopDefaults */
+/** @typedef {import('../types.js').Step} Step */
+
+/** @param {Loop} l */
 export const exhausted = (l) => !l.infinite && l.done >= l.count;
 
 // Loops the engine passes over: switched off, or played out in this run.
-export const skipped = (l) => !l.on || exhausted(l);
+/** @param {Loop} l */
+export const skipped = (l) => !l.on || !!l.skip || exhausted(l);
 
+/** A loop that took part in this run and is over: played out, or skipped by the user. @param {Loop} l */
+export const finished = (l) => !!l.skip || exhausted(l);
+
+/** Every count starts over. @param {Loop[]} loops */
+export function resetRun(loops) {
+  for (const l of loops) {
+    l.done = 0;
+    l.skip = false;
+  }
+}
+
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @param {LoopDefaults} defaults
+ * @returns {Loop}
+ */
 export function newLoop(a, b, c, defaults) {
-  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0 };
+  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
 }
 
 // A single loop covering the whole media is the untouched default: nothing worth saving or marking.
+/**
+ * @param {Loop[]} loops
+ * @param {number} duration
+ */
 export function isDefaultSet(loops, duration) {
   return loops.length === 1 && loops[0].a <= 0.001 && loops[0].b >= duration - 0.05;
 }
 
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
 // seconds early, so the player never reaches "ended" (which would trigger autoplay).
+/**
+ * @param {Loop} l
+ * @param {number} duration
+ * @param {number} guard
+ */
 export function loopEnd(l, duration, guard) {
   return Math.max(l.a + 0.2, Math.min(l.b, duration - guard));
 }
@@ -34,7 +69,15 @@ export function loopEnd(l, duration, guard) {
 // The loop in charge at the playhead: of the loops it is in, the one whose turn-around point comes
 // first, since that is the one that will send playback back (an inner loop inside an outer one;
 // the earlier of two loops that overlap partly). Same end: the one that starts later.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ * @returns {Loop | null}
+ */
 export function loopAt(loops, t, duration, guard) {
+  /** @type {Loop | null} */
   let best = null;
   let bestEnd = Infinity;
   for (const l of loops) {
@@ -50,14 +93,29 @@ export function loopAt(loops, t, duration, guard) {
 }
 
 // The closest loop that starts after `t` and still has plays left.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @returns {Loop | null}
+ */
 export function nextLoop(loops, t) {
+  /** @type {Loop | null} */
   let next = null;
   for (const l of loops) if (!skipped(l) && l.a > t && (!next || l.a < next.a)) next = l;
   return next;
 }
 
 // Loops whose end playback ran into between `prev` and `t` (forward playback only), or null.
+/**
+ * @param {Loop[]} loops
+ * @param {number} prev
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ * @returns {Loop[] | null}
+ */
 export function crossedLoops(loops, prev, t, duration, guard) {
+  /** @type {Loop[] | null} */
   let crossed = null;
   for (const l of loops) {
     if (skipped(l)) continue;
@@ -68,12 +126,22 @@ export function crossedLoops(loops, prev, t, duration, guard) {
 }
 
 // Whether any playable loop still ends after `t`.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ */
 export function anyAhead(loops, t, duration, guard) {
   return loops.some((l) => !skipped(l) && loopEnd(l, duration, guard) > t);
 }
 
 // Counts one play for each loop that just ended and returns the loop to go back to: the first
 // one (inner loops first) that still has plays left. Null when they have all played out.
+/**
+ * @param {Loop[]} crossed
+ * @returns {Loop | null}
+ */
 export function countCrossed(crossed) {
   crossed.sort((x, y) => y.a - x.a);
   for (const l of crossed) {
@@ -92,14 +160,19 @@ export function countCrossed(crossed) {
 //   { finish: true }          nothing left to play
 // "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
 // them and playback is already inside it: it is played from its own start.
-export function advance(loops, prev, t, { duration, guard, after = 'continue' }) {
-  const crossed = crossedLoops(loops, prev, t, duration, guard);
-  if (!crossed) return null;
-  const finishedA = Math.max(...crossed.map((l) => l.a));
-  const back = countCrossed(crossed);
-  if (back) return { seek: back.a, repeat: back };
+/**
+ * What happens once the loops in `finishedLoops` are played out: nothing left (finish), jump to the
+ * next loop ("Next loop"), or carry on.
+ * @param {Loop[]} loops
+ * @param {number} finishedA start of the latest-starting loop that just finished
+ * @param {number} t playhead
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
+function settle(loops, finishedA, t, { duration, guard, after = 'continue' }) {
   if (!anyAhead(loops, t, duration, guard)) return { finish: true };
   if (after === 'next') {
+    /** @type {Loop | null} */
     let next = null;
     for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
     if (next) return { seek: next.a, next };
@@ -108,42 +181,199 @@ export function advance(loops, prev, t, { duration, guard, after = 'continue' })
   return { carryOn: true };
 }
 
+/**
+ * @param {Loop[]} loops
+ * @param {number} prev
+ * @param {number} t
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
+export function advance(loops, prev, t, opts) {
+  const crossed = crossedLoops(loops, prev, t, opts.duration, opts.guard);
+  if (!crossed) return null;
+  const finishedA = Math.max(...crossed.map((l) => l.a));
+  const back = countCrossed(crossed);
+  if (back) return { seek: back.a, repeat: back };
+  return settle(loops, finishedA, t, opts);
+}
+
+/**
+ * Restart the repetition the playhead is in: back to its start, no play counted.
+ * @param {Loop | null} target
+ * @returns {Step}
+ */
+export function restartRep(target) {
+  return target ? { seek: target.a, restart: target } : null;
+}
+
+/**
+ * Skip the rest of the repetition the playhead is in: it counts as played. With plays left, go
+ * back to the start; if it was the last one, apply the "when done" rule from the loop's end.
+ * An endless loop can't be played out: skipping a repetition just starts the next one.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
+export function skipRep(loops, target, opts) {
+  if (!target) return null;
+  target.done += 1;
+  if (!exhausted(target)) return { seek: target.a, repeat: target };
+  const end = loopEnd(target, opts.duration, opts.guard);
+  const step = settle(loops, target.a, end, opts);
+  // Carrying on from the middle of a repetition that was skipped: carry on from its end.
+  return step && 'carryOn' in step && !('seek' in step) ? { seek: end, carryOn: true } : step;
+}
+
+/**
+ * Skip the rest of the loop the playhead is in (or the gap before the next one): its remaining
+ * plays are dropped for this run, and playback jumps to the next loop's start. If no loop starts
+ * later but one still surrounds the skipped loop, playback carries on from the skipped loop's end.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target loop in charge at the playhead, or null between loops
+ * @param {number} t playhead
+ * @param {{ duration: number, guard: number }} opts
+ * @returns {Step}
+ */
+export function skipLoop(loops, target, t, opts) {
+  const from = target ? target.a : t;
+  if (target) target.skip = true;
+  /** @type {Loop | null} */
+  let next = null;
+  for (const l of loops) if (!skipped(l) && l.a > from && (!next || l.a < next.a)) next = l;
+  if (next) return { seek: next.a, next };
+  const end = target ? loopEnd(target, opts.duration, opts.guard) : t;
+  if (anyAhead(loops, end, opts.duration, opts.guard)) return { seek: end, carryOn: true };
+  return { finish: true };
+}
+
+/**
+ * The "previous" button, as on a music player: more than `restartAfter` seconds into the
+ * repetition it restarts it; otherwise it goes back to the loop that starts before this one (or
+ * before the playhead, between loops), playing it afresh. Nothing before: restart.
+ * @param {Loop[]} loops
+ * @param {Loop | null} target
+ * @param {number} t playhead
+ * @param {number} [restartAfter]
+ * @returns {Step}
+ */
+export function prevLoop(loops, target, t, restartAfter = 2) {
+  if (target && t - target.a > restartAfter) return { seek: target.a, restart: target };
+  const from = target ? target.a : t;
+  /** @type {Loop | null} */
+  let prev = null;
+  for (const l of loops) if (l.on && l !== target && l.a < from - 1e-6 && (!prev || l.a > prev.a)) prev = l;
+  if (!prev) return target ? { seek: target.a, restart: target } : null;
+  prev.skip = false;
+  prev.done = 0;
+  return { seek: prev.a, prev };
+}
+
+/**
+ * Another round: every count starts over and playback goes back to the first loop that is
+ * switched on. Null when no loop is on (then there is nothing to play again).
+ * @param {Loop[]} loops
+ * @returns {Loop | null}
+ */
+export function restartSet(loops) {
+  resetRun(loops);
+  /** @type {Loop | null} */
+  let first = null;
+  for (const l of loops) if (l.on && (!first || l.a < first.a)) first = l;
+  return first;
+}
+
+/**
+ * Jump to a given loop and play it afresh, whatever it did before in this run.
+ * @param {Loop | undefined} loop
+ * @returns {Step}
+ */
+export function gotoLoop(loop) {
+  if (!loop) return null;
+  loop.on = true;
+  loop.skip = false;
+  loop.done = 0;
+  return { seek: loop.a, goto: loop };
+}
+
 // Moves one end of a loop. push=true: the other end moves out of the way.
 // push=false: this end stops against the other one. Returns the new { a, b }.
-export function movePoint(l, which, value, push, duration) {
+/**
+ * Moves one end of a loop. push=true: the other end moves out of the way. push=false: this end
+ * stops against it. `digits` is how finely times are kept (1 = tenths, 2 = hundredths).
+ * @param {Loop} l
+ * @param {'a' | 'b'} which
+ * @param {number} value
+ * @param {boolean} push
+ * @param {number} duration
+ * @param {number} [digits]
+ * @returns {{ a: number, b: number }}
+ */
+export function movePoint(l, which, value, push, duration, digits = 1) {
   const d = duration;
+  const minLen = digits > 1 ? FINE_MIN_LEN : MIN_LEN;
   let a = l.a;
   let b = l.b;
-  const len = Math.max(MIN_LEN, b - a);
+  const len = Math.max(minLen, b - a);
   if (which === 'a') {
-    a = clamp(round1(value), 0, d - MIN_LEN);
-    if (a > b - MIN_LEN) {
+    a = clamp(roundT(value, digits), 0, d - minLen);
+    if (a > b - minLen) {
       if (push) b = Math.min(d, a + len);
-      else a = b - MIN_LEN;
+      else a = b - minLen;
     }
   } else {
-    b = round1(value);
+    b = roundT(value, digits);
     if (b > d - 0.1) b = d;
-    b = clamp(b, MIN_LEN, d);
-    if (b < a + MIN_LEN) {
+    b = clamp(b, minLen, d);
+    if (b < a + minLen) {
       if (push) a = Math.max(0, b - len);
-      else b = Math.min(d, a + MIN_LEN);
+      else b = Math.min(d, a + minLen);
     }
   }
+  return { a: roundT(a, digits), b: roundT(b, digits) };
+}
+
+/**
+ * Moves the whole loop so it starts at `start`, keeping its length; it stops at the ends of the media.
+ * @param {Loop} l
+ * @param {number} start
+ * @param {number} duration
+ * @param {number} [digits]
+ * @returns {{ a: number, b: number }}
+ */
+export function moveLoop(l, start, duration, digits = 1) {
+  const len = l.b - l.a;
+  const a = clamp(roundT(start, digits), 0, Math.max(0, duration - len));
+  const b = Math.min(duration, roundT(a + len, digits));
   return { a, b };
 }
 
-// Keeps every loop inside [0, duration] and at least MIN_LEN long.
+/**
+ * The loops in play order (by start; the shorter first when they start together). A new array.
+ * @param {Loop[]} loops
+ */
+export const sortedByStart = (loops) => [...loops].sort((x, y) => x.a - y.a || x.b - y.b);
+
+/**
+ * @param {Loop[]} loops
+ * @param {number} duration
+ */
 export function clampLoops(loops, duration) {
   for (const l of loops) {
-    l.b = clamp(l.b, MIN_LEN, duration);
-    l.a = clamp(l.a, 0, l.b - MIN_LEN);
+    const min = Math.min(MIN_LEN, Math.max(FINE_MIN_LEN, l.b - l.a)); // a short loop made in fine mode stays short
+    l.b = clamp(l.b, min, duration);
+    l.a = clamp(l.a, 0, l.b - min);
   }
 }
 
 // Loops that overlap in time are drawn on separate rows.
+/**
+ * @param {Loop[]} loops
+ * @returns {number[]}
+ */
 export function lanesOf(loops) {
   const order = loops.map((_, i) => i).sort((x, y) => loops[x].a - loops[y].a);
+  /** @type {number[]} */
   const ends = [];
   const out = new Array(loops.length).fill(0);
   for (const i of order) {
@@ -156,13 +386,20 @@ export function lanesOf(loops) {
 }
 
 // The stored form of a set of loops.
+/** @param {Loop[]} loops */
 export function serializeLoops(loops) {
-  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c }));
+  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c, ...(l.name ? { name: l.name } : {}) }));
 }
 
 // Reads a stored entry back into loops, dropping anything malformed. Null when nothing usable.
+/**
+ * @param {any} saved
+ * @param {LoopDefaults} defaults
+ * @returns {Loop[] | null}
+ */
 export function loopsFromSaved(saved, defaults) {
   if (!saved || !Array.isArray(saved.loops)) return null;
+  /** @type {Loop[]} */
   const out = [];
   for (const r of saved.loops) {
     if (!r || !isNum(r.a) || !isNum(r.b) || !(r.b > r.a) || r.a < 0) continue;
@@ -170,6 +407,7 @@ export function loopsFromSaved(saved, defaults) {
     if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
     if (typeof r.inf === 'boolean') l.infinite = r.inf;
     if (typeof r.on === 'boolean') l.on = r.on;
+    if (typeof r.name === 'string' && r.name.trim()) l.name = r.name.trim().slice(0, NAME_MAX);
     out.push(l);
     if (out.length >= MAX_LOOPS) break;
   }

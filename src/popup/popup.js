@@ -2,6 +2,7 @@
 // It only asks for or gives back permissions; the background script registers the content script.
 
 import { builtInFor } from '../sites.js';
+import { buildReport } from './report.js';
 
 const api = globalThis.browser || globalThis.chrome;
 const ALL = '*://*/*';
@@ -81,6 +82,25 @@ async function render(opts = {}) {
     });
   }
 }
+
+// Gathers what a bug report needs, shows it so it can be read, and copies it. Nothing is sent anywhere.
+async function diagnostics() {
+  let page = null;
+  try { page = await api.tabs.sendMessage(tab.id, { type: 'loopsmith:diagnostics' }); } catch (_) { /* no Loopsmith in that page */ }
+  const text = buildReport({ version: api.runtime.getManifest().version, userAgent: navigator.userAgent, host, page });
+  const box = $('diagText');
+  box.value = text;
+  box.hidden = false;
+  box.select();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (_) { /* the text is selected: Ctrl/Cmd+C works */ }
+  show($('note'), copied ? 'Copied. Paste it into your bug report.' : 'Select and copy the text below.');
+}
+
+$('diag').addEventListener('click', diagnostics);
 
 (async () => {
   [tab] = await api.tabs.query({ active: true, currentWindow: true });

@@ -20,11 +20,16 @@
       <button type="button" id="secondary" class="link" hidden></button>
     </div>
     <p class="note" id="note" hidden></p>
+    <button type="button" id="diag" class="link">Copy diagnostics for a bug report</button>
+    <textarea id="diagText" readonly hidden rows="8" spellcheck="false" aria-label="Diagnostics"></textarea>
   </main>
 
   <footer>
     <p><kbd>Shift</kbd> <kbd>A</kbd> / <kbd>B</kbd> start / end at now</p>
     <p><kbd>Shift</kbd> <kbd>S</kbd> play loop · <kbd>Shift</kbd> <kbd>R</kbd> looping on / off</p>
+    <p><kbd>Shift</kbd> <kbd>]</kbd> / <kbd>[</kbd> next / previous loop</p>
+    <p><kbd>Shift</kbd> <kbd>\</kbd> skip repetition · <kbd>Shift</kbd> <kbd>Z</kbd> restart it</p>
+    <p><kbd>Shift</kbd> <kbd>1</kbd>…<kbd>9</kbd> go to that loop</p>
   </footer>
   <script src="popup.js"></script>
 </body>

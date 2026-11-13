@@ -21,14 +21,16 @@ function adapterFor(hostname) {
   return (site && ADAPTERS[site.adapter]) || generic;
 }
 
+/** Starts Loopsmith on this page. Resolves to the running app, or undefined when it has nothing to do here. */
 export async function boot(backend) {
   const adapter = adapterFor(location.hostname);
   if (!adapter.shouldRun()) return;
   // The marker lives in the DOM so the script never attaches twice to one page (it can be injected
   // both by the manifest and when a site is turned on in an open tab).
   const root = document.documentElement;
-  if (root.hasAttribute('data-ysl')) return;
-  root.setAttribute('data-ysl', '');
+  // Pages that still hold a copy from before 1.3 (it marked itself `data-ysl`) are left alone.
+  if (root.hasAttribute('data-lsm') || root.hasAttribute('data-ysl')) return;
+  root.setAttribute('data-lsm', '');
 
   // Most pages never have media: on those, wait quietly instead of starting anything.
   // (Music sites start right away: their loop button shows before anything plays.)
@@ -41,7 +43,7 @@ export async function boot(backend) {
     try { raw = JSON.parse(localStorage.getItem(adapter.legacyStoreKey)); } catch (_) { /* blocked or corrupt */ }
     migrateV1(store, raw, adapter.keyPrefix);
   }
-  start(adapter, store);
+  return start(adapter, store);
 }
 
 function firstMedia() {
