@@ -4,7 +4,17 @@ A-B loop for any video: repeat one or several sections a chosen number of times.
 handles, type a timestamp, or grab the current time. Hotkeys: Shift+A / Shift+B set the start / end
 to now, Shift+S plays the selected loop, Shift+R turns looping on or off.
 
-Supported today: YouTube. More sites are coming, see [docs/MULTI_SITE_PLAN.md](docs/MULTI_SITE_PLAN.md).
+**Where it works**
+
+- **YouTube**, out of the box: a loop button in the player's control bar, markers on the seek bar.
+- **Any other site with an HTML5 video or audio**, once you turn it on: click the Loopsmith toolbar
+  icon → *Turn on for this site* (or *for every website*). A loop button appears when you hover the
+  video; for audio and small videos it sits in the bottom-right corner. The hotkeys work there once
+  you have played the media.
+- The userscript runs on every site; narrow it with your userscript manager's include/exclude rules.
+
+Not yet: media inside shadow DOM players, SoundCloud, Spotify and other music apps. See the plan in
+[docs/MULTI_SITE_PLAN.md](docs/MULTI_SITE_PLAN.md).
 
 ## Build
 
@@ -27,7 +37,9 @@ runs on youtube.com.
 src/core/       loop rules (engine.js), storage (store.js), timestamps: no DOM, unit-tested
 src/ui/         DOM helpers, icons, styles
 src/app.js      the player: state, playback control, panel, hotkeys
-src/adapters/   one file per site (youtube.js)
+src/adapters/   one file per site (youtube.js) + generic.js for any other page
+src/sites.js    sites with a dedicated adapter (they run without asking for a permission)
+src/background.js, src/popup/   per-site on/off: optional permissions + a registered content script
 src/page/       tiny scripts that run in the page's own JS world (Chrome)
 src/platform/   storage backends: extension storage, userscript storage
 scripts/build.mjs

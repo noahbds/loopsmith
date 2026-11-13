@@ -1,6 +1,9 @@
 # Plan: from "YouTube Section Loop" to a loop tool for any website
 
-Status: Phase 0 built on branch `phase0-foundation` (2026-11-13). Later phases not started.
+Status: Phases 0 and 1 built on branch `phase0-foundation` (2026-11-13). Phase 2 not started.
+
+Phase 1 notes: Firefox moved to Manifest V3 (Firefox 128+) so both browsers share the popup,
+background and page-world scripts. Media inside shadow roots isn't picked up yet (phase 3).
 
 ## 0. Decisions
 

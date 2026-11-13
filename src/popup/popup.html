@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loopsmith</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icon.svg" alt="" width="28" height="28">
+    <h1>Loopsmith</h1>
+  </header>
+
+  <main>
+    <p class="site" id="site"></p>
+    <p class="status" id="status"></p>
+    <div class="actions">
+      <button type="button" id="primary" class="primary" hidden></button>
+      <button type="button" id="secondary" class="link" hidden></button>
+    </div>
+    <p class="note" id="note" hidden></p>
+  </main>
+
+  <footer>
+    <p><kbd>Shift</kbd> <kbd>A</kbd> / <kbd>B</kbd> start / end at now</p>
+    <p><kbd>Shift</kbd> <kbd>S</kbd> play loop · <kbd>Shift</kbd> <kbd>R</kbd> looping on / off</p>
+  </footer>
+  <script src="popup.js"></script>
+</body>
+</html>

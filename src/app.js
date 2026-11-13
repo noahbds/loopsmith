@@ -5,6 +5,7 @@
 import { MIN_LEN, NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, PALETTE, AFTER } from './core/constants.js';
 import { clamp, round1, fmt, parseTime, segments } from './core/util.js';
 import * as E from './core/engine.js';
+import { visibleArea } from './core/mediakey.js';
 import { el, icon, I, setText, setAttr, setStyle, pct } from './ui/dom.js';
 import { LIGHT_CSS, SHADOW_CSS } from './ui/styles.js';
 
@@ -46,6 +47,9 @@ export function start(adapter, store) {
   };
 
   const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [] };
+  // Floating mode (sites without a control bar to join): the panel, toast and a small loop button
+  // sit in an overlay laid over the video, or docked bottom-right for audio and small videos.
+  const floating = !!adapter.floating;
   let shadow = null;
   const focused = () => (shadow && shadow.activeElement) || document.activeElement;
 
@@ -798,6 +802,7 @@ export function start(adapter, store) {
     ui.btn.classList.toggle('ysl-active', S.active);
     setAttr(ui.btn, 'aria-expanded', String(S.open));
     setAttr(ui.btn, 'aria-pressed', String(S.active));
+    updatePill();
 
     renderLoops(ok);
     renderLive();
@@ -1073,9 +1078,10 @@ export function start(adapter, store) {
   function place() {
     const p = S.player;
     if (!p) return;
-    const pr = p.getBoundingClientRect();
+    const pr = (floating ? ui.host : p).getBoundingClientRect();
     const top = adapter.controlsTop(p);
-    const bottom = top == null ? 62 : Math.max(12, Math.round(pr.bottom - top + 8));
+    let bottom = top == null ? 62 : Math.max(12, Math.round(pr.bottom - top + 8));
+    if (floating && dock) bottom = 68; // above the docked loop button
     ui.panel.style.bottom = bottom + 'px';
     ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - 10)) + 'px';
     S.laneW = ui.lane.clientWidth;
@@ -1105,10 +1111,14 @@ export function start(adapter, store) {
   function buildUI() {
     ui.badge = el('span', { class: 'ysl-badge' });
     ui.btn = el('button', {
-      class: `${adapter.buttonClass || ''} ysl-btn`.trim(), type: 'button', title: 'Section loop (Loopsmith)', 'aria-label': 'Section loop',
+      class: floating ? 'ysl-pill' : `${adapter.buttonClass || ''} ysl-btn`.trim(), type: 'button', title: 'Section loop (Loopsmith)', 'aria-label': 'Section loop',
       'aria-haspopup': 'dialog', 'aria-expanded': 'false',
-    }, icon(I.loop, 24), ui.badge);
-    ui.btn.addEventListener('click', () => (S.open ? closePanel() : openPanel()));
+    }, icon(I.loop, floating ? 22 : 24), ui.badge);
+    ui.btn.addEventListener('click', (e) => {
+      if (floating) e.stopPropagation(); // not a click on the page
+      if (S.open) closePanel();
+      else openPanel();
+    });
 
     ui.markBox = el('div', { class: 'ysl-marks', hidden: true });
     ui.toast = el('div', { class: 'ysl-toast', role: 'status', 'aria-live': 'polite' });
@@ -1256,9 +1266,15 @@ export function start(adapter, store) {
 
     // The panel and the toast live in a shadow root: the site's CSS can't reach them.
     // Open, so focus and composedPath() still see which field is being typed in.
-    ui.host = el('div', { class: 'ysl-host' });
+    // A custom tag name: broad site selectors like `body > div` don't match it.
+    ui.host = document.createElement('loopsmith-root');
     shadow = ui.host.attachShadow({ mode: 'open' });
     shadow.append(el('style', { text: SHADOW_CSS }), ui.panel, ui.toast);
+    if (floating) {
+      shadow.append(ui.btn);
+      const base = { position: 'fixed', display: 'block', margin: '0', padding: '0', border: '0', 'z-index': '2147483646', 'pointer-events': 'none', left: '0', top: '0', width: '0', height: '0' };
+      for (const [k, v] of Object.entries(base)) ui.host.style.setProperty(k, v, 'important');
+    }
 
     bindSlider();
 
@@ -1288,10 +1304,92 @@ export function start(adapter, store) {
 
   const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.open) place(); }) : null;
 
+  // Floating mode: the overlay follows the media. Big enough and mostly on screen: laid over the
+  // video. Otherwise (audio, small or scrolled-away video): docked to the bottom-right corner.
+  let dock = false;
+  let hoverUntil = 0;
+  let hoverTimer = 0;
+  const box = { l: '', t: '', w: '', h: '' };
+
+  function layoutHost() {
+    if (!floating) return;
+    const p = S.player;
+    if (!p || !p.isConnected) {
+      if (ui.host.isConnected) ui.host.remove();
+      return;
+    }
+    const fs = document.fullscreenElement;
+    const parent = fs && !(fs instanceof HTMLMediaElement) ? fs : document.body || document.documentElement;
+    if (ui.host.parentNode !== parent) parent.appendChild(ui.host);
+    const r = p.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const over = p.tagName === 'VIDEO' && r.width >= 360 && r.height >= 220 && visibleArea(r, vw, vh) >= 0.5 * r.width * r.height;
+    const next = over
+      ? { l: Math.round(r.left) + 'px', t: Math.round(r.top) + 'px', w: Math.round(r.width) + 'px', h: Math.round(r.height) + 'px' }
+      : { l: '0px', t: '0px', w: vw + 'px', h: vh + 'px' };
+    for (const [k, prop] of [['l', 'left'], ['t', 'top'], ['w', 'width'], ['h', 'height']]) {
+      if (box[k] !== next[k]) {
+        box[k] = next[k];
+        ui.host.style.setProperty(prop, next[k], 'important');
+      }
+    }
+    if (dock !== !over) {
+      dock = !over;
+      ui.host.classList.toggle('ysl-dock', dock);
+      if (S.open) place();
+    }
+    updatePill();
+  }
+
+  // Over a video the button shows while the pointer is on it; docked, once the media has been played.
+  function updatePill() {
+    if (!floating) return;
+    const p = S.player;
+    const show = S.open || S.active || (dock ? !!p && (adapter.engaged(p) || !p.paused) : Date.now() < hoverUntil);
+    ui.btn.classList.toggle('ysl-show', show);
+  }
+
+  let moveQueued = false;
+  function onPointerMove(e) {
+    if (moveQueued || !S.player) return;
+    moveQueued = true;
+    const x = e.clientX;
+    const y = e.clientY;
+    requestAnimationFrame(() => {
+      moveQueued = false;
+      if (dock || !S.player) return;
+      const r = S.player.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        hoverUntil = Date.now() + 2500;
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(updatePill, 2600);
+      }
+      updatePill();
+    });
+  }
+
+  let layoutQueued = false;
+  function queueLayout() {
+    if (layoutQueued) return;
+    layoutQueued = true;
+    requestAnimationFrame(() => {
+      layoutQueued = false;
+      layoutHost();
+      if (S.open) place();
+    });
+  }
+
   // Sites like YouTube are single-page apps and rebuild parts of the player; re-attach whatever went missing.
   function ensure() {
-    const p = adapter.findPlayer();
-    if (!p) return;
+    const p = adapter.findPlayer(S.active || S.open);
+    if (!p) {
+      if (floating && S.player && !S.player.isConnected) {
+        if (S.open) closePanel();
+        layoutHost();
+      }
+      return;
+    }
     if (p !== S.player) {
       S.player = p;
       S.dirty = true;
@@ -1299,6 +1397,10 @@ export function start(adapter, store) {
         resizeWatch.disconnect();
         resizeWatch.observe(p);
       }
+    }
+    if (floating) {
+      layoutHost();
+      return;
     }
     if (ui.host.parentNode !== p) p.appendChild(ui.host);
     const host = adapter.buttonHost(p);
@@ -1317,7 +1419,9 @@ export function start(adapter, store) {
     if (isTyping(e)) return;
     const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : String(e.code || '').replace(/^Key/, '').toLowerCase();
     if (k !== 'a' && k !== 'b' && k !== 'r' && k !== 's') return;
-    if (!S.player || !S.player.isConnected || !S.player.getClientRects().length) return;
+    if (!S.player || !S.player.isConnected) return;
+    // On an arbitrary page, only once the user has played that media (or opened the panel).
+    if (floating ? !(S.open || adapter.engaged(S.player)) : !S.player.getClientRects().length) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (k === 'r') {
@@ -1334,10 +1438,12 @@ export function start(adapter, store) {
   /* Boot                                                               */
   /* ------------------------------------------------------------------ */
 
-  const style = document.createElement('style');
-  style.id = 'ysl-style';
-  style.textContent = LIGHT_CSS;
-  (document.head || document.documentElement).appendChild(style);
+  if (!floating) { // the button and the markers live in the site's own DOM
+    const style = document.createElement('style');
+    style.id = 'ysl-style';
+    style.textContent = LIGHT_CSS;
+    (document.head || document.documentElement).appendChild(style);
+  }
 
   buildUI();
   render();
@@ -1366,7 +1472,23 @@ export function start(adapter, store) {
       scheduleSync();
     });
   }
-  document.addEventListener('fullscreenchange', () => { if (S.open) requestAnimationFrame(place); });
+  document.addEventListener('fullscreenchange', () => {
+    if (floating) queueLayout();
+    else if (S.open) requestAnimationFrame(place);
+  });
+  if (floating) {
+    window.addEventListener('scroll', queueLayout, { capture: true, passive: true });
+    window.addEventListener('resize', queueLayout, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
+    for (const t of ['play', 'pause']) document.addEventListener(t, () => setTimeout(updatePill, 0), true);
+  }
+  if (adapter.init) {
+    adapter.init(() => {
+      ensure();
+      S.dirty = true;
+      scheduleSync();
+    });
+  }
   window.addEventListener('keydown', onHotkey, true);
   window.addEventListener('pagehide', () => { store.flush(); });
 }
