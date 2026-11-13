@@ -16,7 +16,9 @@ export function createLayout(A) {
     if (floating && dock) bottom = 68; // above the docked loop button
     ui.panel.style.bottom = bottom + 'px';
     ui.strip.style.bottom = bottom + 'px';
-    ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - 10)) + 'px';
+    // Over a video the loop button sits at the top right: keep the panel clear of it (it scrolls instead).
+    const topRoom = floating && !dock ? 58 : 10;
+    ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - topRoom)) + 'px';
     S.laneW = ui.lane.clientWidth;
     S.dpr = window.devicePixelRatio || 1;
     clampPos(pr);

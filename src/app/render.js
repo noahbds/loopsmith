@@ -201,6 +201,7 @@ export function createRender(A) {
     const startTitle = `Play ${which} from its start`;
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
+    A.syncToolbar();
     ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()) && (!floating || L.barPlaced));
     ui.markBox.classList.toggle('lsm-live', S.active);
   }
@@ -253,6 +254,7 @@ export function createRender(A) {
     setAttr(ui.main, 'aria-pressed', String(S.active));
     setText(ui.mainText, S.active ? 'Turn off' : 'Turn looping on');
     ui.status.hidden = !S.active;
+    ui.hint.hidden = P.hintSeen;
     live.stale = true; // the run status below is rebuilt by renderLive()
     if (!S.active) {
       live.prog = -1;

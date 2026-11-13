@@ -415,6 +415,33 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// Keyboard use of the chip row, and the first-run tip.
+{
+  const { ctx, page } = await open('Chips by keyboard, first-run tip', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  check(await L(page, '.lsm-hint').isVisible(), 'the tip shows the first time');
+  await L(page, '.lsm-add').click();
+  const stops = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-chips button')].filter((b) => b.tabIndex === 0).length);
+  check((await stops()) === 1, 'the chip row is a single Tab stop', String(await stops()));
+  await L(page, '.lsm-chip-main').first().focus();
+  await page.keyboard.press('ArrowRight');
+  const active = () => shadow(page, (sr) => sr.activeElement && sr.activeElement.className);
+  check(/lsm-dot/.test(await active()), 'the arrow keys move along the row', await active());
+  await page.keyboard.press('End');
+  check(/lsm-add/.test(await active()), 'End goes to the last button', await active());
+  await page.keyboard.press('Home');
+  check(/lsm-dot/.test(await active()), 'Home goes to the first', await active());
+  await L(page, '.lsm-hint-btn').click();
+  check(!(await L(page, '.lsm-hint').isVisible()), 'Got it hides the tip');
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  check(!(await L(page, '.lsm-hint').isVisible()), 'and it stays hidden');
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');

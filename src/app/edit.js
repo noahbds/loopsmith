@@ -90,6 +90,13 @@ export function createEdit(A) {
     A.toast(P.fine ? 'Times to hundredths of a second' : 'Times to tenths of a second');
   }
 
+  // Whether the small strip shows while looping with the editor closed.
+  function setStrip(on) {
+    P.strip = !!on;
+    rememberPrefs();
+    A.render();
+  }
+
   function setAfter(v) {
     P.after = AFTER.includes(v) ? v : 'continue';
     rememberPrefs();

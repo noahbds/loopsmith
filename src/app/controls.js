@@ -273,9 +273,40 @@ export function createControls(A) {
     const t = keyTarget(e);
     if (!t || t.nodeType !== 1) return false;
     if (e.key === 'Escape' || t.tagName === 'INPUT') return true;
-    if (t.tagName === 'BUTTON') return e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar';
+    if (t.tagName === 'BUTTON') {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') return true;
+      return !!t.closest('[role="toolbar"]') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key);
+    }
     if (t.getAttribute('role') === 'slider') return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key);
     return false;
+  }
+
+  // The row of chips is one Tab stop; the arrow keys move along it (Home / End jump to the ends).
+  const toolbarItems = () => [...ui.chipRow.querySelectorAll('button')].filter((b) => !b.hidden && !b.closest('[hidden]'));
+
+  function syncToolbar() {
+    const items = toolbarItems();
+    if (!items.length) return;
+    const keep = items.includes(ui.rove) ? ui.rove : (ui.chips[S.sel] && ui.chips[S.sel].main) || items[0];
+    for (const b of items) b.tabIndex = b === keep ? 0 : -1;
+  }
+
+  function bindToolbar(row) {
+    row.addEventListener('focusin', (e) => {
+      if (e.target.tagName === 'BUTTON') {
+        ui.rove = e.target;
+        syncToolbar();
+      }
+    });
+    row.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const items = toolbarItems();
+      const i = items.indexOf(focused());
+      if (i < 0) return;
+      e.preventDefault();
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : clamp(i + (e.key === 'ArrowRight' ? 1 : -1), 0, items.length - 1);
+      items[next].focus();
+    });
   }
 
   // The "more" menu: actions that are used less often than the buttons in the panel.
@@ -401,7 +432,11 @@ export function createControls(A) {
     ui.btn.addEventListener('click', (e) => {
       if (floating) e.stopPropagation(); // not a click on the page
       if (S.open) A.closePanel();
-      else A.openPanel();
+      else {
+        A.openPanel();
+        // Opened from the keyboard: put the focus inside, on the selected loop.
+        if (e.detail === 0 && ui.chips[S.sel]) ui.chips[S.sel].main.focus({ preventScroll: true });
+      }
     });
 
     ui.markBox = el('div', { class: floating ? 'lsm-marks lsm-float' : 'lsm-marks', hidden: true });
@@ -410,7 +445,8 @@ export function createControls(A) {
     // Header: one chip per loop
     ui.add = el('button', { class: 'lsm-hb lsm-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time' }, icon(I.plus, 14));
     ui.add.addEventListener('click', A.addLoop);
-    ui.chipRow = el('div', { class: 'lsm-chips', role: 'group', 'aria-label': 'Loops' }, ui.add);
+    ui.chipRow = el('div', { class: 'lsm-chips', role: 'toolbar', 'aria-label': 'Loops' }, ui.add);
+    bindToolbar(ui.chipRow);
     ui.more = el('button', { class: 'lsm-hb lsm-more', type: 'button', 'aria-label': 'More', title: 'More', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon(I.more, 16));
     ui.more.addEventListener('click', () => (ui.menu.hidden ? A.openMenu() : A.closeMenu()));
     const close = el('button', { class: 'lsm-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
@@ -419,6 +455,13 @@ export function createControls(A) {
     const head = el('div', { class: 'lsm-head' }, ui.grip, ui.chipRow, ui.more, close);
     ui.menu = buildMenu();
     ui.notice = el('div', { class: 'lsm-notice', role: 'status' });
+    const gotIt = el('button', { class: 'lsm-hint-btn', type: 'button', text: 'Got it' });
+    gotIt.addEventListener('click', () => {
+      P.hintSeen = true;
+      A.rememberPrefs();
+      A.render();
+    });
+    ui.hint = el('div', { class: 'lsm-hint', hidden: true }, el('span', { text: 'Tip: every shortcut is listed under ⋯' }), gotIt);
 
     // Slider
     ui.thumb.a = el('div', { class: 'lsm-thumb lsm-thumb-a', 'data-which': 'a', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop start', text: 'A' });
@@ -559,7 +602,7 @@ export function createControls(A) {
     ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, rounds, ui.status, actions);
     ui.strip = buildStrip();
     ui.help = buildHelp();
-    ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.notice, ui.body, ui.help);
+    ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.hint, ui.notice, ui.body, ui.help);
 
     // The panel and the toast live in a shadow root: the site's CSS can't reach them.
     // Open, so focus and composedPath() still see which field is being typed in.
@@ -617,5 +660,5 @@ export function createControls(A) {
     });
   }
 
-  return { bindSlider, buildUI, startRename, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
+  return { bindSlider, buildUI, syncToolbar, startRename, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
 }
