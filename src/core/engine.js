@@ -11,22 +11,44 @@
 import { MIN_LEN, MAX_LOOPS, MAX_COUNT, PALETTE } from './constants.js';
 import { clamp, round1, isNum } from './util.js';
 
+/** @typedef {import('../types.js').Loop} Loop */
+/** @typedef {import('../types.js').LoopDefaults} LoopDefaults */
+/** @typedef {import('../types.js').Step} Step */
+
+/** @param {Loop} l */
 export const exhausted = (l) => !l.infinite && l.done >= l.count;
 
 // Loops the engine passes over: switched off, or played out in this run.
+/** @param {Loop} l */
 export const skipped = (l) => !l.on || exhausted(l);
 
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @param {LoopDefaults} defaults
+ * @returns {Loop}
+ */
 export function newLoop(a, b, c, defaults) {
   return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0 };
 }
 
 // A single loop covering the whole media is the untouched default: nothing worth saving or marking.
+/**
+ * @param {Loop[]} loops
+ * @param {number} duration
+ */
 export function isDefaultSet(loops, duration) {
   return loops.length === 1 && loops[0].a <= 0.001 && loops[0].b >= duration - 0.05;
 }
 
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
 // seconds early, so the player never reaches "ended" (which would trigger autoplay).
+/**
+ * @param {Loop} l
+ * @param {number} duration
+ * @param {number} guard
+ */
 export function loopEnd(l, duration, guard) {
   return Math.max(l.a + 0.2, Math.min(l.b, duration - guard));
 }
@@ -34,7 +56,15 @@ export function loopEnd(l, duration, guard) {
 // The loop in charge at the playhead: of the loops it is in, the one whose turn-around point comes
 // first, since that is the one that will send playback back (an inner loop inside an outer one;
 // the earlier of two loops that overlap partly). Same end: the one that starts later.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ * @returns {Loop | null}
+ */
 export function loopAt(loops, t, duration, guard) {
+  /** @type {Loop | null} */
   let best = null;
   let bestEnd = Infinity;
   for (const l of loops) {
@@ -50,14 +80,29 @@ export function loopAt(loops, t, duration, guard) {
 }
 
 // The closest loop that starts after `t` and still has plays left.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @returns {Loop | null}
+ */
 export function nextLoop(loops, t) {
+  /** @type {Loop | null} */
   let next = null;
   for (const l of loops) if (!skipped(l) && l.a > t && (!next || l.a < next.a)) next = l;
   return next;
 }
 
 // Loops whose end playback ran into between `prev` and `t` (forward playback only), or null.
+/**
+ * @param {Loop[]} loops
+ * @param {number} prev
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ * @returns {Loop[] | null}
+ */
 export function crossedLoops(loops, prev, t, duration, guard) {
+  /** @type {Loop[] | null} */
   let crossed = null;
   for (const l of loops) {
     if (skipped(l)) continue;
@@ -68,12 +113,22 @@ export function crossedLoops(loops, prev, t, duration, guard) {
 }
 
 // Whether any playable loop still ends after `t`.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ */
 export function anyAhead(loops, t, duration, guard) {
   return loops.some((l) => !skipped(l) && loopEnd(l, duration, guard) > t);
 }
 
 // Counts one play for each loop that just ended and returns the loop to go back to: the first
 // one (inner loops first) that still has plays left. Null when they have all played out.
+/**
+ * @param {Loop[]} crossed
+ * @returns {Loop | null}
+ */
 export function countCrossed(crossed) {
   crossed.sort((x, y) => y.a - x.a);
   for (const l of crossed) {
@@ -92,6 +147,13 @@ export function countCrossed(crossed) {
 //   { finish: true }          nothing left to play
 // "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
 // them and playback is already inside it: it is played from its own start.
+/**
+ * @param {Loop[]} loops
+ * @param {number} prev
+ * @param {number} t
+ * @param {{ duration: number, guard: number, after?: string }} opts
+ * @returns {Step}
+ */
 export function advance(loops, prev, t, { duration, guard, after = 'continue' }) {
   const crossed = crossedLoops(loops, prev, t, duration, guard);
   if (!crossed) return null;
@@ -100,6 +162,7 @@ export function advance(loops, prev, t, { duration, guard, after = 'continue' })
   if (back) return { seek: back.a, repeat: back };
   if (!anyAhead(loops, t, duration, guard)) return { finish: true };
   if (after === 'next') {
+    /** @type {Loop | null} */
     let next = null;
     for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
     if (next) return { seek: next.a, next };
@@ -110,6 +173,14 @@ export function advance(loops, prev, t, { duration, guard, after = 'continue' })
 
 // Moves one end of a loop. push=true: the other end moves out of the way.
 // push=false: this end stops against the other one. Returns the new { a, b }.
+/**
+ * @param {Loop} l
+ * @param {'a' | 'b'} which
+ * @param {number} value
+ * @param {boolean} push
+ * @param {number} duration
+ * @returns {{ a: number, b: number }}
+ */
 export function movePoint(l, which, value, push, duration) {
   const d = duration;
   let a = l.a;
@@ -134,6 +205,10 @@ export function movePoint(l, which, value, push, duration) {
 }
 
 // Keeps every loop inside [0, duration] and at least MIN_LEN long.
+/**
+ * @param {Loop[]} loops
+ * @param {number} duration
+ */
 export function clampLoops(loops, duration) {
   for (const l of loops) {
     l.b = clamp(l.b, MIN_LEN, duration);
@@ -142,8 +217,13 @@ export function clampLoops(loops, duration) {
 }
 
 // Loops that overlap in time are drawn on separate rows.
+/**
+ * @param {Loop[]} loops
+ * @returns {number[]}
+ */
 export function lanesOf(loops) {
   const order = loops.map((_, i) => i).sort((x, y) => loops[x].a - loops[y].a);
+  /** @type {number[]} */
   const ends = [];
   const out = new Array(loops.length).fill(0);
   for (const i of order) {
@@ -156,13 +236,20 @@ export function lanesOf(loops) {
 }
 
 // The stored form of a set of loops.
+/** @param {Loop[]} loops */
 export function serializeLoops(loops) {
   return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c }));
 }
 
 // Reads a stored entry back into loops, dropping anything malformed. Null when nothing usable.
+/**
+ * @param {any} saved
+ * @param {LoopDefaults} defaults
+ * @returns {Loop[] | null}
+ */
 export function loopsFromSaved(saved, defaults) {
   if (!saved || !Array.isArray(saved.loops)) return null;
+  /** @type {Loop[]} */
   const out = [];
   for (const r of saved.loops) {
     if (!r || !isNum(r.a) || !isNum(r.b) || !(r.b > r.a) || r.a < 0) continue;

@@ -68,7 +68,7 @@ export default {
 
   // The audio is the media the hook moved into its box. Track "Canvas" backgrounds are short
   // looping <video>s that also call play(): never pick those.
-  findPlayer(keep) {
+  findPlayer() {
     const boxed = [...document.querySelectorAll('loopsmith-media video, loopsmith-media audio')].filter((m) => m.duration > 0);
     return boxed.find((m) => !m.paused) || boxed[boxed.length - 1] || null;
   },

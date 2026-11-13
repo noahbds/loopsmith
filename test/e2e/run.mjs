@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 import { makeMedia } from './make-media.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = join(here, '..', '..');
 const fixtures = join(here, 'fixtures');
 const out = join(here, 'out');
 mkdirSync(out, { recursive: true });

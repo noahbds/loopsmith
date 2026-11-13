@@ -23,15 +23,23 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
     "test": "vitest run",
     "check": "node --check dist/firefox/content.js && node --check dist/chrome/content.js",
     "e2e": "node test/e2e/run.mjs",
     "e2e:live": "node test/e2e/live.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "fflate": "^0.8.3",
+    "globals": "^17.14.0",
     "happy-dom": "^21.0.4",
     "playwright": "^1.65.0",
+    "typescript": "^5.9.3",
     "vitest": "^5.1.0"
   },
   "allowScripts": {

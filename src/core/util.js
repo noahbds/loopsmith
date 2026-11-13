@@ -1,10 +1,15 @@
 // Small helpers and timestamp formatting/parsing. No DOM.
 
+/** @param {number} x @param {number} lo @param {number} hi */
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+/** @param {number} x */
 export const round1 = (x) => Math.round(x * 10) / 10;
+/** @param {number} n */
 export const pad2 = (n) => String(n).padStart(2, '0');
+/** @param {unknown} x @returns {x is number} */
 export const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
+/** @param {number} sec @param {boolean} withHours */
 export function fmt(sec, withHours) {
   const tenthsTotal = Math.max(0, Math.round(sec * 10));
   const whole = Math.floor(tenthsTotal / 10);
@@ -18,6 +23,7 @@ export function fmt(sec, withHours) {
 }
 
 // Accepts 9:00, 1:02:03.5, 540, 90s, 9m30s, 1h2m, "9 30". Returns seconds or null.
+/** @param {unknown} raw @returns {number | null} */
 export function parseTime(raw) {
   const s = String(raw).trim().toLowerCase().replace(/,/g, '.');
   if (!s) return null;
@@ -39,7 +45,12 @@ export function parseTime(raw) {
 }
 
 // Splits a formatted time into its editable parts: [{start, end, unit}]
+/**
+ * @param {string} val
+ * @returns {{ start: number, end: number, unit: number }[]}
+ */
 export function segments(val) {
+  /** @type {{ start: number, end: number, unit: number }[]} */
   const out = [];
   const parts = val.split(':');
   let pos = 0;
