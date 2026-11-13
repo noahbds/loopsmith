@@ -11,6 +11,16 @@ All notable changes are listed here. Versions follow [semantic versioning](https
   remembered per site, and double-clicking the grip puts it back.
 - The run status has its own line with a progress bar instead of sharing the main button.
 - Twelve loop colours instead of six.
+- Loop names: double-click a chip (or ⋯ → Rename) to name a loop; the name shows on the chip and in
+  the status. ⋯ → *Number loops by start time* renumbers them in play order (undoable).
+- Drag the bar between A and B to move the whole loop. A click far from the loop no longer moves a
+  handle.
+- ⋯ → *Times to hundredths of a second*: loops down to 0.2 s, times kept to 0.01 s. Alt steps by
+  the finest unit.
+- Keyboard: the chip row is one Tab stop with arrow keys; opening the panel from the keyboard puts
+  the focus inside; bigger click targets and labels; Windows high-contrast colours; a one-time tip
+  that points to the shortcut list. The panel keeps clear of the loop button on small videos
+  (it scrolls).
 
 - Skipping: next loop, previous loop (restarts the repetition when you are more than 2 s into it),
   skip a repetition, restart a repetition, and go to loop 1–9. Buttons for next / previous in the

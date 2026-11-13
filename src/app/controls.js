@@ -318,6 +318,7 @@ export function createControls(A) {
     };
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
+    ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miDelete = item('Delete loop', () => A.removeLoop());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
@@ -326,6 +327,7 @@ export function createControls(A) {
       ui.miRename,
       ui.miSort,
       ui.miFine,
+      ui.miStrip,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
       item('Keyboard shortcuts', () => A.toggleHelp()));
@@ -407,6 +409,7 @@ export function createControls(A) {
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
+    ui.miStrip.firstChild.textContent = P.strip ? 'Hide the strip while looping' : 'Show a strip while looping';
     ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
     ui.menu.hidden = false;

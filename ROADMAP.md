@@ -345,23 +345,26 @@ Fixes your two stated problems.
 *Done when:* from a running 3-loop set you can skip a repetition, skip a loop, go back, and jump to
 loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and on a generic page.
 
-### Phase 2: Panel redesign (target 1.4)
+### Phase 2: Panel redesign (target 1.4) *(built on branch `phase-1-skipping`)*
 
-- [ ] **U5 / U7** Compact run strip plus draggable full editor; remember position and mode (U14).
-- [ ] **U8** Loop names (inline rename), reorder by drag, 12 distinct colours (or colour plus
-  shape/number badge), collapse chips into a scrollable row.
-- [ ] **U9** Drag the filled bar to move a loop; click on the empty track moves nothing unless it
-  is within a few px of a handle; **auto-zoom** on drag, with manual lock.
-- [ ] **U10 / E5** Optional fine precision (0.01 s, shown only when you opt in), minimum loop
-  length 0.1 s when fine mode is on.
-- [ ] **U11 / A1 / A2 / A3** 28 px minimum targets, 12px minimum text, focus moved into the panel
-  on open, roving tabindex on chips, focus trap with Escape to close.
-- [ ] **A5** `forced-colors` styles; **A4** use `rem`-friendly sizes where it doesn't fight the host.
-- [ ] **U12** One-time first-run hint; shortcuts sheet under ⋯.
-- [ ] Re-shoot store screenshots and a short demo GIF (L1).
-
-*Done when:* a new user can set a loop, loop it five times and move to the next without opening
-any tooltip, and a keyboard-only user can do the same.
+- [x] **U5 / U7** Compact run strip plus draggable editor; position remembered per site; run status
+  on its own line. The strip can be turned off from ⋯. *Not done:* a separate "mode" setting.
+- [~] **U8** Loop names (double-click or ⋯), 12 distinct colours. Instead of drag-to-reorder
+  (numbers would no longer match the play order, which is by start time), ⋯ has *Number loops by
+  start time*. *Not done:* collapsing chips into a scrollable row.
+- [~] **U9** Drag the bar to move the whole loop; a stray click moves nothing. *Not done:*
+  auto-zoom while dragging.
+- [x] **U10 / E5** Fine timing (⋯): hundredths of a second, loops down to 0.2 s (not 0.1 s: a loop
+  never turns around sooner than 0.2 s after its start).
+- [~] **U11 / A1 / A2 / A3** Targets are at least 24 px, labels 11.5 px; chip row is one Tab stop with
+  arrow keys; keyboard-opening moves focus inside. *Not done:* a focus trap, 12 px labels.
+- [~] **A5** `forced-colors` styles are in, but **not tested** on Windows. *Not done:* A4 (text
+  scaling, RTL).
+- [x] **U12** One-time tip and the shortcut sheet (⋯).
+- [ ] Re-shoot store screenshots and a short demo GIF (L1). Needs real sites; not done.
+- [x] *Added at your request:* **Play all loops** (rounds): 2 to 99 times or again and again.
+- *Known gap:* on a small video the editor is taller than the space and scrolls, so the action row
+  can be partly hidden. A sticky action row would fix it.
 
 ### Phase 3: Practice features (target 1.5)
 

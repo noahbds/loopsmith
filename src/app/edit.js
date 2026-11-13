@@ -263,5 +263,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, clearAll, markNow, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, clearAll, markNow, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }
