@@ -1,12 +1,12 @@
 // Drawing the state into the panel, the chips, the markers and the toast.
 
 import { MAX_LOOPS, PALETTE } from '../core/constants.js';
-import { clamp, round1, fmt } from '../core/util.js';
+import { clamp, roundT, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
   const live = { round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
@@ -228,10 +228,10 @@ export function createRender(A) {
       const th = ui.thumb[w];
       th.tabIndex = ok ? 0 : -1;
       setAttr(th, 'aria-valuemax', String(Math.round(S.duration)));
-      setAttr(th, 'aria-valuenow', ok ? String(round1(l[w])) : '0');
+      setAttr(th, 'aria-valuenow', ok ? String(roundT(l[w], digits())) : '0');
       setAttr(th, 'aria-valuetext', shown);
     }
-    setText(ui.len, ok ? `Length ${fmt(l.b - l.a, false)}` : '');
+    setText(ui.len, ok ? `Length ${fmt(l.b - l.a, false, digits())}` : '');
     setText(ui.scaleStart, ok ? fmtT(viewStart()) : '0:00');
     setText(ui.scaleEnd, ok ? fmtT(viewEnd()) : '–:––');
     setAttr(ui.zoom, 'aria-pressed', String(S.zoom));

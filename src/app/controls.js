@@ -76,8 +76,8 @@ export function createControls(A) {
       class: 'lsm-time', id, type: 'text', inputmode: 'text', autocomplete: 'off', spellcheck: 'false', maxlength: '14',
       title: 'Type a time: 9:00 · 1:02:03 · 90s · 9m30s\n↑ / ↓ adjust the part under the cursor',
     });
-    const minus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} earlier`, title: '−1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.minus, 14));
-    const plus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} later`, title: '+1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.plus, 14));
+    const minus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} earlier`, title: '−1 s  (Shift: 10 s · Alt: the finest step)' }, icon(I.minus, 14));
+    const plus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} later`, title: '+1 s  (Shift: 10 s · Alt: the finest step)' }, icon(I.plus, 14));
     f.now = el('button', { class: 'lsm-ib lsm-now', type: 'button', 'aria-label': `Set ${label.toLowerCase()} to the current time`, title: `Use the current time  (Shift+${key})` }, icon(I.now, 15));
     f.root = el('div', { class: 'lsm-field' },
       el('label', { class: 'lsm-label', for: id }, el('b', { class: 'lsm-tag', text: key }), label),
@@ -105,7 +105,7 @@ export function createControls(A) {
     const step = (dir, e) => {
       if (!ready()) return;
       if (f.editing) commit();
-      A.setPoint(which, cur()[which] + dir * (e.altKey ? 0.1 : e.shiftKey ? 10 : 1), false);
+      A.setPoint(which, cur()[which] + dir * (e.altKey ? A.fineStep() : e.shiftKey ? 10 : 1), false);
     };
 
     // Steps the part of the timestamp under the cursor (hours, minutes, seconds, tenths).
@@ -120,13 +120,13 @@ export function createControls(A) {
       if (f.stick && f.stick.val === val && f.stick.s === s && f.stick.e === en) {
         unit = f.stick.unit;
       } else if (s != null && !(s === 0 && en === val.length)) {
-        const seg = segments(val).find((g) => s <= g.end);
+        const seg = segments(val, A.digits()).find((g) => s <= g.end);
         if (seg) unit = seg.unit;
       }
-      const amount = e.altKey ? 0.1 : e.shiftKey ? unit * 10 : unit;
+      const amount = e.altKey ? A.fineStep() : e.shiftKey ? unit * 10 : unit;
       A.setPoint(which, cur()[which] + dir * amount, false);
       const next = inp.value;
-      const segs = segments(next);
+      const segs = segments(next, A.digits());
       const seg = segs.find((g) => g.unit === unit) || segs.find((g) => g.unit === 1);
       if (seg && focused() === inp) {
         inp.setSelectionRange(seg.start, seg.end);
@@ -185,7 +185,8 @@ export function createControls(A) {
         if (Math.abs(e.clientX - drag.x0) < 3) return;
         drag.moved = true;
       }
-      A.setPoint(drag.which, fromFrac(laneFrac(e.clientX - drag.off)), false);
+      if (drag.whole) A.moveWhole(drag.a0 + fromFrac(laneFrac(e.clientX)) - drag.t0);
+      else A.setPoint(drag.which, fromFrac(laneFrac(e.clientX - drag.off)), false);
     };
 
     const end = (e) => {
@@ -194,8 +195,10 @@ export function createControls(A) {
       drag = null;
       try { track.releasePointerCapture(d.id); } catch (_) { /* already released */ }
       track.classList.remove('lsm-dragging');
-      ui.thumb[d.which].classList.remove('lsm-grab');
-      if (!ui.thumb[d.which].matches(':focus-visible')) A.hideTip();
+      if (!d.whole) {
+        ui.thumb[d.which].classList.remove('lsm-grab');
+        if (!ui.thumb[d.which].matches(':focus-visible')) A.hideTip();
+      }
       S.sliding = false;
       A.render();
     };
@@ -207,12 +210,21 @@ export function createControls(A) {
       let which;
       let off = 0;
       const r = ui.lane.getBoundingClientRect();
+      const px = (t) => r.left + (toPct(t) / 100) * r.width;
       if (th) {
         which = th.dataset.which;
-        off = e.clientX - (r.left + (toPct(l[which]) / 100) * r.width);
+        off = e.clientX - px(l[which]);
+      } else if (e.clientX > px(l.a) && e.clientX < px(l.b)) {
+        // On the bar between the handles: dragging it moves the whole loop. A plain click does nothing.
+        drag = { whole: true, id: e.pointerId, x0: e.clientX, moved: false, a0: l.a, t0: fromFrac(laneFrac(e.clientX)) };
+        S.sliding = true;
+        try { track.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        track.classList.add('lsm-dragging');
+        return;
       } else {
-        const t = fromFrac(laneFrac(e.clientX));
-        which = Math.abs(t - l.a) <= Math.abs(t - l.b) ? 'a' : 'b';
+        // Outside the loop, only a press close to a handle takes it (a stray click moves nothing).
+        which = Math.abs(e.clientX - px(l.a)) <= Math.abs(e.clientX - px(l.b)) ? 'a' : 'b';
+        if (Math.abs(e.clientX - px(l[which])) > 16) return;
       }
       drag = { which, id: e.pointerId, off, x0: e.clientX, moved: !th };
       S.sliding = true;
@@ -232,7 +244,7 @@ export function createControls(A) {
       const th = ui.thumb[w];
       th.addEventListener('keydown', (e) => {
         if (!ready()) return;
-        const unit = e.altKey ? 0.1 : e.shiftKey ? 10 : 1;
+        const unit = e.altKey ? A.fineStep() : e.shiftKey ? 10 : 1;
         const now = cur()[w];
         let target;
         switch (e.key) {
@@ -274,6 +286,7 @@ export function createControls(A) {
       return b;
     };
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
+    ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miDelete = item('Delete loop', () => A.removeLoop());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
@@ -281,6 +294,7 @@ export function createControls(A) {
       item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z'),
       ui.miRename,
       ui.miSort,
+      ui.miFine,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
       item('Keyboard shortcuts', () => A.toggleHelp()));
@@ -362,6 +376,7 @@ export function createControls(A) {
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
+    ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
     ui.menu.hidden = false;
     A.setMenuOpen(true);
@@ -414,7 +429,7 @@ export function createControls(A) {
     ui.lane = el('div', { class: 'lsm-lane' },
       el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
       ui.thumb.a, ui.thumb.b, ui.tip);
-    ui.track = el('div', { class: 'lsm-track', title: 'Drag A and B, or click to move the nearest one' }, ui.lane);
+    ui.track = el('div', { class: 'lsm-track', title: 'Drag the A and B handles, or the bar between them to move the whole loop' }, ui.lane);
     ui.len = el('span', { class: 'lsm-len' });
     ui.scaleStart = el('span', { text: '0:00' });
     ui.scaleEnd = el('span');

@@ -1,7 +1,7 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
 import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, AFTER } from '../core/constants.js';
-import { clamp, round1 } from '../core/util.js';
+import { clamp, roundT } from '../core/util.js';
 import * as E from '../core/engine.js';
 
 export function createEdit(A) {
@@ -10,7 +10,21 @@ export function createEdit(A) {
   function setPoint(which, value, push) {
     if (!ready() || !isFinite(value)) return;
     const l = cur();
-    const { a, b } = E.movePoint(l, which, value, push, S.duration);
+    const { a, b } = E.movePoint(l, which, value, push, S.duration, A.digits());
+    if (a !== l.a || b !== l.b) {
+      l.a = a;
+      l.b = b;
+      S.lastT = null;
+      rememberLoops();
+    }
+    A.render();
+  }
+
+  // Moves the whole loop so it starts at `start` (dragging the bar), keeping its length.
+  function moveWhole(start) {
+    if (!ready()) return;
+    const l = cur();
+    const { a, b } = E.moveLoop(l, start, S.duration, A.digits());
     if (a !== l.a || b !== l.b) {
       l.a = a;
       l.b = b;
@@ -66,6 +80,14 @@ export function createEdit(A) {
     P.setsForever = !!on;
     rememberPrefs();
     A.render();
+  }
+
+  // Times to hundredths of a second, for short loops and exact entry points.
+  function setFine(on) {
+    P.fine = !!on;
+    rememberPrefs();
+    A.render();
+    A.toast(P.fine ? 'Times to hundredths of a second' : 'Times to tenths of a second');
   }
 
   function setAfter(v) {
@@ -151,8 +173,8 @@ export function createEdit(A) {
     const d = S.duration;
     const len = Math.min(NEW_LOOP_LEN, d);
     let a = S.trusted && !isAd() ? S.video.currentTime : cur().b;
-    a = clamp(round1(a), 0, Math.max(0, d - len));
-    let b = round1(a + len);
+    a = clamp(roundT(a, A.digits()), 0, Math.max(0, d - len));
+    let b = roundT(a + len, A.digits());
     if (b > d - 0.1) b = d;
     const added = newLoop(a, b, freeColor());
     added.infinite = false; // an endless loop would keep the ones after it from ever playing
@@ -234,5 +256,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setName, setPoint, sortLoops, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, clearAll, markNow, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

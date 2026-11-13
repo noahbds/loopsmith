@@ -360,8 +360,9 @@ export const sortedByStart = (loops) => [...loops].sort((x, y) => x.a - y.a || x
  */
 export function clampLoops(loops, duration) {
   for (const l of loops) {
-    l.b = clamp(l.b, MIN_LEN, duration);
-    l.a = clamp(l.a, 0, l.b - MIN_LEN);
+    const min = Math.min(MIN_LEN, Math.max(FINE_MIN_LEN, l.b - l.a)); // a short loop made in fine mode stays short
+    l.b = clamp(l.b, min, duration);
+    l.a = clamp(l.a, 0, l.b - min);
   }
 }
 

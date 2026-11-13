@@ -59,6 +59,7 @@ export function createCore(adapter, store) {
   const ready = () => !!S.video && S.ranged && !S.live && S.loops.length > 0;
   const cur = () => S.loops[S.sel];
   const digits = () => (P.fine ? 2 : 1); // decimals of a second that times are kept to
+  const fineStep = () => 10 ** -digits(); // the smallest step: 0.1 s, or 0.01 s in fine mode
   const fmtT = (sec) => fmt(sec, S.duration >= 3600, digits());
   // "Loop 2" (or its name); just "Loop" when there is only one.
   const loopLabel = (l) => l.name || (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
@@ -132,5 +133,5 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

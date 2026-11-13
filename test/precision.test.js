@@ -74,3 +74,16 @@ describe('times to hundredths', () => {
     expect(segments('1:23.4').at(-1)).toEqual({ start: 5, end: 6, unit: 0.1 });
   });
 });
+
+describe('clampLoops', () => {
+  it('leaves a short loop made in fine mode short', () => {
+    const l = loop(10, 10.25);
+    E.clampLoops([l], 100);
+    expect([l.a, l.b]).toEqual([10, 10.25]);
+  });
+  it('still grows a loop that is shorter than any loop can be', () => {
+    const l = loop(10, 10.05);
+    E.clampLoops([l], 100);
+    expect(l.b - l.a).toBeCloseTo(0.2, 5);
+  });
+});

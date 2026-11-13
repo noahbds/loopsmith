@@ -382,6 +382,39 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// The slider: drag the bar to move the whole loop; a stray click moves nothing. Fine timing.
+{
+  const { ctx, page } = await open('Slider bar and fine timing', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:10');
+  await setField(page, '#lsm-time-b', '0:20');
+  const ab = async () => [await L(page, '#lsm-time-a').inputValue(), await L(page, '#lsm-time-b').inputValue()];
+  const fill = await L(page, '.lsm-fill').boundingBox();
+  await page.mouse.click(fill.x + fill.width + 90, fill.y + fill.height / 2);
+  check(JSON.stringify(await ab()) === '["0:10","0:20"]', 'clicking far from the loop moves nothing', JSON.stringify(await ab()));
+  await page.mouse.move(fill.x + fill.width / 2, fill.y + fill.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(fill.x + fill.width / 2 + 60, fill.y + fill.height / 2, { steps: 6 });
+  await page.mouse.up();
+  const [a, b] = await ab();
+  const secs = (t) => t.split(':').reduce((x, y) => x * 60 + Number(y), 0);
+  check(secs(a) > 15 && near(secs(b) - secs(a), 10, 0.2), 'dragging the bar moves both ends and keeps the length', JSON.stringify([a, b]));
+
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'hundredths' }).click();
+  await setField(page, '#lsm-time-a', '0:05.25');
+  check((await L(page, '#lsm-time-a').inputValue()) === '0:05.25', 'fine timing keeps hundredths', await L(page, '#lsm-time-a').inputValue());
+  await setField(page, '#lsm-time-b', '0:05.6');
+  check((await L(page, '#lsm-time-b').inputValue()) === '0:05.6', 'and allows a 0.35 s loop', await L(page, '#lsm-time-b').inputValue());
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  check((await L(page, '#lsm-time-a').inputValue()) === '0:05.25', 'the hundredths are saved and the mode is remembered', await L(page, '#lsm-time-a').inputValue());
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');
