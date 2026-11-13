@@ -270,6 +270,20 @@ export function prevLoop(loops, target, t, restartAfter = 2) {
 }
 
 /**
+ * Another round: every count starts over and playback goes back to the first loop that is
+ * switched on. Null when no loop is on (then there is nothing to play again).
+ * @param {Loop[]} loops
+ * @returns {Loop | null}
+ */
+export function restartSet(loops) {
+  resetRun(loops);
+  /** @type {Loop | null} */
+  let first = null;
+  for (const l of loops) if (l.on && (!first || l.a < first.a)) first = l;
+  return first;
+}
+
+/**
  * Jump to a given loop and play it afresh, whatever it did before in this run.
  * @param {Loop | undefined} loop
  * @returns {Step}

@@ -1,6 +1,6 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
-import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, AFTER } from '../core/constants.js';
+import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, AFTER } from '../core/constants.js';
 import { clamp, round1 } from '../core/util.js';
 import * as E from '../core/engine.js';
 
@@ -51,6 +51,20 @@ export function createEdit(A) {
     A.settleRun();
     rememberPrefs();
     rememberLoops();
+    A.render();
+  }
+
+  // How many times the whole set of loops plays (1 = once).
+  function setSets(n) {
+    P.sets = clamp(Math.round(n) || 1, 1, MAX_SETS);
+    P.setsForever = false;
+    rememberPrefs();
+    A.render();
+  }
+
+  function setSetsForever(on) {
+    P.setsForever = !!on;
+    rememberPrefs();
     A.render();
   }
 
@@ -193,5 +207,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setPoint, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setPoint, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

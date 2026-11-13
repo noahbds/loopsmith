@@ -4,6 +4,14 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+- *Play all loops*: once the last loop is done, the whole set can start over, 2 to 99 times or again
+  and again. The status shows the round, and the choice is remembered.
+- A small strip shows while looping with the editor closed (what is playing, previous / next / stop,
+  and a button that opens the editor). The panel and the strip can be dragged; the position is
+  remembered per site, and double-clicking the grip puts it back.
+- The run status has its own line with a progress bar instead of sharing the main button.
+- Twelve loop colours instead of six.
+
 - Skipping: next loop, previous loop (restarts the repetition when you are more than 2 s into it),
   skip a repetition, restart a repetition, and go to loop 1–9. Buttons for next / previous in the
   panel; shortcuts `Shift+]`, `Shift+[`, `Shift+\`, `Shift+Z`, `Shift+1`…`9`, none of them used by

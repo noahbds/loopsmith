@@ -3,7 +3,7 @@
 import * as E from '../core/engine.js';
 
 export function createRun(A) {
-  const { S, P, ui, adapter, cur, describe, isAd, ready, rememberLoops, skipped } = A;
+  const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, skipped } = A;
 
   function play() {
     const v = S.video;
@@ -61,7 +61,7 @@ export function createRun(A) {
     const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
     if (!step) return;
     if (step.finish) {
-      finishRun();
+      finishOrAgain();
       return;
     }
     if (step.seek != null) seekTo(step.seek);
@@ -81,15 +81,37 @@ export function createRun(A) {
     return true;
   }
 
+  // The last loop is done: play the whole set again if more rounds are wanted, else finish.
+  function finishOrAgain() {
+    if (!moreRounds()) {
+      finishRun();
+      return;
+    }
+    const first = E.restartSet(S.loops);
+    if (!first) {
+      finishRun();
+      return;
+    }
+    S.round += 1;
+    S.lastT = null;
+    seekTo(first.a);
+    if (S.video && (S.video.paused || S.video.ended)) play();
+    A.render();
+    A.replay(ui.badge, 'lsm-pop');
+    if (!S.open) A.toast(`Round ${S.round}${P.setsForever ? '' : ` of ${P.sets}`}`);
+  }
+
   function finishRun() {
     const on = S.loops.filter((l) => l.on);
     const single = on.length === 1 ? on[0] : null;
+    const rounds = S.round;
+    S.round = 1;
     S.active = false;
     S.lastT = null;
     E.resetRun(S.loops);
     if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
     A.render();
-    A.toast(single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
+    A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
   }
 
   // The video reached its very end before the regular check caught it.
@@ -97,7 +119,7 @@ export function createRun(A) {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
     const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
     if (tail.length && turnAround(tail, true)) return;
-    finishRun();
+    finishOrAgain();
   }
 
   // Turns looping on, every count starting over. At least one loop has to be switched on:
@@ -114,6 +136,7 @@ export function createRun(A) {
       rememberLoops();
     }
     E.resetRun(S.loops);
+    S.round = 1;
     S.active = true;
     S.lastT = null;
     return true;
@@ -149,6 +172,7 @@ export function createRun(A) {
     S.active = false;
     S.lastT = null;
     E.resetRun(S.loops);
+    S.round = 1;
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -159,7 +183,7 @@ export function createRun(A) {
   // Carries out what an engine action decided: seek, show which loop is now in play, say what happened.
   function follow(step, { play: andPlay = false, say = '' } = {}) {
     if (step.finish) {
-      finishRun();
+      finishOrAgain();
       return;
     }
     if (step.seek != null) seekTo(step.seek);

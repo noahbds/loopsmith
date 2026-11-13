@@ -185,3 +185,16 @@ describe('a run and its reset', () => {
     expect(E.finished(loop(1, 2, 1))).toBe(false);
   });
 });
+
+describe('restartSet', () => {
+  it('starts every count over and goes back to the first loop that is on', () => {
+    const a = loop(40, 50, 2, { done: 2 });
+    const b = loop(10, 20, 3, { done: 3, skip: true });
+    const off = loop(1, 5, 1, { on: false });
+    expect(E.restartSet([a, b, off])).toBe(b);
+    expect([a.done, b.done, b.skip]).toEqual([0, 0, false]);
+  });
+  it('has nothing to play again when every loop is off', () => {
+    expect(E.restartSet([loop(1, 5, 1, { on: false })])).toBeNull();
+  });
+});

@@ -6,9 +6,9 @@ import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, stripWanted, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
-  const live = { notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
+  const live = { round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
   // Cheap, frequent updates: playhead, run status, progress fill, transient notices.
   function renderLive() {
@@ -33,7 +33,8 @@ export function createRender(A) {
       const l = A.loopAt(t, guard);
       const next = l ? null : A.nextLoop(t);
       const done = l ? l.done : -1;
-      if (live.stale || l !== live.loop || next !== live.next || done !== live.done) {
+      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round) {
+        live.round = S.round;
         live.stale = false;
         live.loop = l;
         live.next = next;
@@ -50,6 +51,7 @@ export function createRender(A) {
         } else {
           text = 'Past the loops';
         }
+        text += roundText();
         setText(ui.statusText, text);
         setText(ui.stripText, text);
         setStyle(ui.strip, '--acv', PALETTE[(l || next || cur()).c]);
@@ -237,6 +239,9 @@ export function createRender(A) {
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setAttr(ui.seg, 'data-v', P.after);
+    setText(ui.setsVal, P.setsForever ? '∞' : `${P.sets}×`);
+    setAttr(ui.setsInf, 'aria-pressed', String(P.setsForever));
+    setText(ui.setsNote, P.setsForever ? 'Then starts over, again and again' : P.sets > 1 ? `Then starts over: ${P.sets} rounds in all` : 'Stops after the last loop');
     ui.seg.classList.toggle('lsm-dim', ok && S.loops.every((x) => !x.on || x.infinite));
     for (const b of ui.segBtns) setAttr(b, 'aria-pressed', String(b.dataset.v === P.after));
 

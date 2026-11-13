@@ -33,7 +33,8 @@ for keeping your favourite part of a song on repeat.
   grabbing the current position.
 - Choose how many times a section plays (1 to 999) or forever.
 - Several loops per video or track, overlapping or nested; switch one off without deleting it.
-- When a loop is done: play on, jump to the next loop, or pause after the last one.
+- When a loop is done: play on, jump to the next loop, or pause after the last one. When the last
+  loop is done, the whole set can start over (a number of rounds, or again and again).
 - Loops show on the site's own progress bar, and are saved per video or track.
 - Skip ahead without waiting: next / previous loop, skip a repetition, restart it, or jump to loop 1–9.
   Deleting loops can be undone.

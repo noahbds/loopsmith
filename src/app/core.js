@@ -1,6 +1,6 @@
 // The shared state and small helpers every other part of the app builds on.
 
-import { MAX_COUNT, PALETTE, AFTER } from '../core/constants.js';
+import { MAX_COUNT, MAX_SETS, PALETTE, AFTER } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 
@@ -15,6 +15,8 @@ export function createCore(adapter, store) {
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
+    sets: clamp(Math.round(Number(prefs.sets)) || 1, 1, MAX_SETS), // how many times the whole set of loops plays
+    setsForever: prefs.setsForever === true,
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
   };
 
@@ -30,6 +32,7 @@ export function createCore(adapter, store) {
     live: false,
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
+    round: 1,        // which time through the whole set of loops this run is on
     undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
     lastT: null,     // previous playback position seen by the loop check
@@ -59,6 +62,10 @@ export function createCore(adapter, store) {
   const fmtT = (sec) => fmt(sec, S.duration >= 3600, digits());
   // "Loop 2" (or its name); just "Loop" when there is only one.
   const loopLabel = (l) => l.name || (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
+  // Whether the set of loops plays again once the last loop is done.
+  const moreRounds = () => P.setsForever || S.round < P.sets;
+  // "Round 2/3" or "Round 2" (endless); empty when the set only plays once.
+  const roundText = () => (P.setsForever ? ` · round ${S.round}` : P.sets > 1 ? ` · round ${S.round}/${P.sets}` : '');
   // The small strip shows while looping with the editor closed.
   const stripWanted = () => S.active && !S.open && P.strip && ready() && S.trusted;
   const { exhausted, finished, skipped } = E;
@@ -96,7 +103,7 @@ export function createCore(adapter, store) {
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos });
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -119,10 +126,11 @@ export function createCore(adapter, store) {
       loops: S.loops.length,
       running: S.active,
       after: P.after,
+      rounds: P.setsForever ? 'forever' : P.sets,
     };
   }
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, newLoop, ready, rememberLoops, rememberPrefs, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

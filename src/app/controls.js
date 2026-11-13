@@ -5,7 +5,7 @@ import { el, icon, I } from '../ui/dom.js';
 import { SHADOW_CSS } from '../ui/styles.js';
 
 export function createControls(A) {
-  const { S, ui, adapter, floating, cur, fmtT, focused, fromFrac, ready, toPct } = A;
+  const { S, P, ui, adapter, floating, cur, fmtT, focused, fromFrac, ready, toPct } = A;
 
   function holdRepeat(btn, fn) {
     let delay = 0;
@@ -467,6 +467,21 @@ export function createControls(A) {
     const afterField = el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: 'When done' }), ui.seg);
     const opts = el('div', { class: 'lsm-row lsm-opts' }, countField, afterField);
 
+    // Play the whole set of loops again once the last one is done.
+    ui.setsVal = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
+    const sMinus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'Fewer rounds', title: 'Fewer rounds' }, icon(I.minus, 14));
+    const sPlus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'More rounds', title: 'More rounds' }, icon(I.plus, 14));
+    ui.setsInf = el('button', { class: 'lsm-ib lsm-inf', type: 'button', 'aria-label': 'Play the loops again and again', 'aria-pressed': 'false', title: 'Again and again', text: '∞' });
+    ui.setsNote = el('span', { class: 'lsm-note' });
+    holdRepeat(sMinus, () => { if (P.setsForever) A.setSetsForever(false); else A.setSets(P.sets - 1); });
+    holdRepeat(sPlus, () => { if (P.setsForever) A.setSetsForever(false); else A.setSets(P.sets + 1); });
+    ui.setsInf.addEventListener('click', () => A.setSetsForever(!P.setsForever));
+    const rounds = el('div', { class: 'lsm-row lsm-opts lsm-rounds' },
+      el('div', { class: 'lsm-field' },
+        el('div', { class: 'lsm-label', text: 'Play all loops' }),
+        el('div', { class: 'lsm-box' }, sMinus, ui.setsVal, sPlus, ui.setsInf)),
+      ui.setsNote);
+
     // Actions
     // Turning looping on and starting a loop are separate: the first leaves the video where it is.
     ui.start = el('button', { class: 'lsm-start', type: 'button' }, icon(I.play, 18));
@@ -486,7 +501,7 @@ export function createControls(A) {
     ui.statusFill = el('i');
     ui.status = el('div', { class: 'lsm-status', hidden: true }, ui.statusText, el('span', { class: 'lsm-bar' }, ui.statusFill));
 
-    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, ui.status, actions);
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, rounds, ui.status, actions);
     ui.strip = buildStrip();
     ui.help = buildHelp();
     ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.notice, ui.body, ui.help);

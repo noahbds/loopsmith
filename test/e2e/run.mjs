@@ -314,6 +314,39 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// Play all loops again: loop 1 0:05→0:08 ×1 and loop 2 0:10→0:12 ×1, two rounds.
+{
+  const { ctx, page } = await open('Play all loops again', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:08');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:10');
+  await setField(page, '#lsm-time-b', '0:12');
+  await setField(page, '#lsm-count', '1');
+  const val = () => shadow(page, (sr) => sr.querySelector('.lsm-rounds .lsm-val').textContent);
+  check((await val()) === '1×', 'plays the set once by default');
+  await L(page, '[aria-label="More rounds"]').click();
+  check((await val()) === '2×', 'the + button asks for two rounds', await val());
+  await L(page, '.lsm-chip-main').first().click();
+  await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
+  await L(page, '.lsm-start').click();
+  const w = await watch(page, mainT, 9000);
+  // round 1 ends after loop 2 (0:12) and goes back to 0:05; round 2 ends and playback carries on
+  check(w.jumps.length === 1 && near(w.jumps[0], 5, 1), 'after the last loop it goes back to the first loop, once', JSON.stringify(w.jumps));
+  check(w.status.some((x) => /round 2\/2/.test(x.text)), 'the status shows the round', JSON.stringify(w.status.slice(-3)));
+  check(!(await shadow(page, (sr) => sr.querySelector('.lsm-main').classList.contains('lsm-on'))), 'looping is off after the last round');
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await openPanel(page, [640, 300]);
+  check((await val()) === '2×', 'the number of rounds is remembered');
+  await L(page, '.lsm-rounds .lsm-inf').click();
+  check((await val()) === '∞', 'the ∞ button plays them again and again');
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');
