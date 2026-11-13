@@ -12,6 +12,10 @@ export function createCore(adapter, store) {
     count: clamp(Math.round(Number(prefs.count)) || 5, 1, MAX_COUNT),
     infinite: prefs.infinite === true,
     after: AFTER.includes(prefs.after) ? prefs.after : 'continue',
+    strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
+    fine: prefs.fine === true,      // times to hundredths of a second
+    hintSeen: prefs.hintSeen === true,
+    pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
   };
 
   const S = {
@@ -36,7 +40,10 @@ export function createCore(adapter, store) {
     v1: 0,
     laneW: 0,        // slider width in CSS pixels (measured when the panel is placed)
     dpr: 1,
+    pos: { dx: 0, dy: 0 }, // how far the panel was dragged from its usual place
   };
+  const saved = P.pos[adapter.id];
+  if (saved && Number.isFinite(saved.dx) && Number.isFinite(saved.dy)) S.pos = { dx: saved.dx, dy: saved.dy };
 
   const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [] };
   // Floating mode (sites without a control bar to join): the panel, toast and a small loop button
@@ -48,7 +55,12 @@ export function createCore(adapter, store) {
 
   const ready = () => !!S.video && S.ranged && !S.live && S.loops.length > 0;
   const cur = () => S.loops[S.sel];
-  const fmtT = (sec) => fmt(sec, S.duration >= 3600);
+  const digits = () => (P.fine ? 2 : 1); // decimals of a second that times are kept to
+  const fmtT = (sec) => fmt(sec, S.duration >= 3600, digits());
+  // "Loop 2" (or its name); just "Loop" when there is only one.
+  const loopLabel = (l) => l.name || (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
+  // The small strip shows while looping with the editor closed.
+  const stripWanted = () => S.active && !S.open && P.strip && ready() && S.trusted;
   const { exhausted, finished, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
   const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
@@ -84,7 +96,7 @@ export function createCore(adapter, store) {
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after });
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -112,5 +124,5 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs, skipped, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, newLoop, ready, rememberLoops, rememberPrefs, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

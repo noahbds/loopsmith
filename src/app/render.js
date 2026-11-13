@@ -6,7 +6,7 @@ import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, ready, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, stripWanted, toPct, viewEnd, viewStart } = A;
 
   const live = { notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
@@ -24,7 +24,6 @@ export function createRender(A) {
       ui.notice.classList.toggle('lsm-show', !!notice);
     }
     if (!v || !ready() || ad || !S.trusted) {
-      if (S.active && live.stale) setText(ui.mainText, 'Turn off'); // no position to report yet
       return;
     }
 
@@ -44,21 +43,25 @@ export function createRender(A) {
         let badge = '·';
         if (l) {
           const n = l.infinite ? `${l.done + 1} · ∞` : `${Math.min(l.done + 1, l.count)} / ${l.count}`;
-          text = many ? `Loop ${S.loops.indexOf(l) + 1} · ${n}` : `Rep ${n}`;
+          text = many ? `${loopLabel(l)} · ${n}` : `Rep ${n}`;
           badge = l.infinite ? '∞' : String(Math.max(1, l.count - l.done));
         } else if (next) {
-          text = many ? `Next: loop ${S.loops.indexOf(next) + 1}` : 'Loop ahead';
+          text = many ? `Next: ${next.name || `loop ${S.loops.indexOf(next) + 1}`}` : 'Loop ahead';
         } else {
           text = 'Past the loops';
         }
-        ui.mainText.textContent = 'Turn off · ' + text;
+        setText(ui.statusText, text);
+        setText(ui.stripText, text);
+        setStyle(ui.strip, '--acv', PALETTE[(l || next || cur()).c]);
         ui.badge.textContent = badge;
       }
-      if (S.open) {
+      if (S.open || stripWanted()) {
         const prog = l ? Math.round(clamp((t - l.a) / Math.max(0.01, A.loopEnd(l, guard) - l.a), 0, 1) * 500) : 0;
         if (prog !== live.prog) {
           live.prog = prog;
-          ui.mainFill.style.transform = `scaleX(${prog / 500})`;
+          const scale = `scaleX(${prog / 500})`;
+          ui.statusFill.style.transform = scale;
+          ui.stripFill.style.transform = scale;
         }
       }
     }
@@ -239,12 +242,22 @@ export function createRender(A) {
 
     ui.main.classList.toggle('lsm-on', S.active);
     setAttr(ui.main, 'aria-pressed', String(S.active));
+    setText(ui.mainText, S.active ? 'Turn off' : 'Turn looping on');
+    ui.status.hidden = !S.active;
     live.stale = true; // the run status below is rebuilt by renderLive()
     if (!S.active) {
       live.prog = -1;
-      ui.mainFill.style.transform = '';
-      setText(ui.mainText, 'Turn looping on');
+      ui.statusFill.style.transform = '';
+      ui.stripFill.style.transform = '';
     }
+
+    // The strip: shown while looping with the editor closed.
+    const strip = stripWanted();
+    if (strip !== ui.strip.classList.contains('lsm-open')) {
+      ui.strip.classList.toggle('lsm-open', strip);
+      if (strip) A.place();
+    }
+    setStyle(ui.strip, '--acv', PALETTE[ok ? l.c : 0]);
 
     ui.btn.classList.toggle('lsm-active', S.active);
     setAttr(ui.btn, 'aria-expanded', String(S.open));

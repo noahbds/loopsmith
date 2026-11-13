@@ -2,9 +2,10 @@
 
 import { visibleArea } from '../core/mediakey.js';
 import { shown } from '../core/findbar.js';
+import { clamp } from '../core/util.js';
 
 export function createLayout(A) {
-  const { S, ui, adapter, floating, L, engaged, focused } = A;
+  const { S, P, ui, adapter, floating, L, engaged, focused, rememberPrefs } = A;
 
   function place() {
     const p = S.player;
@@ -14,15 +15,95 @@ export function createLayout(A) {
     let bottom = top == null ? 62 : Math.max(12, Math.round(pr.bottom - top + 8));
     if (floating && dock) bottom = 68; // above the docked loop button
     ui.panel.style.bottom = bottom + 'px';
+    ui.strip.style.bottom = bottom + 'px';
     ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - 10)) + 'px';
     S.laneW = ui.lane.clientWidth;
     S.dpr = window.devicePixelRatio || 1;
+    clampPos(pr);
+  }
+
+  // The panel or the strip, whichever is showing.
+  const visibleBox = () => (S.open ? ui.panel : ui.strip.classList.contains('lsm-open') ? ui.strip : null);
+
+  // The panel and the strip share one dragged offset.
+  function applyPos() {
+    for (const box of [ui.panel, ui.strip]) {
+      box.style.setProperty('--dx', S.pos.dx + 'px');
+      box.style.setProperty('--dy', S.pos.dy + 'px');
+    }
+  }
+
+  // Brings the panel back inside the player if the window or the player got smaller than where it was left.
+  function clampPos(pr) {
+    const box = visibleBox();
+    if (!box) return;
+    const r = box.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    let ddx = 0;
+    let ddy = 0;
+    if (r.left < pr.left) ddx = pr.left - r.left;
+    else if (r.right > pr.right) ddx = pr.right - r.right;
+    if (r.top < pr.top) ddy = pr.top - r.top;
+    else if (r.bottom > pr.bottom) ddy = pr.bottom - r.bottom;
+    if (ddx || ddy) {
+      S.pos = { dx: S.pos.dx + ddx, dy: S.pos.dy + ddy };
+      applyPos();
+    }
+  }
+
+  // Dragging `handle` moves `box` (the panel or the strip) inside the player. The offset is
+  // remembered for the site; double-clicking the handle puts the panel back.
+  function bindDrag(handle, box) {
+    let drag = null;
+    const area = () => (floating ? ui.host : S.player).getBoundingClientRect();
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !S.player) return;
+      const r = box.getBoundingClientRect();
+      const a = area();
+      drag = {
+        id: e.pointerId, x: e.clientX, y: e.clientY, dx: S.pos.dx, dy: S.pos.dy,
+        lo: { x: S.pos.dx + a.left - r.left, y: S.pos.dy + a.top - r.top },
+        hi: { x: S.pos.dx + a.right - r.right, y: S.pos.dy + a.bottom - r.bottom },
+      };
+      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      handle.classList.add('lsm-grab');
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const { lo, hi } = drag;
+      S.pos = {
+        dx: clamp(drag.dx + e.clientX - drag.x, Math.min(lo.x, hi.x), Math.max(lo.x, hi.x)),
+        dy: clamp(drag.dy + e.clientY - drag.y, Math.min(lo.y, hi.y), Math.max(lo.y, hi.y)),
+      };
+      applyPos();
+    });
+    const end = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag = null;
+      handle.classList.remove('lsm-grab');
+      remember();
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', () => {
+      S.pos = { dx: 0, dy: 0 };
+      applyPos();
+      remember();
+    });
+  }
+
+  function remember() {
+    if (S.pos.dx === 0 && S.pos.dy === 0) delete P.pos[adapter.id];
+    else P.pos[adapter.id] = { dx: Math.round(S.pos.dx), dy: Math.round(S.pos.dy) };
+    rememberPrefs();
   }
 
   function openPanel() {
     ensure();
     A.syncVideo();
     S.open = true;
+    applyPos();
     place();
     A.render();
     ui.panel.classList.add('lsm-open');
@@ -39,7 +120,7 @@ export function createLayout(A) {
     if (hadFocus) ui.btn.focus({ preventScroll: true });
   }
 
-  const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.open) place(); }) : null;
+  const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (visibleBox()) place(); }) : null;
 
   // Floating mode: the overlay follows the media. Big enough and mostly on screen: laid over the
   // video. Otherwise (audio, small or scrolled-away video): docked to the bottom-right corner.
@@ -155,7 +236,7 @@ export function createLayout(A) {
     requestAnimationFrame(() => {
       layoutQueued = false;
       layoutHost();
-      if (S.open) place();
+      if (visibleBox()) place();
     });
   }
 
@@ -189,5 +270,5 @@ export function createLayout(A) {
     if (bar && ui.markBox.parentNode !== bar) bar.appendChild(ui.markBox);
   }
 
-  return { box, closePanel, ensure, layoutHost, markRect, onPointerMove, openPanel, place, placeMarks, queueLayout, resizeWatch, updatePill };
+  return { applyPos, bindDrag, box, closePanel, ensure, layoutHost, markRect, onPointerMove, openPanel, place, placeMarks, queueLayout, resizeWatch, updatePill };
 }

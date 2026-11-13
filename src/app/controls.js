@@ -282,6 +282,27 @@ export function createControls(A) {
     return menu;
   }
 
+  // The small strip shown while looping with the editor closed.
+  function buildStrip() {
+    const button = (label, path, run, cls = 'lsm-sb') => {
+      const b = el('button', { class: cls, type: 'button', 'aria-label': label, title: label }, icon(path, 16));
+      b.addEventListener('click', run);
+      return b;
+    };
+    ui.stripGrip = el('span', { class: 'lsm-grip', title: 'Drag to move (double-click: back to the usual place)' }, icon(I.grip, 14));
+    ui.stripText = el('span', { class: 'lsm-strip-text' });
+    ui.stripFill = el('i');
+    return el('div', { class: 'lsm-strip', role: 'group', 'aria-label': 'Looping' },
+      ui.stripGrip,
+      el('i', { class: 'lsm-sdot' }),
+      ui.stripText,
+      button('Previous loop  (Shift+[)', I.prev, () => A.navigate('prev')),
+      button('Next loop  (Shift+])', I.next, () => A.navigate('skipLoop')),
+      button('Turn looping off  (Shift+R)', I.stop, () => A.stopRun()),
+      button('Open the editor', I.expand, () => A.openPanel()),
+      el('span', { class: 'lsm-strip-bar' }, ui.stripFill));
+  }
+
   // The shortcut sheet (opened from the menu).
   function buildHelp() {
     const rows = [
@@ -339,7 +360,8 @@ export function createControls(A) {
     ui.more.addEventListener('click', () => (ui.menu.hidden ? A.openMenu() : A.closeMenu()));
     const close = el('button', { class: 'lsm-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
     close.addEventListener('click', A.closePanel);
-    const head = el('div', { class: 'lsm-head' }, ui.chipRow, ui.more, close);
+    ui.grip = el('span', { class: 'lsm-grip', title: 'Drag to move (double-click: back to the usual place)' }, icon(I.grip, 14));
+    const head = el('div', { class: 'lsm-head' }, ui.grip, ui.chipRow, ui.more, close);
     ui.menu = buildMenu();
     ui.notice = el('div', { class: 'lsm-notice', role: 'status' });
 
@@ -450,9 +472,8 @@ export function createControls(A) {
     ui.start = el('button', { class: 'lsm-start', type: 'button' }, icon(I.play, 18));
     ui.start.addEventListener('click', A.startLoop);
     ui.mainText = el('span', { text: 'Turn looping on' });
-    ui.mainFill = el('span', { class: 'lsm-main-fill' });
     ui.main = el('button', { class: 'lsm-main', type: 'button', 'aria-pressed': 'false', title: 'Turn looping on / off  (Shift+R)\nThe video stays where it is' },
-      ui.mainFill, icon(I.loop, 18, 'lsm-ic-idle'), icon(I.stop, 18, 'lsm-ic-stop'), ui.mainText);
+      icon(I.loop, 18, 'lsm-ic-idle'), icon(I.stop, 18, 'lsm-ic-stop'), ui.mainText);
     ui.main.addEventListener('click', () => (S.active ? A.stopRun() : A.armRun()));
     ui.prev = el('button', { class: 'lsm-skip', type: 'button', 'aria-label': 'Previous loop', title: 'Previous loop  (Shift+[)\nLater in a repetition: restart it' }, icon(I.prev, 16));
     ui.prev.addEventListener('click', () => A.navigate('prev'));
@@ -460,7 +481,13 @@ export function createControls(A) {
     ui.next.addEventListener('click', () => A.navigate('skipLoop'));
     const actions = el('div', { class: 'lsm-actions' }, ui.prev, ui.start, ui.main, ui.next);
 
-    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, actions);
+    // What is playing now: shown while looping.
+    ui.statusText = el('span', { class: 'lsm-status-text' });
+    ui.statusFill = el('i');
+    ui.status = el('div', { class: 'lsm-status', hidden: true }, ui.statusText, el('span', { class: 'lsm-bar' }, ui.statusFill));
+
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, ui.status, actions);
+    ui.strip = buildStrip();
     ui.help = buildHelp();
     ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.notice, ui.body, ui.help);
 
@@ -469,7 +496,7 @@ export function createControls(A) {
     // A custom tag name: broad site selectors like `body > div` don't match it.
     ui.host = document.createElement('loopsmith-root');
     ui.shadow = ui.host.attachShadow({ mode: 'open' });
-    ui.shadow.append(el('style', { text: SHADOW_CSS }), ui.panel, ui.toast);
+    ui.shadow.append(el('style', { text: SHADOW_CSS }), ui.panel, ui.strip, ui.toast);
     if (floating) {
       // Floating mode draws the markers in the overlay, laid over the site's progress bar.
       ui.shadow.append(ui.btn, ui.markBox);
@@ -478,6 +505,8 @@ export function createControls(A) {
     }
 
     bindSlider();
+    A.bindDrag(ui.grip, ui.panel);
+    A.bindDrag(ui.stripGrip, ui.strip);
 
     // A press anywhere outside a text field applies what was being typed first.
     ui.panel.addEventListener('pointerdown', (e) => {
@@ -499,21 +528,23 @@ export function createControls(A) {
       }
     });
     const stop = (e) => e.stopPropagation();
-    for (const t of ['keydown', 'keyup', 'keypress']) {
-      ui.panel.addEventListener(t, (e) => { if (usesKey(e)) e.stopPropagation(); });
+    for (const box of [ui.panel, ui.strip]) {
+      for (const t of ['keydown', 'keyup', 'keypress']) {
+        box.addEventListener(t, (e) => { if (usesKey(e)) e.stopPropagation(); });
+      }
+      for (const t of ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu']) box.addEventListener(t, stop);
+      for (const t of ['wheel', 'touchstart', 'touchend']) box.addEventListener(t, stop, { passive: true });
+      // After a mouse click the focus goes back to the page (a keyboard press keeps it, for Tab).
+      box.addEventListener('click', (e) => {
+        if (e.detail === 0 || !e.target.closest) return;
+        const b = e.target.closest('button');
+        if (b && focused() === b) b.blur(); // the button's own handler has already run
+      });
     }
-    for (const t of ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu']) {
-      ui.panel.addEventListener(t, stop);
-      ui.toast.addEventListener(t, stop);
-    }
-    // After a mouse click the focus goes back to the page (a keyboard press keeps it, for Tab).
+    for (const t of ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu']) ui.toast.addEventListener(t, stop);
     ui.panel.addEventListener('click', (e) => {
-      if (e.detail === 0 || !e.target.closest) return;
-      const b = e.target.closest('button');
-      if (b && focused() === b) b.blur(); // the button's own handler has already run
-      if (!e.target.closest('.lsm-menu, .lsm-more')) A.closeMenu();
+      if (e.target.closest && !e.target.closest('.lsm-menu, .lsm-more')) A.closeMenu();
     });
-    for (const t of ['wheel', 'touchstart', 'touchend']) ui.panel.addEventListener(t, stop, { passive: true });
   }
 
   return { bindSlider, buildUI, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };

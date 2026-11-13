@@ -41,6 +41,7 @@ export function start(adapter, store) {
   }
 
   buildUI();
+  A.applyPos();
   render();
   ensure();
   syncVideo();

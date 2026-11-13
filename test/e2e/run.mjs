@@ -108,7 +108,7 @@ async function watch(page, getT, ms, every = 200) {
 
 const mainT = () => ({
   t: document.getElementById('main').currentTime,
-  text: document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-main span:last-child').textContent,
+  text: document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-status-text').textContent,
 });
 
 /* ---------- scenarios ---------- */
@@ -236,7 +236,7 @@ for (const mode of ['next', 'continue']) {
   await L(page, '.lsm-chip-main').first().click();
   await L(page, '.lsm-start').click();
   const t = () => page.evaluate(() => document.getElementById('main').currentTime);
-  const status = () => shadow(page, (sr) => sr.querySelector('.lsm-main span:last-child').textContent);
+  const status = () => shadow(page, (sr) => sr.querySelector('.lsm-status-text').textContent);
   await page.waitForTimeout(1500);
   check(near(await t(), 6.5, 1.2), 'playing loop 1 from 0:05', String(await t()));
 
@@ -273,6 +273,44 @@ for (const mode of ['next', 'continue']) {
   await page.waitForTimeout(500);
   check(near(await t(), 5.5, 1), 'Run again starts from the first loop', String(await t()));
   check(await shadow(page, (sr) => sr.querySelector('.lsm-main').classList.contains('lsm-on')), 'and looping is on');
+  await ctx.close();
+}
+
+// The strip while looping with the editor closed, and dragging the panel.
+{
+  const { ctx, page } = await open('Strip and moving the panel', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:10');
+  await L(page, '.lsm-start').click();
+  const strip = () => shadow(page, (sr) => sr.querySelector('.lsm-strip').classList.contains('lsm-open'));
+  check(!(await strip()), 'no strip while the editor is open');
+  await L(page, '.lsm-head [aria-label="Close"]').click(); // close the editor
+  await page.waitForTimeout(500);
+  check(await strip(), 'the strip shows while looping with the editor closed');
+  check(/Rep/.test(await shadow(page, (sr) => sr.querySelector('.lsm-strip-text').textContent)), 'it says which repetition is playing');
+  await L(page, '.lsm-strip .lsm-sb:last-of-type').click(); // open the editor
+  await page.waitForTimeout(300);
+  check(!(await strip()), 'opening the editor hides the strip');
+  const rect = () => shadow(page, (sr) => { const r = sr.querySelector('.lsm-panel').getBoundingClientRect(); return { l: r.left, t: r.bottom }; });
+  const before = await rect();
+  const g = await L(page, '.lsm-panel .lsm-grip').boundingBox();
+  await page.mouse.move(g.x + 6, g.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(g.x - 114, g.y - 50, { steps: 6 });
+  await page.mouse.up();
+  const after = await rect();
+  check(near(before.l - after.l, 120, 4) && near(before.t - after.t, 60, 4), 'dragging the grip moves the panel', JSON.stringify({ before, after }));
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  const again = await rect();
+  check(near(again.l, after.l, 4) && near(again.t, after.t, 4), 'the position is remembered after a reload', JSON.stringify({ after, again }));
+  await L(page, '.lsm-panel .lsm-grip').dblclick();
+  const reset = await rect();
+  check(near(reset.l, before.l, 4) && near(reset.t, before.t, 4), 'double-clicking the grip puts it back', JSON.stringify({ before, reset }));
   await ctx.close();
 }
 

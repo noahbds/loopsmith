@@ -254,7 +254,7 @@ export function createRun(A) {
   function wantsFrames() {
     const v = S.video;
     if (!v || v.paused || v.ended || document.hidden) return false;
-    if (S.open) return true;
+    if (S.open || A.stripWanted()) return true;
     if (!S.active) return false;
     const t = v.currentTime;
     const lead = TURN_LEAD * (v.playbackRate || 1);
