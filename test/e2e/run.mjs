@@ -87,7 +87,7 @@ async function setField(page, sel, value) {
 async function openPanel(page, hoverAt) {
   if (hoverAt) await page.mouse.move(...hoverAt);
   await page.waitForTimeout(200);
-  await L(page, '.ysl-pill').click();
+  await L(page, '.lsm-pill').click();
   await page.waitForTimeout(200);
 }
 
@@ -108,7 +108,7 @@ async function watch(page, getT, ms, every = 200) {
 
 const mainT = () => ({
   t: document.getElementById('main').currentTime,
-  text: document.querySelector('loopsmith-root').shadowRoot.querySelector('.ysl-main span:last-child').textContent,
+  text: document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-main span:last-child').textContent,
 });
 
 /* ---------- scenarios ---------- */
@@ -124,19 +124,19 @@ const mainT = () => ({
 
   await page.keyboard.press('Shift+A');
   await page.waitForTimeout(200);
-  check((await shadow(page, (sr) => sr.querySelector('.ysl-toast').textContent)) === '', 'hotkeys do nothing before the media was played');
+  check((await shadow(page, (sr) => sr.querySelector('.lsm-toast').textContent)) === '', 'hotkeys do nothing before the media was played');
 
   await page.mouse.move(640, 600);
   await page.waitForTimeout(300);
-  check(await shadow(page, (sr) => sr.querySelector('.ysl-pill').classList.contains('ysl-show')), 'loop button shows on hover');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-pill').classList.contains('lsm-show')), 'loop button shows on hover');
 
   await openPanel(page);
-  const styles = await shadow(page, (sr) => ({ font: getComputedStyle(sr.querySelector('.ysl-panel')).fontFamily, border: getComputedStyle(sr.querySelector('.ysl-row')).borderTopStyle }));
+  const styles = await shadow(page, (sr) => ({ font: getComputedStyle(sr.querySelector('.lsm-panel')).fontFamily, border: getComputedStyle(sr.querySelector('.lsm-row')).borderTopStyle }));
   check(!/comic/i.test(styles.font) && styles.border === 'none', "the page's hostile CSS doesn't reach the panel", JSON.stringify(styles));
 
-  await setField(page, '#ysl-time-a', '0:05');
-  await setField(page, '#ysl-time-b', '0:09');
-  await setField(page, '#ysl-count', '2');
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:09');
+  await setField(page, '#lsm-count', '2');
   await page.evaluate(() => { const v = document.getElementById('main'); v.muted = true; v.play(); });
   await page.locator('#notes').click();
   await page.keyboard.type('Some Notes');
@@ -146,18 +146,18 @@ const mainT = () => ({
   const w = await watch(page, mainT, 9000);
   check(w.jumps.length === 1 && near(w.jumps[0], 5), 'Shift+S plays 0:05→0:09 twice (one jump back to 0:05)', JSON.stringify(w.jumps));
   check(w.ts[w.ts.length - 1] > 9.5, 'then playback carries on', String(w.ts[w.ts.length - 1]));
-  check((await shadow(page, (sr) => sr.querySelector('.ysl-toast').textContent)) === 'Loop finished · played 2×', 'toast says the loop finished');
+  check((await shadow(page, (sr) => sr.querySelector('.lsm-toast').textContent)) === 'Loop finished · played 2×', 'toast says the loop finished');
 
   await page.reload();
   await page.waitForTimeout(1200);
   await page.evaluate(() => { const v = document.getElementById('main'); v.muted = true; v.play(); });
   await page.waitForTimeout(600);
-  const saved = await shadow(page, (sr) => [sr.querySelector('#ysl-time-a').value, sr.querySelector('#ysl-time-b').value]);
+  const saved = await shadow(page, (sr) => [sr.querySelector('#lsm-time-a').value, sr.querySelector('#lsm-time-b').value]);
   check(JSON.stringify(saved) === '["0:05","0:09"]', 'the loop is still there after a reload', JSON.stringify(saved));
 
   await page.evaluate(() => { document.getElementById('main').pause(); const a = document.getElementById('song'); a.scrollIntoView(); a.play(); });
   await page.waitForTimeout(1500);
-  const dock = await page.evaluate(() => ({ dock: document.querySelector('loopsmith-root').classList.contains('ysl-dock'), b: document.querySelector('loopsmith-root').shadowRoot.querySelector('#ysl-time-b').value }));
+  const dock = await page.evaluate(() => ({ dock: document.querySelector('loopsmith-root').classList.contains('lsm-dock'), b: document.querySelector('loopsmith-root').shadowRoot.querySelector('#lsm-time-b').value }));
   check(dock.dock && dock.b === '0:40', 'playing the audio docks the panel bottom-right, on the audio', JSON.stringify(dock));
   await ctx.close();
 }
@@ -168,7 +168,7 @@ const mainT = () => ({
   await page.waitForTimeout(400);
   await page.mouse.move(640, 200);
   await page.waitForTimeout(400);
-  const top = await shadow(page, (sr) => Math.round(sr.querySelector('.ysl-pill').getBoundingClientRect().top));
+  const top = await shadow(page, (sr) => Math.round(sr.querySelector('.lsm-pill').getBoundingClientRect().top));
   check(top >= 0 && top <= 20, 'button is inside the window, at the top of the visible part', String(top));
   await ctx.close();
 }
@@ -178,17 +178,17 @@ for (const mode of ['next', 'continue']) {
   const { ctx, page } = await open(`Overlapping loops, "${mode === 'next' ? 'Next loop' : 'Play on'}"`, '/overlap.html');
   await page.evaluate(() => { const v = document.getElementById('main'); v.play(); });
   await openPanel(page, [640, 300]);
-  await setField(page, '#ysl-time-a', '0:05');
-  await setField(page, '#ysl-time-b', '0:15');
-  await setField(page, '#ysl-count', '2');
-  await L(page, '.ysl-add').click();
-  await setField(page, '#ysl-time-a', '0:12');
-  await setField(page, '#ysl-time-b', '0:20');
-  await setField(page, '#ysl-count', '3');
-  await L(page, `.ysl-seg button[data-v="${mode}"]`).click();
-  await L(page, '.ysl-chip').first().click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:15');
+  await setField(page, '#lsm-count', '2');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:12');
+  await setField(page, '#lsm-time-b', '0:20');
+  await setField(page, '#lsm-count', '3');
+  await L(page, `.lsm-seg button[data-v="${mode}"]`).click();
+  await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
-  await L(page, '.ysl-start').click();
+  await L(page, '.lsm-start').click();
   const w = await watch(page, mainT, 23000);
   // Next loop: 0:15→0:05, then a jump to loop 2's start, then two repeats of it.
   // Play on: 0:15→0:05, then playback runs on into loop 2, which repeats twice from 0:12.
@@ -206,16 +206,16 @@ for (const mode of ['next', 'continue']) {
   const { ctx, page } = await open('A loop inside another', '/overlap.html');
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
-  await setField(page, '#ysl-time-a', '0:02');
-  await setField(page, '#ysl-time-b', '0:14');
-  await setField(page, '#ysl-count', '2');
-  await L(page, '.ysl-add').click();
-  await setField(page, '#ysl-time-a', '0:06');
-  await setField(page, '#ysl-time-b', '0:09');
-  await setField(page, '#ysl-count', '2');
-  await L(page, '.ysl-chip').first().click();
+  await setField(page, '#lsm-time-a', '0:02');
+  await setField(page, '#lsm-time-b', '0:14');
+  await setField(page, '#lsm-count', '2');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:06');
+  await setField(page, '#lsm-time-b', '0:09');
+  await setField(page, '#lsm-count', '2');
+  await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
-  await L(page, '.ysl-start').click();
+  await L(page, '.lsm-start').click();
   const w = await watch(page, mainT, 13000);
   check(w.jumps.length === 2 && near(w.jumps[0], 6) && near(w.jumps[1], 2), 'inner loop twice, then the outer one again', JSON.stringify(w.jumps));
   await ctx.close();
@@ -226,10 +226,10 @@ for (const mode of ['next', 'continue']) {
   await page.evaluate(() => document.querySelector('fancy-player').shadowRoot.querySelector('video').play());
   await page.waitForTimeout(800);
   await openPanel(page, [640, 400]);
-  check(await shadow(page, (sr) => sr.querySelector('.ysl-panel').classList.contains('ysl-open')), 'found the video inside the shadow root');
-  await setField(page, '#ysl-time-a', '0:05');
-  await setField(page, '#ysl-time-b', '0:08');
-  await setField(page, '#ysl-count', '2');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-panel').classList.contains('lsm-open')), 'found the video inside the shadow root');
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:08');
+  await setField(page, '#lsm-count', '2');
   await page.keyboard.press('Escape');
   await page.mouse.click(5, 5);
   await page.keyboard.press('Shift+S');
@@ -243,8 +243,8 @@ for (const kind of ['range', 'aria', 'named', 'named&visover']) {
   const { ctx, page } = await open(`Custom player (${label}): markers on its own bar`, `/custom.html?kind=${kind}`);
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
-  await setField(page, '#ysl-time-a', '0:20');
-  await setField(page, '#ysl-time-b', '0:30');
+  await setField(page, '#lsm-time-a', '0:20');
+  await setField(page, '#lsm-time-b', '0:30');
   await page.keyboard.press('Escape');
   await page.mouse.click(5, 5);
   await page.waitForTimeout(2600); // the bar is looked up again every 2 s
@@ -252,7 +252,7 @@ for (const kind of ['range', 'aria', 'named', 'named&visover']) {
   await page.waitForTimeout(300);
   const pos = await page.evaluate(() => {
     const b = document.getElementById('bar').getBoundingClientRect();
-    const m = document.querySelector('loopsmith-root').shadowRoot.querySelector('.ysl-marks');
+    const m = document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-marks');
     const r = m.getBoundingClientRect();
     return { bar: [Math.round(b.left), Math.round(b.top + b.height / 2), Math.round(b.width)], marks: [Math.round(r.left), Math.round(r.top), Math.round(r.width)], hidden: m.hidden };
   });
@@ -262,12 +262,12 @@ for (const kind of ['range', 'aria', 'named', 'named&visover']) {
   await page.waitForTimeout(300);
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForTimeout(300);
-  check(await shadow(page, (sr) => sr.querySelector('.ysl-marks').hidden), 'markers hide when the player hides its controls');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-marks').hidden), 'markers hide when the player hides its controls');
   await page.evaluate(() => document.getElementById('controls').classList.remove('hidden'));
   await page.waitForTimeout(300);
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForTimeout(300);
-  check(!(await shadow(page, (sr) => sr.querySelector('.ysl-marks').hidden)), 'and come back with them');
+  check(!(await shadow(page, (sr) => sr.querySelector('.lsm-marks').hidden)), 'and come back with them');
   await ctx.close();
 }
 
@@ -275,13 +275,13 @@ for (const kind of ['range', 'aria', 'named', 'named&visover']) {
   const { ctx, page } = await open('Native controls only: markers along the bottom of the video', '/overlap.html');
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
-  await setField(page, '#ysl-time-a', '0:20');
-  await setField(page, '#ysl-time-b', '0:30');
+  await setField(page, '#lsm-time-a', '0:20');
+  await setField(page, '#lsm-time-b', '0:30');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   const pos = await page.evaluate(() => {
     const v = document.getElementById('main').getBoundingClientRect();
-    const r = document.querySelector('loopsmith-root').shadowRoot.querySelector('.ysl-marks').getBoundingClientRect();
+    const r = document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-marks').getBoundingClientRect();
     return { videoBottom: Math.round(v.bottom), marksTop: Math.round(r.top) };
   });
   check(near(pos.marksTop, pos.videoBottom - 4, 3), 'no bar to find: markers on the bottom edge', JSON.stringify(pos));

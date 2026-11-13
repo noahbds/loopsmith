@@ -51,7 +51,7 @@ async function watch(page, getT, ms, every = 250) {
   for (let i = 1; i < ts.length; i++) if (ts[i] < ts[i - 1] - 0.5) jumps.push(+ts[i].toFixed(1));
   return { ts, jumps };
 }
-const toast = (page) => page.evaluate(() => document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.ysl-toast')?.textContent);
+const toast = (page) => page.evaluate(() => document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.lsm-toast')?.textContent);
 
 /* ---------------- YouTube ---------------- */
 try {
@@ -66,13 +66,13 @@ try {
   await page.waitForSelector('#movie_player video', { timeout: 30000 });
   for (let i = 0; i < 40 && await page.evaluate(() => document.getElementById('movie_player').classList.contains('ad-showing')); i++) await page.waitForTimeout(1000);
   await page.waitForTimeout(2000);
-  check(await page.locator('.ytp-right-controls .ysl-btn').count() === 1, 'loop button in the player controls');
-  await page.locator('.ysl-btn').click();
-  await setField(page, '#ysl-time-a', '0:20');
-  await setField(page, '#ysl-time-b', '0:24');
-  await setField(page, '#ysl-count', '2');
-  check(await page.locator('.ytp-progress-bar .ysl-mark').count() === 1, 'marker on the progress bar');
-  await L(page, '.ysl-start').click();
+  check(await page.locator('.ytp-right-controls .lsm-btn').count() === 1, 'loop button in the player controls');
+  await page.locator('.lsm-btn').click();
+  await setField(page, '#lsm-time-a', '0:20');
+  await setField(page, '#lsm-time-b', '0:24');
+  await setField(page, '#lsm-count', '2');
+  check(await page.locator('.ytp-progress-bar .lsm-mark').count() === 1, 'marker on the progress bar');
+  await L(page, '.lsm-start').click();
   const w = await watch(page, () => document.querySelector('#movie_player video').currentTime, 11000);
   check(w.jumps.length === 1 && near(w.jumps[0], 20), 'plays 0:20→0:24 twice', JSON.stringify(w.jumps));
   check((await toast(page)) === 'Loop finished · played 2×', 'loop finishes');
@@ -91,17 +91,17 @@ try {
     const x = page.locator(sel).first();
     if (await x.isVisible().catch(() => false)) { await x.click().catch(() => {}); await page.waitForTimeout(800); }
   }
-  check(await page.evaluate(() => !!document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.ysl-pill.ysl-show')), 'loop button shows before anything plays');
+  check(await page.evaluate(() => !!document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.lsm-pill.lsm-show')), 'loop button shows before anything plays');
   await page.locator('.sc-button-play').first().click({ timeout: 10000 });
   await page.waitForTimeout(4000);
   const m = () => document.querySelector('loopsmith-media audio, loopsmith-media video')?.currentTime ?? -1;
   check(await page.evaluate(m) > 0, "SoundCloud's out-of-page audio was found");
-  await L(page, '.ysl-pill').click();
-  await setField(page, '#ysl-time-a', '0:30');
-  await setField(page, '#ysl-time-b', '0:34');
-  await setField(page, '#ysl-count', '2');
-  check(await page.evaluate(() => !document.querySelector('loopsmith-root').shadowRoot.querySelector('.ysl-marks').hidden), "marker on SoundCloud's progress bar");
-  await L(page, '.ysl-start').click();
+  await L(page, '.lsm-pill').click();
+  await setField(page, '#lsm-time-a', '0:30');
+  await setField(page, '#lsm-time-b', '0:34');
+  await setField(page, '#lsm-count', '2');
+  check(await page.evaluate(() => !document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-marks').hidden), "marker on SoundCloud's progress bar");
+  await L(page, '.lsm-start').click();
   const w = await watch(page, m, 11000);
   check(w.jumps.length === 1 && near(w.jumps[0], 30), 'plays 0:30→0:34 twice', JSON.stringify(w.jumps));
   const shown = await page.evaluate(() => document.querySelector('.playbackTimeline__timePassed span[aria-hidden]')?.textContent || '');
@@ -119,11 +119,11 @@ try {
   await rejectCookies(page);
   await page.locator('.playbutton').first().click();
   await page.waitForTimeout(3000);
-  await L(page, '.ysl-pill').click();
-  await setField(page, '#ysl-time-a', '0:20');
-  await setField(page, '#ysl-time-b', '0:24');
-  await setField(page, '#ysl-count', '2');
-  await L(page, '.ysl-start').click();
+  await L(page, '.lsm-pill').click();
+  await setField(page, '#lsm-time-a', '0:20');
+  await setField(page, '#lsm-time-b', '0:24');
+  await setField(page, '#lsm-count', '2');
+  await L(page, '.lsm-start').click();
   const w = await watch(page, () => [...document.querySelectorAll('audio')].find((a) => a.duration > 0)?.currentTime ?? -1, 11000);
   check(w.jumps.length === 1 && near(w.jumps[0], 20), 'plays 0:20→0:24 twice', JSON.stringify(w.jumps));
   await page.close();

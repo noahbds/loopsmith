@@ -291,7 +291,7 @@ Each phase is shippable on its own. Item IDs link back to findings.
 
 Goal: make the rest safe to build.
 
-- [ ] **C1** Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
+- [x] **C1** Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
   `test/e2e/make-media.mjs` instead of committing them. Remove the `.gitignore` line. Add
   `npm test` to `ci.yml`; run e2e in a second job (Playwright, Chromium) that may be marked
   non-blocking at first.
@@ -302,16 +302,16 @@ Goal: make the rest safe to build.
     driven by a `render(state)` call.
   - `core/hotkeys.js`, `platform/layout.js` (floating overlay and docking).
   Do it behind the existing tests and the e2e suite, one extraction per commit.
-- [ ] **C3** Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
+- [x] **C3** Add ESLint, Prettier (or Biome), and `tsc --checkJs` with JSDoc typedefs for `Loop`,
   `Adapter`, `Store`. Move the adapter contract out of `youtube.js` into `src/adapters/README.md`
   plus a typedef.
-- [ ] **C5** `npm run dev` (esbuild watch plus `web-ext run`). Replace the `zip` shell call with a
+- [x] **C5** `npm run dev` (esbuild watch plus `web-ext run`). Replace the `zip` shell call with a
   Node zip so Windows works.
-- [ ] **D7 / R3** Load only `prefs` and the current media key at boot (`storage.local.get([...])`),
+- [ ] *(deferred to Phase 4)* **D7 / R3** Load only `prefs` and the current media key at boot (`storage.local.get([...])`),
   not the whole store. Library views load lazily.
 - [ ] **C6** "Copy diagnostics" button (popup, later panel menu): version, browser, adapter, media
   key, duration, loop count. Nothing is sent anywhere.
-- [ ] **C4** Rename the legacy names for **1.3** (owner decision): CSS prefix `ysl-` → `ls-`,
+- [x] **C4** Rename the legacy names for **1.3** (owner decision): CSS prefix `ysl-` → `lsm-` (a longer prefix than `ls-`, because the marker and button CSS lives in the site's own DOM),
   `data-ysl*` attributes, `ysl:` events, `ysl-style` id. The content script, the page-world scripts
   (`src/page/*.js`) and the adapters must change in the same commit, since they talk through those
   names. **Keep reading the old `ysl:v1` localStorage key** (the v1 migration needs it). Check: a tab

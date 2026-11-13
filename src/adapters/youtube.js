@@ -13,14 +13,14 @@
 //   controlsTop(player)  top edge (px, viewport) of the player's bottom controls, or null
 //   navEvents            extra document events after which the player must be re-checked
 
-const ANSWER = 'data-ysl-yt';
+const ANSWER = 'data-lsm-yt';
 
 // In Chrome the page's own JS (player.getVideoData) is only reachable from a script running in
 // the page world (src/page/youtube.js). It answers synchronously through a DOM attribute.
 function askPage() {
   const root = document.documentElement;
   root.removeAttribute(ANSWER);
-  document.dispatchEvent(new CustomEvent('ysl:yt-ask'));
+  document.dispatchEvent(new CustomEvent('lsm:yt-ask'));
   if (!root.hasAttribute(ANSWER)) return undefined; // no page-world helper here
   const raw = root.getAttribute(ANSWER);
   root.removeAttribute(ANSWER);

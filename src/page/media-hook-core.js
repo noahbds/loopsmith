@@ -8,8 +8,8 @@
 
 export function installMediaHook() {
   const root = document.documentElement;
-  if (!root || root.hasAttribute('data-ysl-hook')) return;
-  root.setAttribute('data-ysl-hook', '');
+  if (!root || root.hasAttribute('data-lsm-hook')) return;
+  root.setAttribute('data-lsm-hook', '');
 
   const P = HTMLMediaElement.prototype;
   const play = P.play;

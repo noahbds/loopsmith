@@ -11,12 +11,12 @@ import youtube from './youtube.js';
 
 function seekViaPlayer(t) {
   const root = document.documentElement;
-  root.removeAttribute('data-ysl-seek-done');
-  root.setAttribute('data-ysl-seek', String(t));
-  document.dispatchEvent(new CustomEvent('ysl:yt-seek'));
-  const done = root.hasAttribute('data-ysl-seek-done');
-  root.removeAttribute('data-ysl-seek-done');
-  root.removeAttribute('data-ysl-seek');
+  root.removeAttribute('data-lsm-seek-done');
+  root.setAttribute('data-lsm-seek', String(t));
+  document.dispatchEvent(new CustomEvent('lsm:yt-seek'));
+  const done = root.hasAttribute('data-lsm-seek-done');
+  root.removeAttribute('data-lsm-seek-done');
+  root.removeAttribute('data-lsm-seek');
   return done;
 }
 

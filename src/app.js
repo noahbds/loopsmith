@@ -287,7 +287,7 @@ export function start(adapter, store) {
     }
     if (step.seek != null) seekTo(step.seek);
     render();
-    if (step.repeat) replay(ui.badge, 'ysl-pop');
+    if (step.repeat) replay(ui.badge, 'lsm-pop');
   }
 
   // Counts one play for each loop that just ended; goes back to the start of the
@@ -298,7 +298,7 @@ export function start(adapter, store) {
     seekTo(l.a);
     if (fromEnded) play();
     render();
-    replay(ui.badge, 'ysl-pop');
+    replay(ui.badge, 'lsm-pop');
     return true;
   }
 
@@ -407,7 +407,7 @@ export function start(adapter, store) {
       return;
     }
     setPoint(which, S.video.currentTime, true);
-    replay(ui.field[which].now, 'ysl-flash');
+    replay(ui.field[which].now, 'lsm-flash');
     if (!S.open) toast(`${which === 'a' ? 'Start' : 'End'} set to ${fmtT(cur()[which])}`);
   }
 
@@ -493,7 +493,7 @@ export function start(adapter, store) {
     if (S.zoom) fitView();
     rememberLoops();
     render();
-    replay(ui.chips[S.sel].root, 'ysl-new');
+    replay(ui.chips[S.sel].root, 'lsm-new');
   }
 
   function removeLoop() {
@@ -591,7 +591,7 @@ export function start(adapter, store) {
     if (notice !== live.notice) {
       live.notice = notice;
       ui.notice.textContent = notice;
-      ui.notice.classList.toggle('ysl-show', !!notice);
+      ui.notice.classList.toggle('lsm-show', !!notice);
     }
     if (!v || !ready() || ad || !S.trusted) {
       if (S.active && live.stale) setText(ui.mainText, 'Turn off'); // no position to report yet
@@ -651,13 +651,13 @@ export function start(adapter, store) {
 
   function showTip(which) {
     tipWhich = which;
-    ui.tip.classList.add('ysl-show');
+    ui.tip.classList.add('lsm-show');
     renderTip();
   }
 
   function hideTip() {
     tipWhich = null;
-    ui.tip.classList.remove('ysl-show');
+    ui.tip.classList.remove('lsm-show');
   }
 
   function renderTip() {
@@ -678,7 +678,7 @@ export function start(adapter, store) {
   function makeChip() {
     const num = el('b');
     const meta = el('span');
-    const root = el('button', { class: 'ysl-chip', type: 'button' }, el('i'), num, meta);
+    const root = el('button', { class: 'lsm-chip', type: 'button' }, el('i'), num, meta);
     const chip = { root, num, meta };
     root.addEventListener('click', () => selectLoop(ui.chips.indexOf(chip)));
     ui.chipRow.insertBefore(root, ui.add);
@@ -692,8 +692,8 @@ export function start(adapter, store) {
     const many = loops.length > 1;
 
     resize(ui.chips, loops.length, makeChip);
-    resize(ui.ghosts, loops.length, () => ui.ghostBox.appendChild(el('div', { class: 'ysl-ghost' })));
-    resize(ui.marks, loops.length, () => ui.markBox.appendChild(el('div', { class: 'ysl-mark' })));
+    resize(ui.ghosts, loops.length, () => ui.ghostBox.appendChild(el('div', { class: 'lsm-ghost' })));
+    resize(ui.marks, loops.length, () => ui.markBox.appendChild(el('div', { class: 'lsm-mark' })));
 
     loops.forEach((l, i) => {
       const rgb = PALETTE[l.c];
@@ -708,8 +708,8 @@ export function start(adapter, store) {
       const chip = ui.chips[i];
       setStyle(chip.root, '--cv', rgb);
       setAttr(chip.root, 'aria-pressed', String(selected));
-      chip.root.classList.toggle('ysl-spent', spent);
-      chip.root.classList.toggle('ysl-muted', !l.on);
+      chip.root.classList.toggle('lsm-spent', spent);
+      chip.root.classList.toggle('lsm-muted', !l.on);
       setAttr(chip.root, 'title', `Loop ${i + 1}: ${describe(l)}${l.on ? '' : ' · switched off'}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
       setText(chip.num, String(i + 1));
       setText(chip.meta, meta);
@@ -717,7 +717,7 @@ export function start(adapter, store) {
       const ghost = ui.ghosts[i];
       const shown = many && !selected && l.b > viewStart() && l.a < viewEnd();
       ghost.hidden = !shown;
-      ghost.classList.toggle('ysl-muted', !l.on);
+      ghost.classList.toggle('lsm-muted', !l.on);
       if (shown) {
         const ga = toPct(l.a);
         setStyle(ghost, 'left', pct(ga));
@@ -731,9 +731,9 @@ export function start(adapter, store) {
       setStyle(mark, 'width', pct(((l.b - l.a) / d) * 100));
       setStyle(mark, '--cv', rgb);
       setStyle(mark, '--lane', String(Math.min(lanes[i], 3)));
-      mark.classList.toggle('ysl-sel', selected || !many);
-      mark.classList.toggle('ysl-spent', spent);
-      mark.classList.toggle('ysl-muted', !l.on);
+      mark.classList.toggle('lsm-sel', selected || !many);
+      mark.classList.toggle('lsm-spent', spent);
+      mark.classList.toggle('lsm-muted', !l.on);
     });
 
     const which = many ? `loop ${S.sel + 1}` : 'this loop';
@@ -751,7 +751,7 @@ export function start(adapter, store) {
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
     ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()) && (!floating || barPlaced));
-    ui.markBox.classList.toggle('ysl-live', S.active);
+    ui.markBox.classList.toggle('lsm-live', S.active);
   }
 
   function render() {
@@ -763,9 +763,9 @@ export function start(adapter, store) {
     const pb = ok ? toPct(l.b) : 100;
 
     ui.body.disabled = !ok;
-    ui.panel.classList.toggle('ysl-off', !ok);
-    ui.panel.classList.toggle('ysl-running', S.active);
-    ui.panel.classList.toggle('ysl-muted', ok && !l.on);
+    ui.panel.classList.toggle('lsm-off', !ok);
+    ui.panel.classList.toggle('lsm-running', S.active);
+    ui.panel.classList.toggle('lsm-muted', ok && !l.on);
     setStyle(ui.panel, '--acv', PALETTE[ok ? l.c : 0]);
     setStyle(ui.lane, '--a', pct(pa));
     setStyle(ui.lane, '--b', pct(pb));
@@ -792,10 +792,10 @@ export function start(adapter, store) {
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setAttr(ui.seg, 'data-v', P.after);
-    ui.seg.classList.toggle('ysl-dim', ok && S.loops.every((x) => !x.on || x.infinite));
+    ui.seg.classList.toggle('lsm-dim', ok && S.loops.every((x) => !x.on || x.infinite));
     for (const b of ui.segBtns) setAttr(b, 'aria-pressed', String(b.dataset.v === P.after));
 
-    ui.main.classList.toggle('ysl-on', S.active);
+    ui.main.classList.toggle('lsm-on', S.active);
     setAttr(ui.main, 'aria-pressed', String(S.active));
     live.stale = true; // the run status below is rebuilt by renderLive()
     if (!S.active) {
@@ -804,7 +804,7 @@ export function start(adapter, store) {
       setText(ui.mainText, 'Turn looping on');
     }
 
-    ui.btn.classList.toggle('ysl-active', S.active);
+    ui.btn.classList.toggle('lsm-active', S.active);
     setAttr(ui.btn, 'aria-expanded', String(S.open));
     setAttr(ui.btn, 'aria-pressed', String(S.active));
     updatePill();
@@ -823,9 +823,9 @@ export function start(adapter, store) {
 
   function toast(msg) {
     ui.toast.textContent = msg;
-    ui.toast.classList.add('ysl-show');
+    ui.toast.classList.add('lsm-show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ui.toast.classList.remove('ysl-show'), 1900);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('lsm-show'), 1900);
   }
 
   /* ------------------------------------------------------------------ */
@@ -877,7 +877,7 @@ export function start(adapter, store) {
   }
 
   function shake(node) {
-    replay(node, 'ysl-shake');
+    replay(node, 'lsm-shake');
   }
 
   // Applies whatever is half-typed in a field. Not every browser blurs an input
@@ -895,18 +895,18 @@ export function start(adapter, store) {
 
   function makeField(which, label) {
     const f = { editing: false, stick: null };
-    const id = 'ysl-time-' + which;
+    const id = 'lsm-time-' + which;
     const key = which.toUpperCase();
     f.input = el('input', {
-      class: 'ysl-time', id, type: 'text', inputmode: 'text', autocomplete: 'off', spellcheck: 'false', maxlength: '14',
+      class: 'lsm-time', id, type: 'text', inputmode: 'text', autocomplete: 'off', spellcheck: 'false', maxlength: '14',
       title: 'Type a time: 9:00 · 1:02:03 · 90s · 9m30s\n↑ / ↓ adjust the part under the cursor',
     });
-    const minus = el('button', { class: 'ysl-ib', type: 'button', 'aria-label': `${label} earlier`, title: '−1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.minus, 14));
-    const plus = el('button', { class: 'ysl-ib', type: 'button', 'aria-label': `${label} later`, title: '+1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.plus, 14));
-    f.now = el('button', { class: 'ysl-ib ysl-now', type: 'button', 'aria-label': `Set ${label.toLowerCase()} to the current time`, title: `Use the current time  (Shift+${key})` }, icon(I.now, 15));
-    f.root = el('div', { class: 'ysl-field' },
-      el('label', { class: 'ysl-label', for: id }, el('b', { class: 'ysl-tag', text: key }), label),
-      el('div', { class: 'ysl-box' }, minus, f.input, plus, f.now));
+    const minus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} earlier`, title: '−1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.minus, 14));
+    const plus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label} later`, title: '+1 s  (Shift: 10 s · Alt: 0.1 s)' }, icon(I.plus, 14));
+    f.now = el('button', { class: 'lsm-ib lsm-now', type: 'button', 'aria-label': `Set ${label.toLowerCase()} to the current time`, title: `Use the current time  (Shift+${key})` }, icon(I.now, 15));
+    f.root = el('div', { class: 'lsm-field' },
+      el('label', { class: 'lsm-label', for: id }, el('b', { class: 'lsm-tag', text: key }), label),
+      el('div', { class: 'lsm-box' }, minus, f.input, plus, f.now));
 
     const revert = () => {
       f.editing = false;
@@ -1018,8 +1018,8 @@ export function start(adapter, store) {
       const d = drag;
       drag = null;
       try { track.releasePointerCapture(d.id); } catch (_) { /* already released */ }
-      track.classList.remove('ysl-dragging');
-      ui.thumb[d.which].classList.remove('ysl-grab');
+      track.classList.remove('lsm-dragging');
+      ui.thumb[d.which].classList.remove('lsm-grab');
       if (!ui.thumb[d.which].matches(':focus-visible')) hideTip();
       S.sliding = false;
       render();
@@ -1028,7 +1028,7 @@ export function start(adapter, store) {
     track.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !ready() || drag) return;
       const l = cur();
-      const th = e.target.closest ? e.target.closest('.ysl-thumb') : null;
+      const th = e.target.closest ? e.target.closest('.lsm-thumb') : null;
       let which;
       let off = 0;
       const r = ui.lane.getBoundingClientRect();
@@ -1042,8 +1042,8 @@ export function start(adapter, store) {
       drag = { which, id: e.pointerId, off, x0: e.clientX, moved: !th };
       S.sliding = true;
       try { track.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-      track.classList.add('ysl-dragging');
-      ui.thumb[which].classList.add('ysl-grab');
+      track.classList.add('lsm-dragging');
+      ui.thumb[which].classList.add('lsm-grab');
       ui.thumb[which].focus({ preventScroll: true });
       showTip(which);
       if (!th) move(e);
@@ -1099,7 +1099,7 @@ export function start(adapter, store) {
     S.open = true;
     place();
     render();
-    ui.panel.classList.add('ysl-open');
+    ui.panel.classList.add('lsm-open');
     wake();
   }
 
@@ -1108,15 +1108,15 @@ export function start(adapter, store) {
     const hadFocus = ui.panel.contains(focused());
     S.open = false;
     hideTip();
-    ui.panel.classList.remove('ysl-open');
+    ui.panel.classList.remove('lsm-open');
     render();
     if (hadFocus) ui.btn.focus({ preventScroll: true });
   }
 
   function buildUI() {
-    ui.badge = el('span', { class: 'ysl-badge' });
+    ui.badge = el('span', { class: 'lsm-badge' });
     ui.btn = el('button', {
-      class: floating ? 'ysl-pill' : `${adapter.buttonClass || ''} ysl-btn`.trim(), type: 'button', title: 'Section loop (Loopsmith)', 'aria-label': 'Section loop',
+      class: floating ? 'lsm-pill' : `${adapter.buttonClass || ''} lsm-btn`.trim(), type: 'button', title: 'Section loop (Loopsmith)', 'aria-label': 'Section loop',
       'aria-haspopup': 'dialog', 'aria-expanded': 'false',
     }, icon(I.loop, floating ? 22 : 24), ui.badge);
     ui.btn.addEventListener('click', (e) => {
@@ -1125,54 +1125,54 @@ export function start(adapter, store) {
       else openPanel();
     });
 
-    ui.markBox = el('div', { class: floating ? 'ysl-marks ysl-float' : 'ysl-marks', hidden: true });
-    ui.toast = el('div', { class: 'ysl-toast', role: 'status', 'aria-live': 'polite' });
+    ui.markBox = el('div', { class: floating ? 'lsm-marks lsm-float' : 'lsm-marks', hidden: true });
+    ui.toast = el('div', { class: 'lsm-toast', role: 'status', 'aria-live': 'polite' });
 
     // Header: one chip per loop
-    ui.add = el('button', { class: 'ysl-hb ysl-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time' }, icon(I.plus, 14));
+    ui.add = el('button', { class: 'lsm-hb lsm-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time' }, icon(I.plus, 14));
     ui.add.addEventListener('click', addLoop);
-    ui.chipRow = el('div', { class: 'ysl-chips', role: 'group', 'aria-label': 'Loops' }, ui.add);
-    ui.trash = el('button', { class: 'ysl-hb', type: 'button' }, icon(I.trash, 15));
+    ui.chipRow = el('div', { class: 'lsm-chips', role: 'group', 'aria-label': 'Loops' }, ui.add);
+    ui.trash = el('button', { class: 'lsm-hb', type: 'button' }, icon(I.trash, 15));
     ui.trash.addEventListener('click', removeLoop);
-    ui.power = el('button', { class: 'ysl-hb ysl-power', type: 'button', 'aria-pressed': 'true' }, icon(I.power, 15));
+    ui.power = el('button', { class: 'lsm-hb lsm-power', type: 'button', 'aria-pressed': 'true' }, icon(I.power, 15));
     ui.power.addEventListener('click', toggleLoop);
-    const close = el('button', { class: 'ysl-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
+    const close = el('button', { class: 'lsm-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
     close.addEventListener('click', closePanel);
-    const head = el('div', { class: 'ysl-head' }, ui.chipRow, ui.power, ui.trash, close);
-    ui.notice = el('div', { class: 'ysl-notice', role: 'status' });
+    const head = el('div', { class: 'lsm-head' }, ui.chipRow, ui.power, ui.trash, close);
+    ui.notice = el('div', { class: 'lsm-notice', role: 'status' });
 
     // Slider
-    ui.thumb.a = el('div', { class: 'ysl-thumb ysl-thumb-a', 'data-which': 'a', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop start', text: 'A' });
-    ui.thumb.b = el('div', { class: 'ysl-thumb ysl-thumb-b', 'data-which': 'b', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop end', text: 'B' });
-    ui.tip = el('div', { class: 'ysl-tip' });
-    ui.ghostBox = el('div', { class: 'ysl-ghosts' });
-    ui.play = el('div', { class: 'ysl-play' });
-    ui.lane = el('div', { class: 'ysl-lane' },
-      el('div', { class: 'ysl-rail' }), ui.ghostBox, el('div', { class: 'ysl-fill' }), ui.play,
+    ui.thumb.a = el('div', { class: 'lsm-thumb lsm-thumb-a', 'data-which': 'a', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop start', text: 'A' });
+    ui.thumb.b = el('div', { class: 'lsm-thumb lsm-thumb-b', 'data-which': 'b', role: 'slider', tabindex: '0', 'aria-valuemin': '0', 'aria-label': 'Loop end', text: 'B' });
+    ui.tip = el('div', { class: 'lsm-tip' });
+    ui.ghostBox = el('div', { class: 'lsm-ghosts' });
+    ui.play = el('div', { class: 'lsm-play' });
+    ui.lane = el('div', { class: 'lsm-lane' },
+      el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
       ui.thumb.a, ui.thumb.b, ui.tip);
-    ui.track = el('div', { class: 'ysl-track', title: 'Drag A and B, or click to move the nearest one' }, ui.lane);
-    ui.len = el('span', { class: 'ysl-len' });
+    ui.track = el('div', { class: 'lsm-track', title: 'Drag A and B, or click to move the nearest one' }, ui.lane);
+    ui.len = el('span', { class: 'lsm-len' });
     ui.scaleStart = el('span', { text: '0:00' });
     ui.scaleEnd = el('span');
-    ui.zoom = el('button', { class: 'ysl-zoom', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Zoom the slider on this loop', title: 'Zoom the slider on this loop (finer dragging)' }, icon(I.zoom, 14));
+    ui.zoom = el('button', { class: 'lsm-zoom', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Zoom the slider on this loop', title: 'Zoom the slider on this loop (finer dragging)' }, icon(I.zoom, 14));
     ui.zoom.addEventListener('click', () => setZoom(!S.zoom));
-    const slider = el('div', { class: 'ysl-slider' }, ui.track,
-      el('div', { class: 'ysl-scale' }, ui.scaleStart, el('span', { class: 'ysl-mid' }, ui.len, ui.zoom), ui.scaleEnd));
+    const slider = el('div', { class: 'lsm-slider' }, ui.track,
+      el('div', { class: 'lsm-scale' }, ui.scaleStart, el('span', { class: 'lsm-mid' }, ui.len, ui.zoom), ui.scaleEnd));
 
     // Timestamps
     ui.field.a = makeField('a', 'Start');
     ui.field.b = makeField('b', 'End');
-    const fields = el('div', { class: 'ysl-row' }, ui.field.a.root, ui.field.b.root);
+    const fields = el('div', { class: 'lsm-row' }, ui.field.a.root, ui.field.b.root);
 
     // Repeat count
     ui.countState = { editing: false };
-    ui.count = el('input', { class: 'ysl-num', id: 'ysl-count', type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: '3', title: 'How many times this loop plays' });
-    const cMinus = el('button', { class: 'ysl-ib', type: 'button', 'aria-label': 'Fewer plays', title: 'Fewer  (Shift: 10)' }, icon(I.minus, 14));
-    const cPlus = el('button', { class: 'ysl-ib', type: 'button', 'aria-label': 'More plays', title: 'More  (Shift: 10)' }, icon(I.plus, 14));
-    ui.inf = el('button', { class: 'ysl-ib ysl-inf', type: 'button', 'aria-label': 'Repeat forever', 'aria-pressed': 'false', title: 'Repeat forever', text: '∞' });
-    const countField = el('div', { class: 'ysl-field' },
-      el('label', { class: 'ysl-label', for: 'ysl-count', text: 'Times to play' }),
-      el('div', { class: 'ysl-box' }, cMinus, ui.count, cPlus, ui.inf));
+    ui.count = el('input', { class: 'lsm-num', id: 'lsm-count', type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: '3', title: 'How many times this loop plays' });
+    const cMinus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'Fewer plays', title: 'Fewer  (Shift: 10)' }, icon(I.minus, 14));
+    const cPlus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'More plays', title: 'More  (Shift: 10)' }, icon(I.plus, 14));
+    ui.inf = el('button', { class: 'lsm-ib lsm-inf', type: 'button', 'aria-label': 'Repeat forever', 'aria-pressed': 'false', title: 'Repeat forever', text: '∞' });
+    const countField = el('div', { class: 'lsm-field' },
+      el('label', { class: 'lsm-label', for: 'lsm-count', text: 'Times to play' }),
+      el('div', { class: 'lsm-box' }, cMinus, ui.count, cPlus, ui.inf));
 
     const commitCount = () => {
       if (!ui.countState.editing) return;
@@ -1246,28 +1246,28 @@ export function start(adapter, store) {
       el('button', { type: 'button', 'data-v': 'pause', 'aria-pressed': 'false', text: 'Pause', title: 'Keep playing between loops, pause after the last one' }),
     ];
     for (const b of ui.segBtns) b.addEventListener('click', () => setAfter(b.dataset.v));
-    ui.seg = el('div', { class: 'ysl-seg', role: 'group', 'aria-label': 'When done' }, ...ui.segBtns);
-    const afterField = el('div', { class: 'ysl-field' }, el('div', { class: 'ysl-label', text: 'When done' }), ui.seg);
-    const opts = el('div', { class: 'ysl-row ysl-opts' }, countField, afterField);
+    ui.seg = el('div', { class: 'lsm-seg', role: 'group', 'aria-label': 'When done' }, ...ui.segBtns);
+    const afterField = el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: 'When done' }), ui.seg);
+    const opts = el('div', { class: 'lsm-row lsm-opts' }, countField, afterField);
 
     // Actions
     // Turning looping on and starting a loop are separate: the first leaves the video where it is.
-    ui.start = el('button', { class: 'ysl-start', type: 'button' }, icon(I.play, 18));
+    ui.start = el('button', { class: 'lsm-start', type: 'button' }, icon(I.play, 18));
     ui.start.addEventListener('click', startLoop);
     ui.mainText = el('span', { text: 'Turn looping on' });
-    ui.mainFill = el('span', { class: 'ysl-main-fill' });
-    ui.main = el('button', { class: 'ysl-main', type: 'button', 'aria-pressed': 'false', title: 'Turn looping on / off  (Shift+R)\nThe video stays where it is' },
-      ui.mainFill, icon(I.loop, 18, 'ysl-ic-idle'), icon(I.stop, 18, 'ysl-ic-stop'), ui.mainText);
+    ui.mainFill = el('span', { class: 'lsm-main-fill' });
+    ui.main = el('button', { class: 'lsm-main', type: 'button', 'aria-pressed': 'false', title: 'Turn looping on / off  (Shift+R)\nThe video stays where it is' },
+      ui.mainFill, icon(I.loop, 18, 'lsm-ic-idle'), icon(I.stop, 18, 'lsm-ic-stop'), ui.mainText);
     ui.main.addEventListener('click', () => (S.active ? stopRun() : armRun()));
-    const reset = el('button', { class: 'ysl-reset', type: 'button', 'aria-label': 'Remove all loops', title: 'Remove all loops and start over' }, icon(I.reset, 18));
+    const reset = el('button', { class: 'lsm-reset', type: 'button', 'aria-label': 'Remove all loops', title: 'Remove all loops and start over' }, icon(I.reset, 18));
     reset.addEventListener('click', () => {
       cancelEdits();
       resetAll();
     });
-    const actions = el('div', { class: 'ysl-actions' }, ui.start, ui.main, reset);
+    const actions = el('div', { class: 'lsm-actions' }, ui.start, ui.main, reset);
 
-    ui.body = el('fieldset', { class: 'ysl-body' }, slider, fields, opts, actions);
-    ui.panel = el('div', { class: 'ysl-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.notice, ui.body);
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, actions);
+    ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.notice, ui.body);
 
     // The panel and the toast live in a shadow root: the site's CSS can't reach them.
     // Open, so focus and composedPath() still see which field is being typed in.
@@ -1346,11 +1346,11 @@ export function start(adapter, store) {
     const pillTop = over && r.top < 0 ? Math.round(10 - r.top) + 'px' : '10px';
     if (box.pill !== pillTop) {
       box.pill = pillTop;
-      ui.host.style.setProperty('--ysl-pill-top', pillTop);
+      ui.host.style.setProperty('--lsm-pill-top', pillTop);
     }
     if (dock !== !over) {
       dock = !over;
-      ui.host.classList.toggle('ysl-dock', dock);
+      ui.host.classList.toggle('lsm-dock', dock);
       if (S.open) place();
     }
     updatePill();
@@ -1394,7 +1394,7 @@ export function start(adapter, store) {
     const p = S.player;
     const show = S.open || S.active || adapter.dockOnly
       || (dock ? !!p && (engaged(p) || (!!S.video && !S.video.paused)) : Date.now() < hoverUntil);
-    ui.btn.classList.toggle('ysl-show', show);
+    ui.btn.classList.toggle('lsm-show', show);
   }
 
   let moveQueued = false;
@@ -1490,7 +1490,7 @@ export function start(adapter, store) {
 
   if (!floating) { // the button and the markers live in the site's own DOM
     const style = document.createElement('style');
-    style.id = 'ysl-style';
+    style.id = 'lsm-style';
     style.textContent = LIGHT_CSS;
     (document.head || document.documentElement).appendChild(style);
   }
