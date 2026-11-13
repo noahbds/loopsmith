@@ -1,7 +1,7 @@
 # Plan: from "YouTube Section Loop" to a loop tool for any website
 
-Status: Phases 0–3 built on branch `phase0-foundation` (2026-11-13). The other music apps (Deezer,
-Tidal, Apple Music, Amazon Music) and phase 4 are not started.
+Status: phases 0–3 built (2026-11-13); the project moved to the `loopsmith` repository.
+**Not yet:** Deezer, Tidal, Apple Music and Amazon Music (no account to test them with), and phase 4.
 
 Phase 1 notes: Firefox moved to Manifest V3 (Firefox 128+) so both browsers share the popup,
 background and page-world scripts. Media inside shadow roots isn't picked up yet (phase 3).
@@ -81,7 +81,7 @@ Ranked by how many people would use it × how hard it is.
 | **Spotify Web** (`open.spotify.com`) | The biggest music catalogue | Hard | DRM audio and a custom player, see 4.9. |
 | **SoundCloud** | Covers, remixes, DJs | Hard | Plays through an `Audio` object that is **not in the DOM**: needs a page-world hook (see 4.5). |
 | **Bandcamp** | Independent music | Easy | `<audio>` in the DOM. |
-| **Deezer, Tidal, Apple Music web, Amazon Music web** | Other catalogues | Medium to hard | Same approach as Spotify (4.9); done one at a time once Spotify works, starting with whichever behaves best. |
+| **Deezer, Tidal, Apple Music web, Amazon Music web** | Other catalogues | Medium to hard | **Not yet.** Same approach as Spotify (4.9), one at a time, once there is an account to test with. |
 | **Songsterr, Moises, and lesson sites** (if they use a plain media element) | Practice tools | Easy | Generic adapter, checked one by one. |
 
 All of these have no video to draw on: the panel docks to the bottom of the viewport, and markers
@@ -317,7 +317,7 @@ now" toast instead of failing silently.
 | **0. Foundation** | Build setup, split into modules, YouTube adapter with exact current behaviour, Shadow DOM, storage v2 + migration, engine unit tests | Same extension, new insides. Ship as a normal update. |
 | **1. Any video** | Generic adapter, floating pill, active-media picking, fullscreen handling, toolbar popup with per-site enable, Chrome MV3 build | "Works on any site" release + Chrome Web Store listing |
 | **2. Music** | Page-world script, docked audio panel, YouTube Music, Bandcamp, SoundCloud, **Spotify Web** (4.9) | Musicians covered: the main use case |
-| **3. More music + video** | Deezer / Tidal / Apple Music / Amazon Music (one at a time), Vimeo, Twitch VODs, Dailymotion, Bilibili, feed sites (X, Reddit…) | Broad coverage |
+| **3. More music + video** | Vimeo, Twitch VODs, Dailymotion, Bilibili, shadow-DOM players (Reddit…). Deezer / Tidal / Apple Music / Amazon Music: **not yet** | Broad coverage |
 | **4. Extras** | "My loops" page, export/import, playback speed / pitch-preserving slow-down for practice, Edge store, maybe Safari | |
 | **5. Maybe** | Netflix, Disney+, Prime through their internal APIs, opt-in | Only with demand |
 
@@ -351,7 +351,7 @@ Since nothing is published yet, the rename can be clean:
 - Userscript `@name Loopsmith`, `@namespace loopsmith`
 - CSS prefix `ysl-` → `ls-`, page marker `data-ysl` → `data-loopsmith`, storage key `loopsmith:v2`
   (the v1 migration still reads `ysl:v1` on youtube.com)
-- GitHub repo `youtube-section-loop` → `loopsmith` (GitHub redirects the old URL)
+- GitHub repo: a new `loopsmith` repository; `youtube-section-loop` is archived
 - New icon: the current one is fine to start; a proper one before the store listing
 
 ## 7. Risks
@@ -374,4 +374,4 @@ Since nothing is published yet, the rename can be clean:
   The hook is registered on every site the user turns on, and the userscript installs it everywhere.
 - Reddit couldn't be checked from Claude in Chrome (site restricted there); covered by the
   shadow-DOM test page. X / Instagram / TikTok use plain `<video>` and go through the generic adapter.
-- Not done here: the remaining music apps need accounts to test, one at a time.
+- Not yet: Deezer, Tidal, Apple Music and Amazon Music need accounts to test, one at a time.

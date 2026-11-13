@@ -19,7 +19,7 @@ to now, Shift+S plays the selected loop, Shift+R turns looping on or off.
 - The userscript runs on every site; narrow it with your userscript manager's include/exclude rules.
 
 Players built as web components (media inside shadow DOM) are found too, as long as their shadow
-root is open. Not yet: Deezer, Tidal, Apple Music, Amazon Music. See the plan in
+root is open. **Not yet:** Deezer, Tidal, Apple Music, Amazon Music. See the plan in
 [docs/MULTI_SITE_PLAN.md](docs/MULTI_SITE_PLAN.md).
 
 ## Build

@@ -117,7 +117,7 @@ async function userscript() {
     '// @grant        GM_listValues',
     '// ==/UserScript==',
     '',
-    '// Built from https://github.com/noahbds/youtube-section-loop (src/). Edit the sources, not this file.',
+    '// Built from https://github.com/noahbds/loopsmith (src/). Edit the sources, not this file.',
     '',
   ].join('\n');
   await bundle('src/entries/userscript.js', join(dist, 'loopsmith.user.js'), { target: 'es2020', banner: { js: header } });
