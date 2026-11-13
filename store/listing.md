@@ -11,31 +11,26 @@ Loop any part of a song or video, as many times as you want, then move on.
 
 Loopsmith adds an A-B repeat to the players you already use. Mark a start and an end, choose how many times the section plays (or forever), and let it run without reaching for the mouse.
 
-Made for two things:
-• Practice: learning a guitar riff, a song's hard part, a dance move, a language, a lecture, a speedrun route.
-• Music on repeat: keep your favourite part of a song playing, on Spotify, YouTube Music, SoundCloud or YouTube.
+It is made for two things: practising (a guitar riff, the hard part of a song, a dance move, a language lesson) and keeping your favourite part of a song on repeat.
 
 WHAT YOU CAN DO
 • Set the start and end by dragging the A and B handles, typing a time (1:23, 90s, 1m30s), or grabbing the current position.
 • Choose how many times a section plays, from 1 to 999, or forever.
-• Add several loops on the same video (up to 12), even overlapping ones. Switch a loop off without deleting it.
+• Add several loops on the same video or track, even overlapping ones. Switch a loop off without deleting it.
 • Decide what happens when a loop is done: play on, jump straight to the next loop, or pause after the last one.
 • See your loops on the site's own progress bar.
-• Your loops are saved per video or track, and come back when you return.
+• Your loops are saved and come back when you return.
 • Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off.
 
-WORKS ON
-• YouTube and YouTube Music
-• Spotify (web player), SoundCloud, Bandcamp
-• Vimeo, Twitch videos and clips, Bilibili, Dailymotion
-• Any other website with a video or audio player: click the Loopsmith icon and choose "Turn on for this site". Loopsmith only runs where you allow it.
+WHERE IT WORKS
+Loopsmith works out of the box on YouTube, Spotify and other popular video and music sites. On any other website with a video or audio player, click the Loopsmith icon and choose "Turn on for this site": it only runs where you allow it.
 
 PRIVATE BY DESIGN
 • No account, no tracking, no analytics, no ads.
 • Loopsmith never sends anything anywhere: your loops are stored in your browser only.
 • It only asks for access to other websites when you turn it on for them, one site at a time.
 
-Live streams can't be looped (there's nothing to go back to). Loopsmith is not affiliated with YouTube, Spotify or any of the sites it works on.
+Live streams can't be looped, since there is nothing to go back to. Loopsmith is not affiliated with any of the sites it works on.
 ```
 
 **Category:** Outils (Tools). Alternative if you prefer to reach learners: Éducation.
