@@ -24,8 +24,9 @@ const GECKO_ID = 'loopsmith@noahbds';
 // (optional host permissions + a content script the background registers).
 const MATCHES = BUILT_IN.flatMap((s) => s.matches);
 const PAGE_WORLD = BUILT_IN.filter((s) => s.pageWorld).map((s) => ({
-  matches: s.matches, src: s.pageWorld, js: 'page-' + s.pageWorld.split('/').pop(),
+  matches: s.matches, src: s.pageWorld, js: s.pageWorld.map((f) => 'page-' + f.split('/').pop()),
 }));
+const PAGE_SOURCES = [...new Set(BUILT_IN.flatMap((s) => s.pageWorld || []))];
 
 const common = { bundle: true, format: 'iife', charset: 'utf8', legalComments: 'none', logLevel: 'warning' };
 
@@ -46,7 +47,7 @@ async function extension(out, target) {
   await bundle('src/entries/content.js', join(out, 'content.js'), { target });
   await bundle('src/background.js', join(out, 'background.js'), { target });
   await bundle('src/popup/popup.js', join(out, 'popup.js'), { target });
-  for (const p of PAGE_WORLD) await bundle(p.src, join(out, p.js), { target });
+  for (const src of PAGE_SOURCES) await bundle(src, join(out, 'page-' + src.split('/').pop()), { target });
   for (const f of ['popup.html', 'popup.css']) cpSync(join(root, 'src/popup', f), join(out, f));
   cpSync(join(root, 'assets/icon.svg'), join(out, 'icon.svg'));
   return {
@@ -59,7 +60,7 @@ async function extension(out, target) {
     optional_host_permissions: ['*://*/*'],
     action: { default_title: 'Loopsmith', default_popup: 'popup.html' },
     content_scripts: [
-      ...PAGE_WORLD.map((p) => ({ matches: p.matches, js: [p.js], run_at: 'document_start', all_frames: true, world: 'MAIN' })),
+      ...PAGE_WORLD.map((p) => ({ matches: p.matches, js: p.js, run_at: 'document_start', all_frames: true, world: 'MAIN' })),
       { matches: MATCHES, js: ['content.js'], run_at: 'document_idle', all_frames: true },
     ],
   };
@@ -108,7 +109,7 @@ async function userscript() {
     // Every site: the generic adapter stays idle on pages without media. Narrow it with your
     // userscript manager's own include/exclude settings if you prefer.
     '// @match        *://*/*',
-    '// @run-at       document-idle',
+    '// @run-at       document-start',
     '// @grant        GM_getValue',
     '// @grant        GM_setValue',
     '// @grant        GM_deleteValue',

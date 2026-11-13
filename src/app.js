@@ -50,6 +50,8 @@ export function start(adapter, store) {
   // Floating mode (sites without a control bar to join): the panel, toast and a small loop button
   // sit in an overlay laid over the video, or docked bottom-right for audio and small videos.
   const floating = !!adapter.floating;
+  // Whether the user has been playing this media (generic pages: only then do the hotkeys act).
+  const engaged = (p) => (adapter.engaged ? adapter.engaged(p) : true);
   let shadow = null;
   const focused = () => (shadow && shadow.activeElement) || document.activeElement;
 
@@ -236,14 +238,20 @@ export function start(adapter, store) {
     const v = S.video;
     if (!v) return;
     S.lastT = null;
-    try { v.currentTime = t; } catch (_) { /* ignore */ }
+    try {
+      // Some players (Spotify) must seek through their own controls to stay in step.
+      if (adapter.seek) adapter.seek(v, t, S.player);
+      else v.currentTime = t;
+    } catch (_) { /* ignore */ }
   }
 
   // A loop that runs to the end of the video turns around this much early, so the player
   // never reaches "ended" (which would trigger autoplay). Hidden tabs only get coarse timing.
   function turnGuard() {
     const rate = (S.video && S.video.playbackRate) || 1;
-    return document.hidden ? 0.1 + 0.3 * rate : 0.25;
+    const base = document.hidden ? 0.1 + 0.3 * rate : 0.25;
+    // Music sites move on to the next track a little before the real end (gapless playback).
+    return Math.max(base, adapter.endGuard || 0);
   }
 
   const loopEnd = (l, guard = turnGuard()) => E.loopEnd(l, S.duration, guard);
@@ -745,7 +753,7 @@ export function start(adapter, store) {
     const startTitle = `Play ${which} from its start`;
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
-    ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()));
+    ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()) && (!floating || barPlaced));
     ui.markBox.classList.toggle('ysl-live', S.active);
   }
 
@@ -1120,7 +1128,7 @@ export function start(adapter, store) {
       else openPanel();
     });
 
-    ui.markBox = el('div', { class: 'ysl-marks', hidden: true });
+    ui.markBox = el('div', { class: floating ? 'ysl-marks ysl-float' : 'ysl-marks', hidden: true });
     ui.toast = el('div', { class: 'ysl-toast', role: 'status', 'aria-live': 'polite' });
 
     // Header: one chip per loop
@@ -1271,7 +1279,8 @@ export function start(adapter, store) {
     shadow = ui.host.attachShadow({ mode: 'open' });
     shadow.append(el('style', { text: SHADOW_CSS }), ui.panel, ui.toast);
     if (floating) {
-      shadow.append(ui.btn);
+      // Floating mode draws the markers in the overlay, laid over the site's progress bar.
+      shadow.append(ui.btn, ui.markBox);
       const base = { position: 'fixed', display: 'block', margin: '0', padding: '0', border: '0', 'z-index': '2147483646', 'pointer-events': 'none', left: '0', top: '0', width: '0', height: '0' };
       for (const [k, v] of Object.entries(base)) ui.host.style.setProperty(k, v, 'important');
     }
@@ -1324,16 +1333,17 @@ export function start(adapter, store) {
     const r = p.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const over = p.tagName === 'VIDEO' && r.width >= 360 && r.height >= 220 && visibleArea(r, vw, vh) >= 0.5 * r.width * r.height;
+    const over = !adapter.dockOnly && p.tagName === 'VIDEO' && r.width >= 360 && r.height >= 220 && visibleArea(r, vw, vh) >= 0.5 * r.width * r.height;
     const next = over
       ? { l: Math.round(r.left) + 'px', t: Math.round(r.top) + 'px', w: Math.round(r.width) + 'px', h: Math.round(r.height) + 'px' }
-      : { l: '0px', t: '0px', w: vw + 'px', h: vh + 'px' };
+      : { l: '0px', t: '0px', w: vw + 'px', h: Math.max(200, vh - (adapter.dockInset || 0)) + 'px' }; // above the site's player bar
     for (const [k, prop] of [['l', 'left'], ['t', 'top'], ['w', 'width'], ['h', 'height']]) {
       if (box[k] !== next[k]) {
         box[k] = next[k];
         ui.host.style.setProperty(prop, next[k], 'important');
       }
     }
+    placeMarks(over ? r : null);
     if (dock !== !over) {
       dock = !over;
       ui.host.classList.toggle('ysl-dock', dock);
@@ -1342,11 +1352,42 @@ export function start(adapter, store) {
     updatePill();
   }
 
+  // Floating mode: the markers are drawn over the site's own progress bar when the adapter knows
+  // where it is, otherwise along the bottom edge of the video (generic pages), or not at all (audio).
+  let barPlaced = false;
+  const markRect = { l: '', t: '', w: '' };
+
+  function placeMarks(videoRect) {
+    let bar = null;
+    try { bar = adapter.progressBar ? adapter.progressBar(S.player) : null; } catch (_) { /* ignore */ }
+    const br = bar && bar.getBoundingClientRect();
+    let next = null;
+    if (br && br.width > 20 && br.bottom > 0 && br.top < window.innerHeight) {
+      next = { l: br.left, t: br.top + br.height / 2 - 2, w: br.width };
+    } else if (videoRect) {
+      next = { l: videoRect.left + 12, t: videoRect.bottom - 4, w: videoRect.width - 24 };
+    }
+    const placed = !!next;
+    if (next) {
+      for (const [k, prop, v] of [['l', 'left', next.l], ['t', 'top', next.t], ['w', 'width', next.w]]) {
+        const px = Math.round(v) + 'px';
+        if (markRect[k] !== px) {
+          markRect[k] = px;
+          ui.markBox.style.setProperty(prop, px);
+        }
+      }
+    }
+    if (placed !== barPlaced) {
+      barPlaced = placed;
+      render();
+    }
+  }
+
   // Over a video the button shows while the pointer is on it; docked, once the media has been played.
   function updatePill() {
     if (!floating) return;
     const p = S.player;
-    const show = S.open || S.active || (dock ? !!p && (adapter.engaged(p) || !p.paused) : Date.now() < hoverUntil);
+    const show = S.open || S.active || (dock ? !!p && (engaged(p) || (!!S.video && !S.video.paused)) : Date.now() < hoverUntil);
     ui.btn.classList.toggle('ysl-show', show);
   }
 
@@ -1421,7 +1462,7 @@ export function start(adapter, store) {
     if (k !== 'a' && k !== 'b' && k !== 'r' && k !== 's') return;
     if (!S.player || !S.player.isConnected) return;
     // On an arbitrary page, only once the user has played that media (or opened the panel).
-    if (floating ? !(S.open || adapter.engaged(S.player)) : !S.player.getClientRects().length) return;
+    if (floating ? !(S.open || engaged(S.player)) : !S.player.getClientRects().length) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (k === 'r') {

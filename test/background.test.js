@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { BUILT_IN_MATCHES } from '../src/sites.js';
 
 // A fake extension API: enough of permissions / scripting / tabs for the background script.
-const granted = new Set(['*://www.youtube.com/*']);
+const granted = new Set(BUILT_IN_MATCHES);
 let registered = [];
 const injected = [];
 const listeners = {};
@@ -42,7 +43,7 @@ describe('background: content script follows the granted sites', () => {
     await listeners.added({ origins: ['*://example.com/*'] });
     expect(registered).toHaveLength(1);
     expect(registered[0]).toMatchObject({
-      id: 'loopsmith-sites', matches: ['*://example.com/*'], excludeMatches: ['*://www.youtube.com/*'], js: ['content.js'], allFrames: true,
+      id: 'loopsmith-sites', matches: ['*://example.com/*'], excludeMatches: BUILT_IN_MATCHES, js: ['content.js'], allFrames: true,
     });
     expect(injected).toEqual([7]);
   });

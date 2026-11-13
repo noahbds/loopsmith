@@ -24,6 +24,9 @@ export const LIGHT_CSS = `
 @media (prefers-reduced-motion:reduce){.ysl-btn *,.ysl-mark{animation:none!important;transition-duration:.01s!important}}
 `;
 
+// The marker rules apply in both places: on the site's bar (light DOM) and in the overlay.
+const MARKS_CSS = () => LIGHT_CSS.split('\n').filter((l) => /^\.ysl-marks?\b/.test(l)).join('\n');
+
 export const SHADOW_CSS = `
 :host{all:initial;display:contents}
 .ysl-pill{position:absolute;top:10px;right:10px;z-index:2201;display:grid;place-items:center;width:40px;height:40px;margin:0;padding:0;border:0;border-radius:50%;background:rgba(24,24,27,.88);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.14);cursor:pointer;pointer-events:none;opacity:0;transform:scale(.85);transition:opacity .18s,transform .18s,background .15s;-webkit-appearance:none;appearance:none}
@@ -39,6 +42,7 @@ export const SHADOW_CSS = `
 .ysl-pill.ysl-active .ysl-badge.ysl-pop{animation:ysl-pop .4s}
 :host(.ysl-dock) .ysl-pill{top:auto;bottom:16px;right:16px}
 :host(.ysl-dock) .ysl-panel{right:16px}
+.ysl-marks.ysl-float{position:fixed;height:4px;z-index:2147483646}
 .ysl-toast{position:absolute;left:50%;top:12%;z-index:2200;max-width:90%;box-sizing:border-box;padding:8px 14px;border-radius:999px;background:rgba(24,24,27,.94);color:#fff;font:600 13px/1.25 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translate(-50%,-6px);pointer-events:none;transition:opacity .18s,transform .18s}
 .ysl-toast.ysl-show{opacity:1;transform:translate(-50%,0)}
 
@@ -163,5 +167,6 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 @keyframes ysl-flow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @keyframes ysl-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
 @keyframes ysl-ping{0%{box-shadow:0 0 0 0 rgba(var(--acv),.7)}100%{box-shadow:0 0 0 9px rgba(var(--acv),0)}}
+${MARKS_CSS()}
 @media (prefers-reduced-motion:reduce){.ysl-panel,.ysl-panel *,.ysl-panel *::before,.ysl-toast,.ysl-pill,.ysl-pill *{animation:none!important;transition-duration:.01s!important}}
 `;

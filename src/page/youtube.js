@@ -1,6 +1,6 @@
 // Runs in the page's own JS world (Chrome: content script with "world": "MAIN").
-// Answers "which video does the player say is loaded?" for the content script, which can't call
-// the player's methods from its isolated world. Kept tiny on purpose: no state, no other access.
+// Answers "which video does the player say is loaded?" and "seek to t" for the content script,
+// which can't call the player's methods from its isolated world. Kept tiny on purpose.
 
 (() => {
   const root = document.documentElement;
@@ -15,5 +15,19 @@
       if (d) out = JSON.stringify({ id: d.video_id ? String(d.video_id) : null, live: d.isLive === true });
     } catch (_) { /* player not initialised yet */ }
     root.setAttribute('data-ysl-yt', out);
+  });
+
+  // Seeks through the player's own API, so its state (queue, progress bar) stays in step.
+  // The time comes in a DOM attribute: event details don't cross JS worlds reliably.
+  document.addEventListener('ysl:yt-seek', () => {
+    const t = Number(root.getAttribute('data-ysl-seek'));
+    root.removeAttribute('data-ysl-seek');
+    try {
+      const p = document.getElementById('movie_player');
+      if (p && typeof p.seekTo === 'function' && Number.isFinite(t)) {
+        p.seekTo(t, true);
+        root.setAttribute('data-ysl-seek-done', '');
+      }
+    } catch (_) { /* fall back to the element */ }
   });
 })();
