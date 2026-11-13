@@ -105,7 +105,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-body{display:grid;gap:10px;min-width:0;margin:0;padding:0;border:0;transition:opacity .2s}
 .lsm-panel.lsm-off .lsm-body{opacity:.38;pointer-events:none}
 
-.lsm-panel .lsm-track{position:relative;height:30px;cursor:pointer;touch-action:none}
+.lsm-panel .lsm-track{position:relative;height:44px;cursor:pointer;touch-action:none}
 .lsm-panel .lsm-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
 .lsm-panel .lsm-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
 .lsm-panel .lsm-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
@@ -114,6 +114,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel.lsm-muted .lsm-fill{opacity:.35}
 .lsm-panel.lsm-open.lsm-running .lsm-fill::after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:lsm-flow 1.4s linear infinite}
 .lsm-panel .lsm-track.lsm-dragging .lsm-fill{cursor:grabbing}
+.lsm-panel .lsm-wave{position:absolute;left:-18px;top:0;width:calc(100% + 36px);height:100%;pointer-events:none}
 .lsm-panel .lsm-mini{position:relative;height:12px;margin:2px 18px 0;border-radius:4px;background:rgba(255,255,255,.1);cursor:pointer;touch-action:none}
 .lsm-panel .lsm-mini-marks{position:absolute;inset:0;overflow:hidden;border-radius:4px}
 .lsm-panel .lsm-mini-marks i{position:absolute;top:3px;bottom:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.85}

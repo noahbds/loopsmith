@@ -398,6 +398,7 @@ export function createControls(A) {
     };
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
+    ui.miWave = item('Hide the waveform', () => A.setWave(!P.wave));
     ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
     ui.miAfter = item('Add a loop right after this one', () => A.addLoopAfter());
     ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
@@ -411,6 +412,7 @@ export function createControls(A) {
       ui.miTap,
       ui.miSort,
       ui.miFine,
+      ui.miWave,
       ui.miStrip,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
@@ -494,6 +496,7 @@ export function createControls(A) {
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
+    ui.miWave.firstChild.textContent = !P.wave ? 'Show the waveform' : S.waveState === 'unavailable' ? 'Waveform: not available on this site' : 'Hide the waveform';
     ui.miStrip.firstChild.textContent = P.strip ? 'Hide the strip while looping' : 'Show a strip while looping';
     ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
@@ -557,8 +560,9 @@ export function createControls(A) {
     ui.tip = el('div', { class: 'lsm-tip' });
     ui.ghostBox = el('div', { class: 'lsm-ghosts' });
     ui.play = el('div', { class: 'lsm-play' });
+    ui.wave = el('canvas', { class: 'lsm-wave', hidden: true, 'aria-hidden': 'true' });
     ui.lane = el('div', { class: 'lsm-lane' },
-      el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
+      ui.wave, el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
       ui.thumb.a, ui.thumb.b, ui.tip);
     ui.track = el('div', { class: 'lsm-track', title: 'Drag the A and B handles, or the bar between them to move the whole loop' }, ui.lane);
     ui.len = el('span', { class: 'lsm-len' });

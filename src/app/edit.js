@@ -91,6 +91,13 @@ export function createEdit(A) {
     A.toast(P.fine ? 'Times to hundredths of a second' : 'Times to tenths of a second');
   }
 
+  // The waveform behind the slider.
+  function setWave(on) {
+    P.wave = !!on;
+    rememberPrefs();
+    A.render();
+  }
+
   // Whether the small strip shows while looping with the editor closed.
   function setStrip(on) {
     P.strip = !!on;
@@ -371,5 +378,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setWave, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

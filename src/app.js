@@ -9,6 +9,7 @@
 //   controls.js  building the panel and its events
 //   layout.js    placement of the panel, overlay and markers; mounting into the site
 //   hotkeys.js   keyboard shortcuts
+//   wave.js      the waveform, built from what is heard while playing
 
 import { LIGHT_CSS } from './ui/styles.js';
 import { createCore } from './app/core.js';
@@ -19,11 +20,12 @@ import { createRender } from './app/render.js';
 import { createControls } from './app/controls.js';
 import { createLayout } from './app/layout.js';
 import { createHotkeys } from './app/hotkeys.js';
+import { createWave } from './app/wave.js';
 
 export function start(adapter, store) {
   // Every part adds its functions to A and reaches the others through it, once all are created.
   const A = createCore(adapter, store);
-  for (const make of [createTracking, createRun, createEdit, createRender, createControls, createLayout, createHotkeys]) {
+  for (const make of [createTracking, createRun, createEdit, createRender, createControls, createLayout, createHotkeys, createWave]) {
     Object.assign(A, make(A));
   }
   const { S, floating } = A;

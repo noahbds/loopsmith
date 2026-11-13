@@ -28,6 +28,7 @@ export function createRender(A) {
       return;
     }
 
+    A.waveTick();
     const t = v.currentTime;
     if (S.active) {
       const guard = A.turnGuard();
@@ -210,6 +211,8 @@ export function createRender(A) {
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
     A.syncToolbar();
+    A.waveGate();
+    A.drawWave();
     ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()) && (!floating || L.barPlaced));
     ui.markBox.classList.toggle('lsm-live', S.active);
   }

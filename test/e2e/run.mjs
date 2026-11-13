@@ -519,6 +519,36 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// The waveform draws itself from what is heard, and never touches the sound.
+{
+  const { ctx, page } = await open('Waveform', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  const stats = () => shadow(page, (sr) => {
+    const cv = sr.querySelector('.lsm-wave');
+    if (!cv || cv.hidden || !cv.width) return { shown: false };
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let bars = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 200) bars++;
+    return { shown: true, bars };
+  });
+  await page.waitForTimeout(5500);
+  const st = await stats();
+  check(st.shown && st.bars > 300, 'bars appear for the part that was played', JSON.stringify(st));
+  const v1 = await page.evaluate(() => { const v = document.getElementById('main'); return { t: v.currentTime, paused: v.paused, muted: v.muted, vol: v.volume }; });
+  await page.waitForTimeout(800);
+  const v2 = await page.evaluate(() => { const v = document.getElementById('main'); return { t: v.currentTime, paused: v.paused }; });
+  check(!v2.paused && v2.t > v1.t + 0.5, 'the media keeps playing', JSON.stringify([v1, v2]));
+  const diag = await page.evaluate(() => document.documentElement.getAttribute('data-lsm') !== null);
+  check(diag, 'Loopsmith is attached');
+  await L(page, '.lsm-more').click();
+  const label = await L(page, '.lsm-mi').filter({ hasText: 'waveform' }).textContent();
+  check(/Hide the waveform/.test(label), 'the menu offers to hide it', label);
+  await L(page, '.lsm-mi').filter({ hasText: 'waveform' }).click();
+  check(!(await stats()).shown, 'hiding it removes the drawing');
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');

@@ -16,6 +16,7 @@ export function createCore(adapter, store) {
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
+    wave: prefs.wave !== false,   // draw a waveform behind the slider
     sets: clamp(Math.round(Number(prefs.sets)) || 1, 1, MAX_SETS), // how many times the whole set of loops plays
     setsForever: prefs.setsForever === true,
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
@@ -34,6 +35,8 @@ export function createCore(adapter, store) {
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
     round: 1,        // which time through the whole set of loops this run is on
+    peaks: null,     // what has been heard of this media (see core/peaks.js)
+    waveState: 'idle', // idle | live | unavailable | off
     tap: null,       // tap to mark: the time of the last mark (the start of the section being tapped)
     undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
@@ -116,7 +119,7 @@ export function createCore(adapter, store) {
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever });
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, wave: P.wave, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -140,6 +143,8 @@ export function createCore(adapter, store) {
       running: S.active,
       after: P.after,
       rounds: P.setsForever ? 'forever' : P.sets,
+      wave: S.waveState,
+      heard: S.peaks ? Math.round(S.peaks.heard() * 100) : 0,
     };
   }
 
