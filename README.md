@@ -1,55 +1,76 @@
-# Loopsmith
+<p align="center">
+  <img src="assets/icon-128.png" width="96" height="96" alt="">
+</p>
 
-A-B loop for any video: repeat one or several sections a chosen number of times. Drag the
-handles, type a timestamp, or grab the current time. Hotkeys: Shift+A / Shift+B set the start / end
-to now, Shift+S plays the selected loop, Shift+R turns looping on or off.
+<h1 align="center">Loopsmith</h1>
 
-**Where it works**
+<p align="center">
+  A-B loop for any song or video: repeat one or several sections, a chosen number of times or forever.
+</p>
 
-- **YouTube**, out of the box: a loop button in the player's control bar, markers on the seek bar.
-- **YouTube Music, SoundCloud, Spotify, Bandcamp**, out of the box: the loop button sits in the
-  bottom-right corner, above the site's player bar. Loops are saved per track (YouTube Music shares
-  them with YouTube). Spotify needs a browser with DRM support (regular Chrome, Edge, Firefox).
-- **Vimeo, Twitch videos, Bilibili, Dailymotion**, out of the box: a loop button appears when you
-  hover the video, and the markers sit on the site's own progress bar.
-- **Any other site with an HTML5 video or audio**, once you turn it on: click the Loopsmith toolbar
-  icon → *Turn on for this site* (or *for every website*). A loop button appears when you hover the
-  video; for audio and small videos it sits in the bottom-right corner. The hotkeys work there once
-  you have played the media.
+<p align="center">
+  <a href="https://github.com/noahbds/loopsmith/actions/workflows/ci.yml"><img src="https://github.com/noahbds/loopsmith/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
 
-Players built as web components (media inside shadow DOM) are found too, as long as their shadow
-root is open. **Not yet:** Deezer, Tidal, Apple Music, Amazon Music. See the plan in
-[docs/MULTI_SITE_PLAN.md](docs/MULTI_SITE_PLAN.md).
+<p align="center">
+  <img src="store/screenshot-1-youtube.png" width="760" alt="Loopsmith's panel over a YouTube video, with two loops marked on the progress bar">
+</p>
+
+Made for practising (a guitar riff, the hard part of a song, a dance move, a language lesson) and
+for keeping your favourite part of a song on repeat.
+
+## Install
+
+- **Chrome, Edge, Brave:** Chrome Web Store (in review)
+- **Firefox:** Firefox Add-ons (in review)
+- **From source:** see [Build](#build), or download the packages attached to each
+  [release](https://github.com/noahbds/loopsmith/releases).
+
+## What it does
+
+- Set the start and end by dragging the A and B handles, typing a time (`1:23`, `90s`, `1m30s`), or
+  grabbing the current position.
+- Choose how many times a section plays (1 to 999) or forever.
+- Several loops per video or track, overlapping or nested; switch one off without deleting it.
+- When a loop is done: play on, jump to the next loop, or pause after the last one.
+- Loops show on the site's own progress bar, and are saved per video or track.
+- Shortcuts: <kbd>Shift</kbd>+<kbd>A</kbd> / <kbd>Shift</kbd>+<kbd>B</kbd> set start / end to now,
+  <kbd>Shift</kbd>+<kbd>S</kbd> plays the selected loop, <kbd>Shift</kbd>+<kbd>R</kbd> turns looping
+  on or off.
+
+## Where it works
+
+| | |
+|---|---|
+| **Built in** | YouTube, YouTube Music, Spotify, SoundCloud, Bandcamp, Vimeo, Twitch (videos and clips), Bilibili, Dailymotion |
+| **Any other site** | Click the toolbar button, then *Turn on for this site* (or *for every website*). Works with any HTML5 `<video>` / `<audio>`, including players built as web components. |
+| **Not yet** | Deezer, Tidal, Apple Music, Amazon Music. Help welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). |
+
+Live streams can't be looped. Spotify needs a browser with DRM support (regular Chrome, Edge, Firefox).
+
+## Privacy
+
+No account, no analytics, no network requests. Loops are stored in your browser only, and
+Loopsmith only runs on other sites after you turn it on for them. See [PRIVACY.md](PRIVACY.md).
 
 ## Build
 
+Needs Node.js 20 or later.
+
 ```bash
-npm install
-npm run build   # dist/firefox, dist/chrome (+ .xpi / .zip)
+npm ci
+npm run build   # dist/chrome, dist/firefox, plus loopsmith-chrome.zip and loopsmith-firefox.xpi
 ```
 
-- **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → `dist/firefox/manifest.json`
-- **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load unpacked → `dist/chrome`
+- **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → *Load unpacked* → `dist/chrome`
+- **Firefox:** `about:debugging` → This Firefox → *Load Temporary Add-on* → `dist/firefox/manifest.json`
 
-Loops saved by YouTube Section Loop 1.x are copied over automatically the first time Loopsmith
-runs on youtube.com.
+## Contributing
 
-## Layout
-
-```
-src/core/       loop rules (engine.js), storage (store.js), timestamps: no DOM, unit-tested
-src/ui/         DOM helpers, icons, styles
-src/app.js      the player: state, playback control, panel, hotkeys
-src/adapters/   one file per site (youtube.js, spotify.js, video-sites.js…) + generic.js for any
-                other page
-src/sites.js    sites with a dedicated adapter (they run without asking for a permission)
-src/background.js, src/popup/   per-site on/off: optional permissions + a registered content script
-src/page/       tiny scripts that run in the page's own JS world: YouTube player data, and a hook
-                that brings out-of-page audio (SoundCloud, Spotify) into the page
-src/platform/   extension storage
-scripts/build.mjs
-```
+Bug reports, site requests and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md);
+security issues go through [SECURITY.md](SECURITY.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+[MIT](LICENSE). Loopsmith is not affiliated with any of the sites it works on.

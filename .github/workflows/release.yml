@@ -1,0 +1,43 @@
+# Push a tag like v1.2.0 (matching "version" in package.json) to publish a GitHub release with the
+# Chrome and Firefox packages and the source archive that Mozilla asks for.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The tag must match package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match package.json version $version" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check
+      - run: npx --yes web-ext@8 lint --source-dir dist/firefox --self-hosted=false
+      - name: Source archive
+        run: git archive --format=zip -o "dist/loopsmith-${GITHUB_REF_NAME}-source.zip" "$GITHUB_REF_NAME"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/loopsmith-chrome.zip "dist/loopsmith-${GITHUB_REF_NAME}-chrome.zip"
+          cp dist/loopsmith-firefox.xpi "dist/loopsmith-${GITHUB_REF_NAME}-firefox.xpi"
+          gh release create "$GITHUB_REF_NAME" --title "Loopsmith ${GITHUB_REF_NAME#v}" --generate-notes \
+            "dist/loopsmith-${GITHUB_REF_NAME}-chrome.zip" \
+            "dist/loopsmith-${GITHUB_REF_NAME}-firefox.xpi" \
+            "dist/loopsmith-${GITHUB_REF_NAME}-source.zip"

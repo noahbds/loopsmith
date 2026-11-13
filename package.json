@@ -2,7 +2,24 @@
   "name": "loopsmith",
   "version": "1.2.0",
   "private": true,
-  "description": "Loopsmith: A-B loop for any video. Repeat one or several sections a chosen number of times.",
+  "description": "A-B loop for any song or video: repeat one or several sections, a chosen number of times or forever.",
+  "keywords": [
+    "browser-extension",
+    "chrome-extension",
+    "firefox-addon",
+    "a-b-repeat",
+    "loop",
+    "music-practice"
+  ],
+  "homepage": "https://github.com/noahbds/loopsmith#readme",
+  "bugs": {
+    "url": "https://github.com/noahbds/loopsmith/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noahbds/loopsmith.git"
+  },
+  "author": "noahbds",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -21,5 +38,8 @@
     "esbuild@0.28.2": true,
     "fsevents@2.3.3": true
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
 }

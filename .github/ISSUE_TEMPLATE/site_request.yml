@@ -1,0 +1,32 @@
+name: Site support
+description: Ask for (better) support of a website
+labels: [site]
+body:
+  - type: input
+    id: site
+    attributes:
+      label: Website
+      placeholder: https://example.com
+    validations:
+      required: true
+  - type: dropdown
+    id: generic
+    attributes:
+      label: Did you try "Turn on for this site" from the Loopsmith toolbar button?
+      options:
+        - "Yes, and it doesn't work at all"
+        - "Yes, it works but something is off (markers, saving, ...)"
+        - "No"
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Does playing media on this site need an account or a subscription?
+      options: ["No", "A free account", "A paid subscription"]
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happens, and what you would expect

@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. The more precise the steps, the faster it gets fixed.
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The address of the page where it happens (remove anything private from it).
+      placeholder: https://www.youtube.com/watch?v=…
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options: [Chrome, Edge, Brave, Firefox, Other]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Browser and Loopsmith versions
+      description: Loopsmith's version is on the extensions page (chrome://extensions or about:addons).
+      placeholder: Chrome 141, Loopsmith 1.2.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the page and play the video
+        2. Set A to 1:00 and B to 1:10, times to play 2
+        3. Press the play button in the panel
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: A screenshot of the panel and the player helps a lot.
