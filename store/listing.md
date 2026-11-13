@@ -9,9 +9,11 @@ Everything to paste into the developer dashboard. Images are in this folder.
 ```
 Loop any part of a song or video, as many times as you want, then move on.
 
-Loopsmith adds an A-B repeat to the players you already use. Mark a start and an end, choose how many times the section plays (or forever), and keep practising without reaching for the mouse.
+Loopsmith adds an A-B repeat to the players you already use. Mark a start and an end, choose how many times the section plays (or forever), and let it run without reaching for the mouse.
 
-Made for practice: learning a guitar riff, a dance move, a language, a lecture, a speedrun route.
+Made for two things:
+• Practice: learning a guitar riff, a song's hard part, a dance move, a language, a lecture, a speedrun route.
+• Music on repeat: keep your favourite part of a song playing, on Spotify, YouTube Music, SoundCloud or YouTube.
 
 WHAT YOU CAN DO
 • Set the start and end by dragging the A and B handles, typing a time (1:23, 90s, 1m30s), or grabbing the current position.
@@ -63,7 +65,7 @@ Live streams can't be looped (there's nothing to go back to). Loopsmith is not a
 **Single purpose**
 
 ```
-Loopsmith repeats a chosen section of the video or audio playing on a web page (A-B loop), a chosen number of times.
+Loopsmith repeats a chosen section of the music or video playing on a web page (A-B loop), a chosen number of times or forever, for practising a passage or listening to a favourite part on repeat.
 ```
 
 **Permission justifications**
