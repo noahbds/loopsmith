@@ -191,6 +191,20 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-skip:hover{background:rgba(255,255,255,.14);color:#fff}
 .lsm-panel .lsm-skip:active{transform:scale(.92)}
 
+.lsm-panel .lsm-head{position:sticky;top:-10px;z-index:4;margin:-10px -14px 8px;padding:10px 14px 6px;background:rgb(24,24,27)}
+.lsm-panel .lsm-actions{position:sticky;bottom:-14px;z-index:3;margin:0 -14px -14px;padding:8px 14px 14px;background:rgb(24,24,27)}
+.lsm-panel .lsm-row1{display:block}
+.lsm-panel .lsm-val.lsm-dimmed{color:var(--mute);font-weight:500}
+.lsm-panel .lsm-disclose{justify-self:start;height:28px;padding:0 6px;border-radius:6px;color:var(--mute);font-size:12px;font-weight:600;letter-spacing:.2px}
+.lsm-panel .lsm-disclose:hover{background:rgba(255,255,255,.1);color:#fff}
+.lsm-panel .lsm-practice{display:grid;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line)}
+.lsm-panel .lsm-ramp-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lsm-panel .lsm-ramp-toggle{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:14px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);color:var(--mute);font-size:12px;font-weight:700;transition:background .12s,color .12s}
+.lsm-panel .lsm-ramp-toggle[aria-pressed="true"]{background:var(--ac);color:var(--ac-ink);box-shadow:none}
+.lsm-panel .lsm-ramp{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mute);transition:opacity .15s}
+.lsm-panel .lsm-ramp.lsm-off{opacity:.45}
+.lsm-panel .lsm-mini-num{width:34px;height:26px;border-radius:7px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);text-align:center;color:#fff;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.lsm-panel .lsm-mini-num:focus{box-shadow:inset 0 0 0 1.5px var(--ac)}
 .lsm-panel .lsm-grip,.lsm-strip .lsm-grip{flex:none;display:grid;place-items:center;width:16px;height:26px;color:var(--mute);cursor:grab;touch-action:none;opacity:.7}
 .lsm-panel .lsm-grip:hover,.lsm-strip .lsm-grip:hover,.lsm-grip.lsm-grab{opacity:1}
 .lsm-grip.lsm-grab{cursor:grabbing}

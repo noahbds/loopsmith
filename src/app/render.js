@@ -3,13 +3,14 @@
 import { MAX_LOOPS, PALETTE } from '../core/constants.js';
 import { clamp, roundT, fmt } from '../core/util.js';
 import * as V from '../core/view.js';
+import { rateText } from '../core/practice.js';
 import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, focused, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
-  const live = { round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
+  const live = { wait: '', round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
   // Cheap, frequent updates: playhead, run status, progress fill, transient notices.
   function renderLive() {
@@ -35,8 +36,10 @@ export function createRender(A) {
       const l = A.loopAt(t, guard);
       const next = l ? null : A.nextLoop(t);
       const done = l ? l.done : -1;
-      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round) {
+      const wait = S.waiting ? (S.waiting.kind === 'count' ? `Starting in ${S.waiting.left}` : 'Next repetition…') : '';
+      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round || wait !== live.wait) {
         live.round = S.round;
+        live.wait = wait;
         live.stale = false;
         live.loop = l;
         live.next = next;
@@ -54,6 +57,8 @@ export function createRender(A) {
           text = 'Past the loops';
         }
         text += roundText();
+        if (S.baseRate != null && S.ownRate != null && l) text += ` · ${rateText(S.ownRate)}`;
+        if (wait) text = wait;
         setText(ui.statusText, text);
         setText(ui.stripText, text);
         setStyle(ui.strip, '--acv', PALETTE[(l || next || cur()).c]);
@@ -281,6 +286,24 @@ export function createRender(A) {
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setAttr(ui.seg, 'data-v', P.after);
+    // Speed
+    const own = ok && Number.isFinite(l.rate);
+    setText(ui.rateVal, own ? rateText(l.rate) : rateText((S.video && S.video.playbackRate) || 1));
+    ui.rateVal.classList.toggle('lsm-dimmed', !own);
+    ui.rateReset.hidden = !own;
+    setAttr(ui.rateVal, 'title', own ? 'This loop plays at this speed' : "The player's own speed (this loop doesn't change it)");
+    // Practice options
+    ui.practiceBtn.setAttribute('aria-expanded', String(P.practiceOpen));
+    setText(ui.practiceBtn, P.practiceOpen ? '▾ Practice options' : '▸ Practice options');
+    ui.practice.hidden = !P.practiceOpen;
+    setText(ui.gapVal, P.gap ? `${P.gap} s` : 'off');
+    setText(ui.countVal, P.countIn ? `${P.countIn} s` : 'off');
+    setAttr(ui.tickBtn, 'aria-pressed', String(P.tick));
+    ui.tickBtn.hidden = !P.countIn;
+    setAttr(ui.rampBtn, 'aria-pressed', String(P.ramp.on));
+    setText(ui.rampBtn.firstChild, P.ramp.on ? 'On' : 'Off');
+    ui.ramp.classList.toggle('lsm-off', !P.ramp.on);
+    for (const [k, input] of Object.entries(ui.rampIn)) if (focused() !== input && input.value !== String(P.ramp[k])) input.value = String(P.ramp[k]);
     setText(ui.setsVal, P.setsForever ? '∞' : `${P.sets}×`);
     setAttr(ui.setsInf, 'aria-pressed', String(P.setsForever));
     setText(ui.setsNote, P.setsForever ? 'Then starts over, again and again' : P.sets > 1 ? `Then starts over: ${P.sets} rounds in all` : 'Stops after the last loop');

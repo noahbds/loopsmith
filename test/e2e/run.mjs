@@ -326,6 +326,7 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:10');
   await setField(page, '#lsm-time-b', '0:12');
   await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-disclose').click(); // the practice options
   const val = () => shadow(page, (sr) => sr.querySelector('.lsm-rounds .lsm-val').textContent);
   check((await val()) === '1×', 'plays the set once by default');
   await L(page, '[aria-label="More rounds"]').click();
@@ -341,6 +342,7 @@ for (const mode of ['next', 'continue']) {
   await page.reload();
   await page.waitForTimeout(1200);
   await openPanel(page, [640, 300]);
+  check(await L(page, '.lsm-practice').isVisible(), 'the practice section stays open');
   check((await val()) === '2×', 'the number of rounds is remembered');
   await L(page, '.lsm-rounds .lsm-inf').click();
   check((await val()) === '∞', 'the ∞ button plays them again and again');
@@ -546,6 +548,86 @@ for (const mode of ['next', 'continue']) {
   check(/Hide the waveform/.test(label), 'the menu offers to hide it', label);
   await L(page, '.lsm-mi').filter({ hasText: 'waveform' }).click();
   check(!(await stats()).shown, 'hiding it removes the drawing');
+  await ctx.close();
+}
+
+// Practice: speed per loop, the ramp, the gap between repetitions, the count-in.
+{
+  const { ctx, page } = await open('Speed and ramp', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:05.5');
+  const rate = () => page.evaluate(() => document.getElementById('main').playbackRate);
+  const speedText = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-row .lsm-val')[0].textContent);
+  check((await speedText()) === '100%', 'the speed shows the player\'s own speed to begin with', await speedText());
+  for (let i = 0; i < 10; i++) await L(page, '[aria-label="Slower"]').click();
+  check((await speedText()) === '50%', 'ten steps down make it 50%', await speedText());
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(500);
+  check(near(await rate(), 0.5, 0.01), 'the loop plays at its own speed', String(await rate()));
+  await L(page, '.lsm-main').click(); // stop
+  await page.waitForTimeout(200);
+  check(near(await rate(), 1, 0.01), 'and the player\'s speed comes back when looping stops', String(await rate()));
+
+  // the ramp: 50% for one repetition, then +25% each time, up to 100%
+  await L(page, '.lsm-disclose').click();
+  await L(page, '.lsm-ramp-toggle').click();
+  for (const [label, v] of [['Percent added each time', '25'], ['Repetitions between steps', '1'], ['Speed to stop at, in percent', '100']]) {
+    await L(page, `[aria-label="${label}"]`).fill(v);
+    await L(page, `[aria-label="${label}"]`).press('Enter');
+  }
+  await L(page, '.lsm-start').click();
+  const seen = [];
+  for (let i = 0; i < 50; i++) {
+    await page.waitForTimeout(100);
+    const r = +(await rate()).toFixed(2);
+    if (seen[seen.length - 1] !== r) seen.push(r);
+  }
+  const up = seen.filter((r, i) => i === 0 || r > seen[i - 1]);
+  check(seen.includes(0.5) && seen.includes(0.75) && seen.includes(1) && up.join() === seen.slice(0, up.length).join(), 'the speed goes 50%, 75%, 100% and no further', JSON.stringify(seen));
+  await ctx.close();
+}
+
+{
+  const { ctx, page } = await open('Gap between plays and count-in', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:06');
+  await setField(page, '#lsm-count', '3');
+  await L(page, '.lsm-disclose').click();
+  const gapMore = L(page, '[aria-label="Gap between plays: more"]');
+  await gapMore.click();
+  await gapMore.click();
+  check((await shadow(page, (sr) => sr.querySelectorAll('.lsm-practice .lsm-val')[1].textContent)) === '1 s', 'two half-second steps make a 1 s gap');
+  await L(page, '.lsm-start').click();
+  let resumes = 0;
+  let wasPaused = false;
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(100);
+    const paused = await page.evaluate(() => document.getElementById('main').paused);
+    if (wasPaused && !paused) resumes++;
+    wasPaused = paused;
+  }
+  check(resumes >= 2, 'it pauses between plays and carries on by itself', String(resumes));
+  await L(page, '.lsm-main').click(); // stop (if still running)
+
+  // count-in: 2 seconds before the loop starts
+  await page.evaluate(() => document.getElementById('main').play());
+  await L(page, '[aria-label="Gap between plays: less"]').click();
+  await L(page, '[aria-label="Gap between plays: less"]').click();
+  const countMore = L(page, '[aria-label="Count-in: more"]');
+  await countMore.click();
+  await countMore.click();
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.getElementById('main').paused), 'the count-in holds the video at the loop start');
+  check(/Starting in/.test(await shadow(page, (sr) => sr.querySelector('.lsm-status-text').textContent)), 'and the status counts down');
+  await page.waitForTimeout(2300);
+  check(!(await page.evaluate(() => document.getElementById('main').paused)), 'then it plays');
   await ctx.close();
 }
 

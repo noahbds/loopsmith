@@ -11,6 +11,7 @@
  * @property {number} c        palette index
  * @property {number} done     plays completed in the current run
  * @property {string} [name]   optional label
+ * @property {number} [rate]   playback speed for this loop; absent = leave the speed alone
  * @property {boolean} [skip]  skipped by the user in the current run (never saved)
  */
 
@@ -19,6 +20,7 @@
  * @typedef {object} LoopDefaults
  * @property {number} count
  * @property {boolean} infinite
+ * @property {number | null} [rate]
  */
 
 /**

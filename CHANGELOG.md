@@ -4,6 +4,24 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+- **Placing loops next to each other:** under Start / End, buttons put this loop's start right
+  after the previous loop's end, or its end right before the next loop's start. Dragging an edge
+  snaps to other loops' edges (hold Alt to drag freely). Shift+click the **+** button, or ⋯ → *Add a
+  loop right after this one*, to add a loop where the selected one ends.
+- **Tap to mark** (`Shift+M`): tap while the media plays; each tap ends the section that began at the
+  previous tap and starts the next one.
+- **Zoom:** the mouse wheel on the slider zooms around the pointer, Shift+wheel moves, double-click
+  goes back to the whole video. An overview strip shows where the window is (drag it to move), and
+  dragging an edge into the border scrolls the slider along.
+- **Waveform** behind the slider, drawn from what you hear while the media plays (nothing is fetched
+  or decoded, and it never changes the sound). It fills in as you play, and is off where the browser
+  can't capture the audio (copy-protected media such as Spotify). ⋯ turns it off.
+- **Speed** per loop (5% steps, pitch kept) that comes back to the player's own speed between loops
+  and when looping stops; **speed ramp** (+N% every M plays up to a target); **gap** between plays
+  (0 to 5 s) and **count-in** (0 to 8 s, with ticks). These and *Play all loops* are under
+  *Practice options*.
+- The editor's header and action buttons stay in view when the panel is taller than the video.
+
 - *Play all loops*: once the last loop is done, the whole set can start over, 2 to 99 times or again
   and again. The status shows the round, and the choice is remembered.
 - A small strip shows while looping with the editor closed (what is playing, previous / next / stop,

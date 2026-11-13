@@ -7,11 +7,13 @@
 //   on        false = switched off: kept and saved, never played
 //   c         palette index
 //   name      optional label, at most NAME_MAX characters
+//   rate      optional playback speed while this loop plays (1 = normal); absent = leave the speed alone
 //   done      plays completed in the current run
 //   skip      skipped by the user in the current run (runtime only, never saved)
 
 import { MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, NAME_MAX, PALETTE } from './constants.js';
 import { clamp, roundT, isNum } from './util.js';
+import { clampRate } from './practice.js';
 
 /** @typedef {import('../types.js').Loop} Loop */
 /** @typedef {import('../types.js').LoopDefaults} LoopDefaults */
@@ -43,7 +45,10 @@ export function resetRun(loops) {
  * @returns {Loop}
  */
 export function newLoop(a, b, c, defaults) {
-  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
+  /** @type {Loop} */
+  const l = { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
+  if (isNum(defaults.rate)) l.rate = clampRate(defaults.rate);
+  return l;
 }
 
 // A single loop covering the whole media is the untouched default: nothing worth saving or marking.
@@ -388,7 +393,7 @@ export function lanesOf(loops) {
 // The stored form of a set of loops.
 /** @param {Loop[]} loops */
 export function serializeLoops(loops) {
-  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c, ...(l.name ? { name: l.name } : {}) }));
+  return loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c, ...(l.name ? { name: l.name } : {}), ...(isNum(l.rate) ? { rate: l.rate } : {}) }));
 }
 
 // Reads a stored entry back into loops, dropping anything malformed. Null when nothing usable.
@@ -407,6 +412,7 @@ export function loopsFromSaved(saved, defaults) {
     if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
     if (typeof r.inf === 'boolean') l.infinite = r.inf;
     if (typeof r.on === 'boolean') l.on = r.on;
+    if (isNum(r.rate)) l.rate = clampRate(r.rate);
     if (typeof r.name === 'string' && r.name.trim()) l.name = r.name.trim().slice(0, NAME_MAX);
     out.push(l);
     if (out.length >= MAX_LOOPS) break;

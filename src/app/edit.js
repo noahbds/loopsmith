@@ -4,6 +4,7 @@ import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NA
 import { clamp, roundT } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
+import { clampRate, readRamp, RATE_STEP, MAX_GAP, MAX_COUNT_IN } from '../core/practice.js';
 
 export function createEdit(A) {
   const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs } = A;
@@ -89,6 +90,69 @@ export function createEdit(A) {
     rememberPrefs();
     A.render();
     A.toast(P.fine ? 'Times to hundredths of a second' : 'Times to tenths of a second');
+  }
+
+  /* Practice: speed per loop, the ramp, the gap between repetitions, the count-in. */
+
+  // Puts the selected loop's speed in force now if it is the one playing.
+  function applyRateNow() {
+    S.rateLoop = null;
+    A.wake();
+  }
+
+  // One step (5%) up or down from the loop's speed, or from the player's own when it has none.
+  function stepRate(dir) {
+    if (!ready()) return;
+    const l = cur();
+    const from = Number.isFinite(l.rate) ? l.rate : (S.video && S.video.playbackRate) || 1;
+    l.rate = clampRate(from + dir * RATE_STEP);
+    P.rate = l.rate;
+    rememberPrefs();
+    rememberLoops();
+    applyRateNow();
+    A.render();
+  }
+
+  // The loop goes back to the player's own speed.
+  function clearRate() {
+    if (!ready()) return;
+    delete cur().rate;
+    P.rate = null;
+    rememberPrefs();
+    rememberLoops();
+    if (S.active) A.restoreRate();
+    A.render();
+  }
+
+  function setRamp(patch) {
+    P.ramp = readRamp({ ...P.ramp, ...patch });
+    rememberPrefs();
+    applyRateNow();
+    A.render();
+  }
+
+  function setGap(sec) {
+    P.gap = Math.min(MAX_GAP, Math.max(0, Math.round(sec * 2) / 2));
+    rememberPrefs();
+    A.render();
+  }
+
+  function setCountIn(sec) {
+    P.countIn = Math.min(MAX_COUNT_IN, Math.max(0, Math.round(sec)));
+    rememberPrefs();
+    A.render();
+  }
+
+  function setTick(on) {
+    P.tick = !!on;
+    rememberPrefs();
+    A.render();
+  }
+
+  function togglePractice() {
+    P.practiceOpen = !P.practiceOpen;
+    rememberPrefs();
+    A.render();
   }
 
   // The waveform behind the slider.
@@ -378,5 +442,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setWave, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setWave, stepRate, clearRate, setRamp, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

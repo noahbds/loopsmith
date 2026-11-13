@@ -366,19 +366,19 @@ loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and
 - *Known gap:* on a small video the editor is taller than the space and scrolls, so the action row
   can be partly hidden. A sticky action row would fix it.
 
-### Phase 3: Practice features (target 1.5)
+### Phase 3: Practice features *(speed, ramp, gap, count-in, tap to mark built on branch `round-3-zoom-waveform-practice`)* (target 1.5)
 
-- [ ] **E3** Speed control per loop or global (`playbackRate`), presets (50/75/90/100%), ± steps,
+- [x] **E3** *(per loop, new loops inherit the last speed; 5% steps, no presets; pitch kept; the player's speed comes back between loops and on stop; a speed changed by hand is respected)* Speed control per loop or global (`playbackRate`), presets (50/75/90/100%), ± steps,
   pitch preservation toggle (`preservesPitch`), restore the original speed on stop or navigation.
   Must not fight sites that also set the rate (YouTube): re-apply on `ratechange` only when the
   change didn't come from us.
-- [ ] **E3** Speed ramp: start rate, target rate, step, every N repetitions; shown in the strip.
-- [ ] **E4** Gap between reps (0–5 s) and count-in (silence before the first rep, optional click
+- [x] **E3** *(+N% every M plays up to a target, in Practice options; the status shows the current speed)* Speed ramp: start rate, target rate, step, every N repetitions; shown in the strip.
+- [x] **E4** *(gap 0–5 s, count-in 0–8 s with ticks; the count-in runs on ▶ and Run again)* Gap between reps (0–5 s) and count-in (silence before the first rep, optional click
   or tick). Gap implemented as pause plus timer, not as extra video playback.
-- [ ] **E2 / 3.4** Between-loops and end-of-set settings, including "repeat the set N times / ∞".
+- [~] **E2 / 3.4** *(repeat the set N times / ∞ is done; the between-loops / end-of-set split of "When done" is not)* Between-loops and end-of-set settings, including "repeat the set N times / ∞".
   Prefs migration from `after`.
 - [ ] Nudge the whole loop by ±1 s or by its own length; halve and double the length.
-- [ ] **Tap-to-mark** while playing: `Shift+A` then `Shift+B`, plus "mark and keep going" for
+- [x] **Tap-to-mark** *(done as `Shift+M`: each tap ends a section and starts the next)* while playing: `Shift+A` then `Shift+B`, plus "mark and keep going" for
   defining several loops in a single pass.
 - [ ] Practice stats per loop (reps, time) and a "Today" figure; stored locally, off by default
   if you prefer nothing extra is kept.
@@ -508,3 +508,15 @@ can't read without losing the loops (new fields are optional; old fields are nev
 - Downloading, recording or converting media.
 - Accounts, cloud storage, or any analytics.
 - Looping live streams (nothing to go back to).
+
+## Round 3 (zoom, snapping, waveform) *(built on branch `round-3-zoom-waveform-practice`)*
+
+- [x] Join loops: *Start after previous* / *End before next* buttons, snapping of dragged edges to other
+  loops' edges (Alt = free), *Add a loop right after this one*.
+- [x] Zoom: wheel zooms around the pointer, Shift+wheel pans, double-click resets, an overview strip,
+  scrolling when an edge is dragged into the border.
+- [x] Waveform built from playback (captureStream + an analyser that is not connected to the speakers).
+  *Limits:* only the played parts are drawn; not saved between visits; off for copy-protected media
+  and browsers without `captureStream` (Firefox is only enabled when it has the standard method, and
+  was **not tested**).
+- [ ] *Not done:* snapping to YouTube chapters; saving the waveform; per-loop gap/count-in.

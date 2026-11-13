@@ -4,6 +4,7 @@ import { MAX_COUNT, MAX_SETS, PALETTE, AFTER } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
+import { readRamp, clampRate, MAX_GAP, MAX_COUNT_IN } from '../core/practice.js';
 
 export function createCore(adapter, store) {
   const prefs = store.getPrefs();
@@ -16,6 +17,12 @@ export function createCore(adapter, store) {
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
+    rate: Number.isFinite(prefs.rate) ? clampRate(prefs.rate) : null, // speed given to new loops (null = leave the speed alone)
+    ramp: readRamp(prefs.ramp),     // speed up a little every few repetitions
+    gap: clamp(Math.round((Number(prefs.gap) || 0) * 2) / 2, 0, MAX_GAP),       // seconds of pause between repetitions
+    countIn: clamp(Math.round(Number(prefs.countIn) || 0), 0, MAX_COUNT_IN),    // seconds of count-in before a loop starts
+    tick: prefs.tick !== false,     // tick during the count-in
+    practiceOpen: prefs.practiceOpen === true,
     wave: prefs.wave !== false,   // draw a waveform behind the slider
     sets: clamp(Math.round(Number(prefs.sets)) || 1, 1, MAX_SETS), // how many times the whole set of loops plays
     setsForever: prefs.setsForever === true,
@@ -35,6 +42,11 @@ export function createCore(adapter, store) {
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
     round: 1,        // which time through the whole set of loops this run is on
+    baseRate: null,  // the player's own speed, to put back when looping stops
+    ownRate: null,   // the speed Loopsmith last set
+    rateLoop: null,  // the loop whose speed is in force
+    rateDone: -1,
+    waiting: null,   // { kind: 'gap' | 'count', until, timer, left }: a pause before playing again
     peaks: null,     // what has been heard of this media (see core/peaks.js)
     waveState: 'idle', // idle | live | unavailable | off
     tap: null,       // tap to mark: the time of the last mark (the start of the section being tapped)
@@ -119,7 +131,7 @@ export function createCore(adapter, store) {
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, wave: P.wave, sets: P.sets, setsForever: P.setsForever });
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, wave: P.wave, rate: P.rate, ramp: P.ramp, gap: P.gap, countIn: P.countIn, tick: P.tick, practiceOpen: P.practiceOpen, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the

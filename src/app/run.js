@@ -1,6 +1,7 @@
 // Running the loops: turning playback around, arming and stopping, and the frame scheduling.
 
 import * as E from '../core/engine.js';
+import { rateFor } from '../core/practice.js';
 
 export function createRun(A) {
   const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, skipped } = A;
@@ -23,6 +24,125 @@ export function createRun(A) {
       if (adapter.seek) adapter.seek(v, t, S.player);
       else v.currentTime = t;
     } catch (_) { /* ignore */ }
+  }
+
+  /* Speed: while a loop plays, the player runs at that loop's speed (and the ramp). Between loops,
+     and when looping stops, the player's own speed comes back. */
+
+  function setRate(rate) {
+    const v = S.video;
+    if (!v) return;
+    if (S.baseRate == null) S.baseRate = v.playbackRate;
+    S.ownRate = rate;
+    if (Math.abs(v.playbackRate - rate) > 0.001) {
+      try { v.preservesPitch = true; v.mozPreservesPitch = true; v.webkitPreservesPitch = true; } catch (_) { /* older browsers */ }
+      v.playbackRate = rate;
+    }
+  }
+
+  function restoreRate() {
+    const v = S.video;
+    // Only if nobody changed it since: a speed picked by hand stays.
+    if (v && S.baseRate != null && S.ownRate != null && Math.abs(v.playbackRate - S.ownRate) < 0.002) v.playbackRate = S.baseRate;
+    S.baseRate = S.ownRate = null;
+    S.rateLoop = null;
+    S.rateDone = -1;
+  }
+
+  // The player's speed was changed by someone else (the site's own controls): that is the new normal.
+  function onRateChange() {
+    const v = S.video;
+    if (v && S.ownRate != null && Math.abs(v.playbackRate - S.ownRate) > 0.002) {
+      S.baseRate = null;
+      S.ownRate = null;
+    }
+  }
+
+  // Called each tick of a run: puts the speed of the loop in charge in force when the loop, or its
+  // repetition, changed.
+  function syncRate(t) {
+    const l = loopAt(t);
+    if (!l) {
+      if (S.rateLoop) restoreRate();
+      return;
+    }
+    if (l === S.rateLoop && l.done === S.rateDone) return;
+    const r = rateFor(l, P.ramp);
+    if (r == null) restoreRate();
+    else setRate(r);
+    S.rateLoop = l;
+    S.rateDone = l.done;
+  }
+
+  /* A pause before playing: the gap between repetitions, or the count-in before a loop starts. */
+
+  function cancelWait() {
+    if (S.waiting) clearTimeout(S.waiting.timer);
+    S.waiting = null;
+  }
+
+  function resume() {
+    S.waiting = null;
+    if (S.active) play();
+  }
+
+  // Waits `sec` seconds (the video is paused) and plays on.
+  function pauseFor(sec) {
+    const v = S.video;
+    if (!v || v.paused || !(sec > 0)) return;
+    cancelWait();
+    const w = { kind: 'gap', until: Date.now() + sec * 1000, timer: 0, left: 0 };
+    w.timer = setTimeout(resume, sec * 1000);
+    S.waiting = w;
+    v.pause();
+  }
+
+  // A short tick (the count-in). Its own audio context: it never touches the media.
+  let beepCtx = null;
+  function beep(freq) {
+    try {
+      beepCtx = beepCtx || new AudioContext();
+      if (beepCtx.state === 'suspended') beepCtx.resume();
+      const o = beepCtx.createOscillator();
+      const g = beepCtx.createGain();
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, beepCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, beepCtx.currentTime + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, beepCtx.currentTime + 0.09);
+      o.connect(g).connect(beepCtx.destination);
+      o.start();
+      o.stop(beepCtx.currentTime + 0.1);
+    } catch (_) { /* no audio available */ }
+  }
+
+  // Counts in (with ticks) from the loop start, then plays. False when the count-in is off.
+  function startCountIn() {
+    const v = S.video;
+    const sec = P.countIn;
+    if (!v || !(sec > 0)) return false;
+    cancelWait();
+    v.pause();
+    let left = sec;
+    const w = { kind: 'count', until: Date.now() + sec * 1000, timer: 0, left };
+    S.waiting = w;
+    const tick = () => {
+      if (S.waiting !== w) return;
+      if (left <= 0) {
+        resume();
+        return;
+      }
+      w.left = left;
+      if (P.tick) beep(left === 1 ? 1320 : 880);
+      left -= 1;
+      w.timer = setTimeout(tick, 1000);
+    };
+    tick();
+    return true;
+  }
+
+  // The user pressed play during a pause: they don't want to wait.
+  function onPlay() {
+    if (S.waiting && Date.now() < S.waiting.until - 150) cancelWait();
   }
 
   // A loop that runs to the end of the video turns around this much early, so the player
@@ -57,16 +177,26 @@ export function createRun(A) {
     const prev = S.lastT;
     S.lastT = t;
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
-    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
+    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
+      syncRate(t);
+      return;
+    }
     const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
-    if (!step) return;
+    if (!step) {
+      syncRate(t);
+      return;
+    }
     if (step.finish) {
       finishOrAgain();
       return;
     }
     if (step.seek != null) seekTo(step.seek);
+    syncRate(step.seek != null ? step.seek : t); // judged where playback goes next, so a turn-around doesn't flicker the speed
     A.render();
-    if (step.repeat) A.replay(ui.badge, 'lsm-pop');
+    if (step.repeat) {
+      A.replay(ui.badge, 'lsm-pop');
+      if (P.gap > 0) pauseFor(P.gap);
+    }
   }
 
   // Counts one play for each loop that just ended; goes back to the start of the
@@ -106,6 +236,8 @@ export function createRun(A) {
     const single = on.length === 1 ? on[0] : null;
     const rounds = S.round;
     S.round = 1;
+    cancelWait();
+    restoreRate();
     S.active = false;
     S.lastT = null;
     E.resetRun(S.loops);
@@ -160,7 +292,7 @@ export function createRun(A) {
     const v = S.video;
     if (S.trusted && !isAd()) {
       seekTo(cur().a);
-      if (v.paused || v.ended) play();
+      if (!startCountIn() && (v.paused || v.ended)) play();
     }
     A.render();
     wake();
@@ -173,6 +305,8 @@ export function createRun(A) {
     S.lastT = null;
     E.resetRun(S.loops);
     S.round = 1;
+    cancelWait();
+    restoreRate();
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -181,7 +315,7 @@ export function createRun(A) {
   const inCharge = () => (S.trusted && S.video ? loopAt(S.video.currentTime) : null);
 
   // Carries out what an engine action decided: seek, show which loop is now in play, say what happened.
-  function follow(step, { play: andPlay = false, say = '' } = {}) {
+  function follow(step, { play: andPlay = false, countIn = false, say = '' } = {}) {
     if (step.finish) {
       finishOrAgain();
       return;
@@ -196,7 +330,7 @@ export function createRun(A) {
         if (S.zoom) A.fitView();
       }
     }
-    if (andPlay && S.video && (S.video.paused || S.video.ended)) play();
+    if (andPlay && S.video && !(countIn && startCountIn()) && (S.video.paused || S.video.ended)) play();
     A.render();
     wake();
     if (step.repeat || step.restart) A.replay(ui.badge, 'lsm-pop');
@@ -258,7 +392,7 @@ export function createRun(A) {
     if (!arm(false)) return;
     const first = S.loops.filter((l) => l.on).sort((x, y) => x.a - y.a)[0];
     const step = E.gotoLoop(first);
-    if (step && S.trusted && !isAd()) follow(step, { play: true });
+    if (step && S.trusted && !isAd()) follow(step, { play: true, countIn: true });
     else A.render();
   }
 
@@ -312,5 +446,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
+  return { onPlay, onRateChange, restoreRate, cancelWait, IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
 }
