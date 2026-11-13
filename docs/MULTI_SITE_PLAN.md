@@ -7,8 +7,11 @@ background and page-world scripts. Media inside shadow roots isn't picked up yet
 
 Phase 2 notes: SoundCloud and Spotify keep their audio out of the page; a page-world hook on
 `HTMLMediaElement.prototype.play` moves it into a hidden `<loopsmith-media>` box. On SoundCloud,
-seeking the element directly keeps its UI in step. Spotify seeks through its own progress bar with a
-self-check fallback to the element; it couldn't be tested here (no Widevine in the test browsers).
+seeking the element directly keeps its UI in step. Spotify: checked in real Chrome. Seeking the hooked element
+keeps Spotify's clock and bar in step, so that is what the adapter does; "Canvas" background videos
+are ignored; music videos and podcasts without a track link are keyed by media-session title.
+YouTube Music: seeks through `seekTo()` and turns around 1.5 s before a track's end, so its queue
+never auto-advances mid-loop (checked in a radio playlist).
 The music sites use the docked panel for now; a button inside each site's own player bar is a
 later polish.
 

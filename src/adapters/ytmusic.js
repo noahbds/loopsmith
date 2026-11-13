@@ -31,7 +31,7 @@ export default {
   engaged: () => true,
   findPlayer: () => document.getElementById('movie_player'),
   buttonHost: undefined,
-  progressBar: () => document.querySelector('ytmusic-player-bar #progress-bar'),
+  progressBar: () => document.querySelector('ytmusic-player-bar #progress-bar #progressContainer') || document.querySelector('ytmusic-player-bar #progress-bar'),
   controlsTop: () => null,
 
   seek(v, t) {
