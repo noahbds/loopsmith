@@ -442,6 +442,83 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// Placing loops next to each other, zooming, and tapping marks.
+{
+  const { ctx, page } = await open('Chaining, zoom and tapping', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:10');
+  await setField(page, '#lsm-time-b', '0:20');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:30');
+  await setField(page, '#lsm-time-b', '0:40');
+  const a = () => L(page, '#lsm-time-a').inputValue();
+  const b = () => L(page, '#lsm-time-b').inputValue();
+  const chain = L(page, '.lsm-chain').first();
+  check((await chain.textContent()).includes('Start after Loop 1'), 'a button offers to start right after the previous loop', await chain.textContent());
+  await chain.click();
+  check((await a()) === '0:20', 'it puts the start at the previous loop\'s end', await a());
+  check(!(await L(page, '.lsm-chain').first().isVisible().catch(() => false)), 'and the button goes away once joined');
+
+  await L(page, '.lsm-add').click({ modifiers: ['Shift'] });
+  check((await a()) === '0:40' && (await b()) === '1:00', 'Shift+add makes a loop right after the selected one', JSON.stringify([await a(), await b()]));
+
+  // zoom with the wheel around the pointer, move with Shift+wheel, reset by double-click
+  const scale = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-scale > span:not(.lsm-mid)')].map((x) => x.textContent).join('-'));
+  const track = await L(page, '.lsm-track').boundingBox();
+  await page.mouse.move(track.x + track.width / 2, track.y + 15);
+  check((await scale()) === '0:00-1:00', 'starts on the whole video', await scale());
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(150);
+  const zoomed = await scale();
+  check(zoomed !== '0:00-1:00' && await L(page, '.lsm-mini').isVisible(), 'the wheel zooms and the overview strip appears', zoomed);
+  await page.keyboard.down('Shift');
+  await page.mouse.wheel(0, 300);
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(150);
+  check((await scale()) !== zoomed, 'Shift+wheel moves the window', await scale());
+  await page.mouse.dblclick(track.x + track.width / 2, track.y + 4);
+  await page.waitForTimeout(150);
+  check((await scale()) === '0:00-1:00', 'double-click goes back to the whole video', await scale());
+
+  // dragging an edge snaps to another loop's edge
+  await L(page, '.lsm-chip-main').nth(1).click();
+  const tr = await L(page, '.lsm-lane').boundingBox();
+  const px = (t) => tr.x + (t / 60) * tr.width;
+  await page.mouse.move(px(20), tr.y + 15);
+  const thumbA = await L(page, '.lsm-thumb-a').boundingBox();
+  await page.mouse.move(thumbA.x + thumbA.width / 2, thumbA.y + thumbA.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(thumbA.x + thumbA.width / 2 + (px(11) - px(20)), thumbA.y + 10, { steps: 8 }); // about 0:11, 1 s from the edge at 0:10
+  await page.mouse.up();
+  check((await a()) === '0:10' || (await a()) === '0:20', 'a dragged edge snaps to a neighbour\'s edge', await a());
+  await page.keyboard.press('Escape');
+  await ctx.close();
+}
+
+{
+  const { ctx, page } = await open('Tap to mark', '/overlap.html');
+  await page.evaluate(() => { const v = document.getElementById('main'); v.currentTime = 4; v.play(); });
+  await openPanel(page, [640, 300]);
+  const chips = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-chip').length);
+  await page.keyboard.press('Shift+KeyM');
+  check(/Start/.test(await shadow(page, (sr) => sr.querySelector('.lsm-toast span').textContent)), 'the first tap marks a start');
+  await page.waitForTimeout(2200);
+  await page.keyboard.press('Shift+KeyM');
+  await page.waitForTimeout(150);
+  const a = await L(page, '#lsm-time-a').inputValue();
+  const b = await L(page, '#lsm-time-b').inputValue();
+  check((await chips()) === 1 && /^0:0[3-5]/.test(a) && /^0:0[6-8]/.test(b), 'the second tap makes the loop (the untouched whole-video loop is replaced)', JSON.stringify([a, b]));
+  await page.waitForTimeout(2000);
+  await page.keyboard.press('Shift+KeyM');
+  await page.waitForTimeout(150);
+  check((await chips()) === 2, 'the third tap makes the next section', String(await chips()));
+  const a2 = await L(page, '#lsm-time-a').inputValue();
+  check(a2 === b, 'which starts where the last one ended', JSON.stringify([a2, b]));
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');

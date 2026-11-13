@@ -28,6 +28,7 @@ export function createHotkeys(A) {
       case 'prev': A.navigate('prev'); break;
       case 'skipRep': A.navigate('skipRep'); break;
       case 'restart': A.navigate('restart'); break;
+      case 'tap': A.tapMark(); break;
       case 'goto': A.navigate('goto', hit.index); break;
     }
   }

@@ -114,6 +114,16 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel.lsm-muted .lsm-fill{opacity:.35}
 .lsm-panel.lsm-open.lsm-running .lsm-fill::after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:lsm-flow 1.4s linear infinite}
 .lsm-panel .lsm-track.lsm-dragging .lsm-fill{cursor:grabbing}
+.lsm-panel .lsm-mini{position:relative;height:12px;margin:2px 18px 0;border-radius:4px;background:rgba(255,255,255,.1);cursor:pointer;touch-action:none}
+.lsm-panel .lsm-mini-marks{position:absolute;inset:0;overflow:hidden;border-radius:4px}
+.lsm-panel .lsm-mini-marks i{position:absolute;top:3px;bottom:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.85}
+.lsm-panel .lsm-mini-marks i.lsm-muted{opacity:.3}
+.lsm-panel .lsm-mini-win{position:absolute;top:-1px;bottom:-1px;border:1.5px solid #fff;border-radius:4px;background:rgba(255,255,255,.12);pointer-events:none}
+.lsm-panel .lsm-lane.lsm-snapped .lsm-fill{box-shadow:0 0 0 2px #fff}
+.lsm-panel .lsm-tip.lsm-snap{background:var(--ac);color:var(--ac-ink)}
+.lsm-panel .lsm-snaprow{display:flex;gap:6px;flex-wrap:wrap}
+.lsm-panel .lsm-chain{height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);color:var(--mute);font-size:12px;font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;transition:background .12s,color .12s}
+.lsm-panel .lsm-chain:hover{background:rgba(255,255,255,.16);color:#fff}
 .lsm-panel .lsm-play{position:absolute;left:0;top:7px;bottom:7px;width:2px;margin-left:-1px;border-radius:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
 .lsm-panel.lsm-off .lsm-play{display:none}
 .lsm-panel .lsm-thumb{position:absolute;top:50%;display:grid;place-items:center;width:18px;height:26px;margin-top:-13px;background:#fff;color:#0f0f0f;font-size:10px;font-weight:800;line-height:1;cursor:ew-resize;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:background .15s,color .15s,box-shadow .15s}

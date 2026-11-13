@@ -2,6 +2,7 @@
 
 import { MAX_LOOPS, PALETTE } from '../core/constants.js';
 import { clamp, roundT, fmt } from '../core/util.js';
+import * as V from '../core/view.js';
 import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
@@ -146,6 +147,7 @@ export function createRender(A) {
     resize(ui.chips, loops.length, makeChip);
     resize(ui.ghosts, loops.length, () => ui.ghostBox.appendChild(el('div', { class: 'lsm-ghost' })));
     resize(ui.marks, loops.length, () => ui.markBox.appendChild(el('div', { class: 'lsm-mark' })));
+    resize(ui.miniTicks, loops.length, () => ui.miniMarks.appendChild(el('i')));
 
     loops.forEach((l, i) => {
       const rgb = PALETTE[l.c];
@@ -184,6 +186,12 @@ export function createRender(A) {
         setStyle(ghost, '--lane', String(lanes[i] % 2));
       }
 
+      const tick = ui.miniTicks[i];
+      setStyle(tick, 'left', pct((l.a / d) * 100));
+      setStyle(tick, 'width', pct(Math.max(0.6, ((l.b - l.a) / d) * 100)));
+      setStyle(tick, '--cv', rgb);
+      tick.classList.toggle('lsm-muted', !l.on);
+
       const mark = ui.marks[i];
       setStyle(mark, 'left', pct((l.a / d) * 100));
       setStyle(mark, 'width', pct(((l.b - l.a) / d) * 100));
@@ -206,11 +214,31 @@ export function createRender(A) {
     ui.markBox.classList.toggle('lsm-live', S.active);
   }
 
+  // The two buttons that join the loop to its neighbours (shown when there is something to join to).
+  function renderChain(ok) {
+    const { prev, next } = ok ? V.neighbours(S.loops, S.sel) : { prev: null, next: null };
+    const l = ok ? cur() : null;
+    const min = P.fine ? 0.2 : 0.5;
+    const showA = !!prev && Math.abs(prev.b - l.a) > 0.001 && prev.b < l.b - min;
+    const showB = !!next && Math.abs(next.a - l.b) > 0.001 && next.a > l.a + min;
+    ui.chainA.hidden = !showA;
+    ui.chainB.hidden = !showB;
+    ui.snapRow.hidden = !(showA || showB);
+    if (showA) {
+      setText(ui.chainA, `⇤ Start after ${loopLabel(prev)}`);
+      setAttr(ui.chainA, 'title', `Start this loop at ${fmtT(prev.b)}, right where ${loopLabel(prev)} ends`);
+    }
+    if (showB) {
+      setText(ui.chainB, `End before ${loopLabel(next)} ⇥`);
+      setAttr(ui.chainB, 'title', `End this loop at ${fmtT(next.a)}, right where ${loopLabel(next)} starts`);
+    }
+  }
+
   function render() {
     const ok = ready();
     const l = ok ? cur() : null;
     if (!ok) S.zoom = false;
-    else if (S.zoom && !S.sliding && (l.a < S.v0 || l.b > S.v1)) fitView();
+    else if (S.zoom && !S.sliding && !S.panned && (l.a < S.v0 || l.b > S.v1)) fitView();
     const pa = ok ? toPct(l.a) : 0;
     const pb = ok ? toPct(l.b) : 100;
 
@@ -236,6 +264,12 @@ export function createRender(A) {
     setText(ui.scaleStart, ok ? fmtT(viewStart()) : '0:00');
     setText(ui.scaleEnd, ok ? fmtT(viewEnd()) : '–:––');
     setAttr(ui.zoom, 'aria-pressed', String(S.zoom));
+    ui.mini.hidden = !(ok && S.zoom);
+    if (ok && S.zoom) {
+      setStyle(ui.miniWin, 'left', pct((S.v0 / S.duration) * 100));
+      setStyle(ui.miniWin, 'width', pct(((S.v1 - S.v0) / S.duration) * 100));
+    }
+    renderChain(ok);
     renderTip();
 
     const inf = ok && l.infinite;

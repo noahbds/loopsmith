@@ -9,6 +9,7 @@ describe('hotkeyAction', () => {
     expect(press('B', 'KeyB')).toEqual({ action: 'markB' });
     expect(press('R', 'KeyR')).toEqual({ action: 'toggle' });
     expect(press('S', 'KeyS')).toEqual({ action: 'start' });
+    expect(press('M', 'KeyM')).toEqual({ action: 'tap' });
   });
 
   it('adds restart, next, previous, skip and go-to', () => {

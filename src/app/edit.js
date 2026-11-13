@@ -1,11 +1,12 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
-import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, AFTER } from '../core/constants.js';
+import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, AFTER } from '../core/constants.js';
 import { clamp, roundT } from '../core/util.js';
 import * as E from '../core/engine.js';
+import * as V from '../core/view.js';
 
 export function createEdit(A) {
-  const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, newLoop, ready, rememberLoops, rememberPrefs } = A;
+  const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs } = A;
 
   function setPoint(which, value, push) {
     if (!ready() || !isFinite(value)) return;
@@ -150,10 +151,117 @@ export function createEdit(A) {
     A.toast('Loops numbered by start time', UNDO);
   }
 
+  // The magnifier: zoom on the selected loop, or back to the whole media.
   function setZoom(on) {
     S.zoom = !!on && ready();
     if (S.zoom) fitView();
     A.render();
+  }
+
+  const fullView = () => ({ v0: 0, v1: S.duration });
+  const currentView = () => (S.zoom ? { v0: S.v0, v1: S.v1 } : fullView());
+
+  // Mouse wheel on the slider: zoom in (factor > 1) or out around the time under the pointer.
+  function zoomView(factor, anchor) {
+    if (!ready()) return;
+    A.setView(V.zoomAt(currentView(), S.duration, factor, anchor));
+    A.render();
+  }
+
+  // Slides the zoomed window by `dt` seconds.
+  function panView(dt) {
+    if (!ready() || !S.zoom) return;
+    A.setView(V.panBy(currentView(), S.duration, dt));
+    A.render();
+  }
+
+  // Centres the zoomed window on a time (a press on the overview strip).
+  function centerView(t) {
+    if (!ready() || !S.zoom) return;
+    A.setView(V.centerOn(currentView(), S.duration, t));
+    A.render();
+  }
+
+  const minLen = () => (P.fine ? FINE_MIN_LEN : MIN_LEN);
+
+  // Start right after the end of the loop before this one (in play order).
+  function chainStart() {
+    if (!ready()) return;
+    const { prev } = V.neighbours(S.loops, S.sel);
+    if (prev) setPoint('a', prev.b, false);
+  }
+
+  // End right where the next loop starts.
+  function chainEnd() {
+    if (!ready()) return;
+    const { next } = V.neighbours(S.loops, S.sel);
+    if (next) setPoint('b', next.a, false);
+  }
+
+  // A new loop of the same length, starting where the selected one ends.
+  function addLoopAfter() {
+    syncAndCheck();
+    if (!ready()) return;
+    if (S.loops.length >= MAX_LOOPS) {
+      A.toast(`${MAX_LOOPS} loops is the maximum`);
+      return;
+    }
+    const l = cur();
+    const d = S.duration;
+    if (l.b >= d - minLen()) {
+      A.toast('No room after this loop');
+      return;
+    }
+    const len = Math.min(l.b - l.a, d - l.b);
+    const added = newLoop(l.b, roundT(l.b + len, A.digits()), freeColor());
+    added.infinite = false;
+    S.loops.push(added);
+    S.sel = S.loops.length - 1;
+    A.hideTip();
+    if (S.zoom) fitView();
+    rememberLoops();
+    A.render();
+    A.replay(ui.chips[S.sel].root, 'lsm-new');
+  }
+
+  const syncAndCheck = () => A.syncVideo();
+
+  // Tap to mark: each press while playing ends the section that began at the previous press and
+  // starts the next one. The first press only marks a start.
+  function tapMark() {
+    A.syncVideo();
+    if (!ready() || !S.trusted || isAd()) {
+      A.toast('Not available right now');
+      return;
+    }
+    const t = roundT(S.video.currentTime, A.digits());
+    const from = S.tap;
+    if (from == null || t < from + minLen()) {
+      S.tap = t;
+      A.toast(`Start ${fmtT(t)} · tap again to end the section`);
+      return;
+    }
+    let l;
+    if (isDefaultSet()) {
+      l = cur();
+      l.a = from;
+      l.b = t;
+    } else {
+      if (S.loops.length >= MAX_LOOPS) {
+        A.toast(`${MAX_LOOPS} loops is the maximum`);
+        return;
+      }
+      l = newLoop(from, t, freeColor());
+      l.infinite = false;
+      S.loops.push(l);
+      S.sel = S.loops.length - 1;
+    }
+    S.tap = t;
+    if (S.zoom) fitView();
+    rememberLoops();
+    A.render();
+    A.replay(ui.chips[S.sel].root, 'lsm-new');
+    A.toast(`${A.loopLabel(l)} · ${fmtT(l.a)} → ${fmtT(l.b)} · tap again for the next section`);
   }
 
   // Clicking the loop that is already selected jumps to its start.
@@ -263,5 +371,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, clearAll, markNow, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

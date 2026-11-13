@@ -5,7 +5,7 @@
 // Letters are matched by the character typed (so they follow the user's layout); the other keys by
 // their physical position, so they are in the same place on every layout.
 
-const LETTERS = { a: 'markA', b: 'markB', r: 'toggle', s: 'start', z: 'restart' };
+const LETTERS = { a: 'markA', b: 'markB', r: 'toggle', s: 'start', z: 'restart', m: 'tap' };
 const CODES = { BracketRight: 'next', BracketLeft: 'prev', Backslash: 'skipRep' };
 
 /**
