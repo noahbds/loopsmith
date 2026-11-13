@@ -20,7 +20,7 @@ globalThis.chrome = {
     registerContentScripts: async (specs) => { registered.push(...specs); },
     updateContentScripts: async (specs) => { registered = registered.map((r) => specs.find((s) => s.id === r.id) || r); },
     unregisterContentScripts: async ({ ids }) => { registered = registered.filter((r) => !ids.includes(r.id)); },
-    executeScript: async ({ target }) => { injected.push(target.tabId); },
+    executeScript: async ({ target, files }) => { injected.push(`${target.tabId}:${files[0]}`); },
   },
   tabs: { query: async ({ url }) => (url.includes('*://example.com/*') ? [{ id: 7 }] : []) },
 };
@@ -41,18 +41,20 @@ describe('background: content script follows the granted sites', () => {
   it('registers and injects when a site is allowed', async () => {
     granted.add('*://example.com/*');
     await listeners.added({ origins: ['*://example.com/*'] });
-    expect(registered).toHaveLength(1);
+    expect(registered).toHaveLength(2);
     expect(registered[0]).toMatchObject({
       id: 'loopsmith-sites', matches: ['*://example.com/*'], excludeMatches: BUILT_IN_MATCHES, js: ['content.js'], allFrames: true,
     });
-    expect(injected).toEqual([7]);
+    expect(registered[1]).toMatchObject({ id: 'loopsmith-sites-hook', js: ['page-media-hook.js'], world: 'MAIN', runAt: 'document_start' });
+    expect(injected).toEqual(['7:page-media-hook.js', '7:content.js']);
   });
 
   it('updates the same registration for more sites', async () => {
     granted.add('*://*/*');
     await listeners.added({ origins: ['*://*/*'] });
-    expect(registered).toHaveLength(1);
+    expect(registered).toHaveLength(2);
     expect(registered[0].matches).toEqual(['*://example.com/*', '*://*/*']);
+    expect(registered[1].matches).toEqual(['*://example.com/*', '*://*/*']);
   });
 
   it('unregisters when every site is removed again', async () => {

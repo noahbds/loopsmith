@@ -1,19 +1,21 @@
 // Any page with an HTML5 <video> or <audio>: course sites, embeds (Video.js, JW Player, Wistia…),
 // Plex/Jellyfin, news sites, self-hosted media. There's no site control bar to join, so the app
 // runs in floating mode: a small loop button over the video (or docked bottom-right for audio),
-// and the loop markers live in the panel only.
+// with the loop markers along the bottom of the video.
 //
-// Not covered yet: media inside shadow roots and media that isn't in the DOM (SoundCloud);
-// see docs/MULTI_SITE_PLAN.md, phases 2 and 3.
+// Media inside open shadow roots (web-component players) is found too. Media that isn't in the
+// page at all is brought in by the page-world hook (src/page/media-hook-core.js), which also
+// announces every play() with a composed event the content script can see across shadow roots.
 
 import { mediaKey, pickMedia } from '../core/mediakey.js';
+import { allMedia, mediaOf, PLAY_EVENT } from '../core/deepmedia.js';
 
 let lastPlayed = null;
 let current = null;
 
 function snapshot() {
   const items = [];
-  for (const m of document.querySelectorAll('video, audio')) {
+  for (const m of allMedia()) {
     items.push({ m, video: m.tagName === 'VIDEO', rect: m.getBoundingClientRect() });
   }
   return items;
@@ -29,14 +31,15 @@ export default {
   // The user playing something is the strongest hint of what they want to loop.
   init(changed) {
     // Something may already be playing (the play that woke Loopsmith up came before this listener).
-    for (const m of document.querySelectorAll('video, audio')) if (!m.paused) lastPlayed = m;
+    for (const m of allMedia()) if (!m.paused) lastPlayed = m;
     const onPlay = (e) => {
-      const m = e.target;
-      if (!(m instanceof HTMLMediaElement) || m === lastPlayed) return;
+      const m = mediaOf(e);
+      if (!m || m === lastPlayed) return;
       lastPlayed = m;
       changed();
     };
     document.addEventListener('play', onPlay, true);
+    document.addEventListener(PLAY_EVENT, onPlay, true);
     document.addEventListener('loadedmetadata', (e) => { if (e.target instanceof HTMLMediaElement && !current) changed(); }, true);
   },
 

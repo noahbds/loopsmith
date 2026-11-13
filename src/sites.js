@@ -37,6 +37,30 @@ export const BUILT_IN = [
     host: (h) => h === 'bandcamp.com' || h.endsWith('.bandcamp.com'),
     adapter: 'bandcamp',
   },
+  {
+    name: 'Vimeo',
+    matches: ['*://vimeo.com/*', '*://player.vimeo.com/*'],
+    host: (h) => h === 'vimeo.com' || h === 'player.vimeo.com',
+    adapter: 'vimeo',
+  },
+  {
+    name: 'Twitch',
+    matches: ['*://www.twitch.tv/*', '*://clips.twitch.tv/*'],
+    host: (h) => h === 'www.twitch.tv' || h === 'clips.twitch.tv',
+    adapter: 'twitch',
+  },
+  {
+    name: 'Bilibili',
+    matches: ['*://www.bilibili.com/*'],
+    host: (h) => h === 'www.bilibili.com',
+    adapter: 'bilibili',
+  },
+  {
+    name: 'Dailymotion',
+    matches: ['*://www.dailymotion.com/*', '*://geo.dailymotion.com/*'],
+    host: (h) => h === 'www.dailymotion.com' || h === 'geo.dailymotion.com',
+    adapter: 'dailymotion',
+  },
 ];
 
 export const BUILT_IN_MATCHES = BUILT_IN.flatMap((s) => s.matches);

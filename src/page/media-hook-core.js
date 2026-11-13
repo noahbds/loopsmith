@@ -1,7 +1,9 @@
-// Runs in the page's own JS world, at document start, on sites whose player keeps its <audio> /
-// <video> out of the page (SoundCloud, Spotify: `new Audio()` that is never inserted). Such media
-// can't be found by the content script, so when one starts playing it is moved into a hidden
-// <loopsmith-media> box at the end of the document. Inserting a media element never pauses it.
+// Runs in the page's own JS world, at document start. Two jobs, both on play():
+// - media the player keeps out of the page (SoundCloud, Spotify: `new Audio()` that is never
+//   inserted) is moved into a hidden <loopsmith-media> box at the end of the document, so the
+//   content script can find it. Inserting a media element never pauses it.
+// - a composed `loopsmith-play` event is fired from the element, which (unlike `play`) crosses
+//   shadow-root boundaries.
 // Nothing else is touched.
 
 export function installMediaHook() {
@@ -29,7 +31,12 @@ export function installMediaHook() {
   }
 
   P.play = function () {
-    try { adopt(this); } catch (_) { /* never get in the way of playback */ }
+    try {
+      adopt(this);
+      // `play` events don't leave shadow roots; this one does, so the content script sees media
+      // inside web-component players too.
+      this.dispatchEvent(new CustomEvent('loopsmith-play', { bubbles: true, composed: true }));
+    } catch (_) { /* never get in the way of playback */ }
     return play.apply(this, arguments);
   };
 }

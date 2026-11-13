@@ -1318,7 +1318,7 @@ export function start(adapter, store) {
   let dock = false;
   let hoverUntil = 0;
   let hoverTimer = 0;
-  const box = { l: '', t: '', w: '', h: '' };
+  const box = { l: '', t: '', w: '', h: '', pill: '' };
 
   function layoutHost() {
     if (!floating) return;
@@ -1344,6 +1344,12 @@ export function start(adapter, store) {
       }
     }
     placeMarks(over ? r : null);
+    // Keep the loop button in the visible part of a video scrolled partly above the window.
+    const pillTop = over && r.top < 0 ? Math.round(10 - r.top) + 'px' : '10px';
+    if (box.pill !== pillTop) {
+      box.pill = pillTop;
+      ui.host.style.setProperty('--ysl-pill-top', pillTop);
+    }
     if (dock !== !over) {
       dock = !over;
       ui.host.classList.toggle('ysl-dock', dock);

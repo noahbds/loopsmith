@@ -26,7 +26,8 @@ const MATCHES = BUILT_IN.flatMap((s) => s.matches);
 const PAGE_WORLD = BUILT_IN.filter((s) => s.pageWorld).map((s) => ({
   matches: s.matches, src: s.pageWorld, js: s.pageWorld.map((f) => 'page-' + f.split('/').pop()),
 }));
-const PAGE_SOURCES = [...new Set(BUILT_IN.flatMap((s) => s.pageWorld || []))];
+// The media hook is always built: the background registers it on sites the user turns on.
+const PAGE_SOURCES = [...new Set(['src/page/media-hook.js', ...BUILT_IN.flatMap((s) => s.pageWorld || [])])];
 
 const common = { bundle: true, format: 'iife', charset: 'utf8', legalComments: 'none', logLevel: 'warning' };
 

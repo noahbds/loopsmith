@@ -29,7 +29,7 @@ const MARKS_CSS = () => LIGHT_CSS.split('\n').filter((l) => /^\.ysl-marks?\b/.te
 
 export const SHADOW_CSS = `
 :host{all:initial;display:contents}
-.ysl-pill{position:absolute;top:10px;right:10px;z-index:2201;display:grid;place-items:center;width:40px;height:40px;margin:0;padding:0;border:0;border-radius:50%;background:rgba(24,24,27,.88);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.14);cursor:pointer;pointer-events:none;opacity:0;transform:scale(.85);transition:opacity .18s,transform .18s,background .15s;-webkit-appearance:none;appearance:none}
+.ysl-pill{position:absolute;top:var(--ysl-pill-top,10px);right:10px;z-index:2201;display:grid;place-items:center;width:40px;height:40px;margin:0;padding:0;border:0;border-radius:50%;background:rgba(24,24,27,.88);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.14);cursor:pointer;pointer-events:none;opacity:0;transform:scale(.85);transition:opacity .18s,transform .18s,background .15s;-webkit-appearance:none;appearance:none}
 .ysl-pill.ysl-show,.ysl-pill:focus-visible{opacity:1;transform:none;pointer-events:auto}
 .ysl-pill:hover{background:rgba(44,44,50,.96)}
 .ysl-pill:focus-visible{outline:2px solid #3ea6ff;outline-offset:2px}

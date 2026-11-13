@@ -1,6 +1,7 @@
 # Plan: from "YouTube Section Loop" to a loop tool for any website
 
-Status: Phases 0, 1 and 2 built on branch `phase0-foundation` (2026-11-13). Phase 3 not started.
+Status: Phases 0–3 built on branch `phase0-foundation` (2026-11-13). The other music apps (Deezer,
+Tidal, Apple Music, Amazon Music) and phase 4 are not started.
 
 Phase 1 notes: Firefox moved to Manifest V3 (Firefox 128+) so both browsers share the popup,
 background and page-world scripts. Media inside shadow roots isn't picked up yet (phase 3).
@@ -362,3 +363,15 @@ Since nothing is published yet, the rename can be clean:
 | Regressions on YouTube during the rewrite | Phase 0 ships with no new features, only the refactor, checked against today's behaviour. |
 | Overlay covers site controls on unknown sites | Pill only on hover, draggable, remembers its corner per site; panel closes on Escape. |
 | Two copies (extension + userscript) both running | Keep the `data-ysl` DOM marker check. |
+
+## Phase 3 notes (2026-11-13)
+
+- Built in: Vimeo (`.vp-progress`), Twitch VODs and clips (`.seekbar-bar`, ads from
+  `data-a-target="video-ad-label"`), Bilibili (`.bpx-player-progress`, keyed by BV id + part),
+  Dailymotion (player frame on geo.dailymotion.com; markers along the video's bottom edge).
+- Shadow DOM: media in open shadow roots is found (re-scanned every 3 s); the page-world hook now
+  fires a composed `loopsmith-play` event on every `play()`, so plays inside web components count.
+  The hook is registered on every site the user turns on, and the userscript installs it everywhere.
+- Reddit couldn't be checked from Claude in Chrome (site restricted there); covered by the
+  shadow-DOM test page. X / Instagram / TikTok use plain `<video>` and go through the generic adapter.
+- Not done here: the remaining music apps need accounts to test, one at a time.
