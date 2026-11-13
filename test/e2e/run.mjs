@@ -347,6 +347,41 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
+// Names, and numbering the loops by start time.
+{
+  const { ctx, page } = await open('Loop names and order', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:30');
+  await setField(page, '#lsm-time-b', '0:35');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:10');
+  await setField(page, '#lsm-time-b', '0:15');
+  await L(page, '.lsm-chip-main').nth(1).dblclick();
+  await L(page, '.lsm-rename').fill('Intro riff');
+  await L(page, '.lsm-rename').press('Enter');
+  const names = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-chip')].map((c) => c.querySelector('b').textContent + ':' + c.querySelector('.lsm-name').textContent));
+  check(JSON.stringify(await names()) === '["1:","2:Intro riff"]', 'double-click names a loop', JSON.stringify(await names()));
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'Number loops by start time' }).click();
+  check(JSON.stringify(await names()) === '["1:Intro riff","2:"]', 'numbering by start time puts the earlier loop first', JSON.stringify(await names()));
+  check((await L(page, '#lsm-time-a').inputValue()) === '0:10', 'the selected loop stays selected');
+  await L(page, '.lsm-toast-btn').click();
+  check(JSON.stringify(await names()) === '["1:","2:Intro riff"]', 'and that can be undone', JSON.stringify(await names()));
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  check(JSON.stringify(await names()) === '["1:","2:Intro riff"]', 'the name is saved', JSON.stringify(await names()));
+  await L(page, '.lsm-chip-main').nth(1).click();
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'Rename loop' }).click();
+  await L(page, '.lsm-rename').fill('');
+  await L(page, '.lsm-rename').press('Enter');
+  check(JSON.stringify(await names()) === '["1:","2:"]', 'an empty name removes it', JSON.stringify(await names()));
+  await ctx.close();
+}
+
 // A click in the panel must not take the keyboard from the player.
 {
   const { ctx, page } = await open('Keyboard after a click in the panel', '/overlap.html');

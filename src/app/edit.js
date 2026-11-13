@@ -1,6 +1,6 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
-import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, AFTER } from '../core/constants.js';
+import { NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, AFTER } from '../core/constants.js';
 import { clamp, round1 } from '../core/util.js';
 import * as E from '../core/engine.js';
 
@@ -92,6 +92,33 @@ export function createEdit(A) {
     if (!ready() || i < 0 || i >= S.loops.length) return;
     if (i !== S.sel) selectLoop(i);
     toggleLoop();
+  }
+
+  function setName(i, text) {
+    const l = S.loops[i];
+    if (!l) return;
+    const name = String(text).trim().slice(0, NAME_MAX);
+    if (name) l.name = name;
+    else delete l.name;
+    rememberLoops();
+    A.render();
+  }
+
+  // Numbers the loops in the order they play (by start time). Can be undone.
+  function sortLoops() {
+    if (!ready()) return;
+    const sorted = E.sortedByStart(S.loops);
+    if (sorted.every((l, i) => l === S.loops[i])) {
+      A.toast('Already in order');
+      return;
+    }
+    snapshot();
+    const keep = cur();
+    S.loops = sorted;
+    S.sel = S.loops.indexOf(keep);
+    rememberLoops();
+    A.render();
+    A.toast('Loops numbered by start time', UNDO);
   }
 
   function setZoom(on) {
@@ -207,5 +234,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setPoint, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, clearAll, markNow, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setInfinite, setName, setPoint, sortLoops, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

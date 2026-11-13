@@ -77,6 +77,8 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-chip-main:hover{background:rgba(255,255,255,.1)}
 .lsm-panel .lsm-chip i{width:8px;height:8px;border-radius:50%;background:rgb(var(--cv))}
 .lsm-panel .lsm-chip b{color:#fff;font-weight:700}
+.lsm-panel .lsm-name{max-width:84px;overflow:hidden;text-overflow:ellipsis;font-style:normal;color:#fff}
+.lsm-panel .lsm-rename{width:104px;height:100%;padding:0 10px 0 2px;border-radius:0 13px 13px 0;color:#fff;font-size:12px}
 .lsm-panel .lsm-chip:active{transform:scale(.97)}
 .lsm-panel .lsm-chip.lsm-sel{background:rgba(var(--cv),.2);box-shadow:inset 0 0 0 1.5px rgb(var(--cv));color:#fff}
 .lsm-panel .lsm-chip.lsm-spent{opacity:.5}

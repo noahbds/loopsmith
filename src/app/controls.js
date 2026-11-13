@@ -1,5 +1,6 @@
 // Building the panel: fields, slider, chips, buttons and their event handling.
 
+import { NAME_MAX } from '../core/constants.js';
 import { clamp, parseTime, segments } from '../core/util.js';
 import { el, icon, I } from '../ui/dom.js';
 import { SHADOW_CSS } from '../ui/styles.js';
@@ -272,10 +273,14 @@ export function createControls(A) {
       b.addEventListener('click', () => { A.closeMenu(); run(); });
       return b;
     };
+    ui.miRename = item('Rename loop', () => A.startRename(S.sel));
+    ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miDelete = item('Delete loop', () => A.removeLoop());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
       item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\'),
       item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z'),
+      ui.miRename,
+      ui.miSort,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
       item('Keyboard shortcuts', () => A.toggleHelp()));
@@ -319,9 +324,44 @@ export function createControls(A) {
     return el('div', { class: 'lsm-help', hidden: true }, el('div', { class: 'lsm-label', text: 'Keyboard shortcuts' }), list);
   }
 
+  // Renaming in place: the chip's label turns into a text field.
+  function startRename(i) {
+    const chip = ui.chips[i];
+    const l = S.loops[i];
+    if (!chip || !l || chip.renaming) return;
+    chip.renaming = true;
+    const input = el('input', { class: 'lsm-rename', type: 'text', maxlength: String(NAME_MAX), autocomplete: 'off', spellcheck: 'false', 'aria-label': `Name of loop ${i + 1}`, placeholder: `Loop ${i + 1}` });
+    input.value = l.name || '';
+    chip.main.hidden = true;
+    chip.root.append(input);
+    input.focus();
+    input.select();
+    const finish = (save) => {
+      if (!chip.renaming) return;
+      chip.renaming = false;
+      const text = input.value;
+      input.remove();
+      chip.main.hidden = false;
+      if (save) A.setName(ui.chips.indexOf(chip), text);
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
   function openMenu() {
     if (!ready()) return;
     const many = S.loops.length > 1;
+    ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
+    ui.miSort.hidden = !many;
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
     ui.menu.hidden = false;
     A.setMenuOpen(true);
@@ -562,5 +602,5 @@ export function createControls(A) {
     });
   }
 
-  return { bindSlider, buildUI, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
+  return { bindSlider, buildUI, startRename, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
 }

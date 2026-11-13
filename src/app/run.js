@@ -203,7 +203,7 @@ export function createRun(A) {
     if (say) A.toast(say);
   }
 
-  const loopNo = (l) => (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
+  const loopNo = (l) => A.loopLabel(l);
 
   // Skip a repetition or a loop, go back, restart, or jump to loop `arg` (an index). Looping is
   // turned on first if it is off, since these act on the run.
@@ -232,7 +232,7 @@ export function createRun(A) {
         break;
       case 'prev':
         step = E.prevLoop(S.loops, target, t);
-        say = step && step.prev ? `Back to ${loopNo(step.prev).toLowerCase()}` : 'Restarted';
+        say = step && step.prev ? `Back to ${loopNo(step.prev)}` : 'Restarted';
         miss = 'Nothing before this';
         break;
       case 'restart':

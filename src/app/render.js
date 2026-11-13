@@ -113,11 +113,13 @@ export function createRender(A) {
   // A chip is two buttons: the dot switches the loop on or off, the rest selects it.
   function makeChip() {
     const num = el('b');
+    const name = el('em', { class: 'lsm-name' });
     const meta = el('span');
     const dot = el('button', { class: 'lsm-dot', type: 'button' }, el('i'));
-    const main = el('button', { class: 'lsm-chip-main', type: 'button' }, num, meta);
+    const main = el('button', { class: 'lsm-chip-main', type: 'button' }, num, name, meta);
     const root = el('div', { class: 'lsm-chip', role: 'group' }, dot, main);
-    const chip = { root, num, meta, dot, main };
+    const chip = { root, num, name, meta, dot, main };
+    main.addEventListener('dblclick', () => A.startRename(ui.chips.indexOf(chip)));
     dot.addEventListener('click', () => A.toggleLoopAt(ui.chips.indexOf(chip)));
     main.addEventListener('click', () => A.selectLoop(ui.chips.indexOf(chip)));
     root.addEventListener('contextmenu', (e) => {
@@ -164,8 +166,10 @@ export function createRender(A) {
       chip.root.classList.toggle('lsm-sel', selected);
       chip.root.classList.toggle('lsm-spent', spent);
       chip.root.classList.toggle('lsm-muted', !l.on);
-      setAttr(chip.main, 'title', `Loop ${i + 1}: ${describe(l)}${l.on ? '' : ' · switched off'}${l.skip ? ' · skipped' : ''}\n${selected ? 'Click again to jump to its start' : 'Click to edit'}`);
+      setAttr(chip.main, 'title', `${l.name ? `${l.name} (loop ${i + 1})` : `Loop ${i + 1}`}: ${describe(l)}${l.on ? '' : ' · switched off'}${l.skip ? ' · skipped' : ''}\n${selected ? 'Click again to jump to its start' : 'Click to edit'} · double-click to rename`);
       setText(chip.num, String(i + 1));
+      setText(chip.name, l.name || '');
+      chip.name.hidden = !l.name;
       setText(chip.meta, meta);
 
       const ghost = ui.ghosts[i];
