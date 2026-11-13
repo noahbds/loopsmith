@@ -1,0 +1,16 @@
+{
+  "name": "loopsmith",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Loopsmith: A-B loop for any video. Repeat one or several sections a chosen number of times.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "check": "node --check dist/firefox/content.js && node --check dist/chrome/content.js && node --check dist/loopsmith.user.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "vitest": "^5.1.0"
+  }
+}

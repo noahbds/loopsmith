@@ -1,212 +1,32 @@
-// ==UserScript==
-// @name         YouTube Section Loop (A-B repeat)
-// @namespace    yt-section-loop
-// @version      1.1
-// @description  Repeat one or several sections of a YouTube video a chosen number of times. Drag the handles, type a timestamp, or grab the current time.
-// @match        https://www.youtube.com/*
-// @run-at       document-idle
-// @grant        none
-// ==/UserScript==
+// The loop player: state, playback control, the panel and the hotkeys. Site specifics come from
+// the adapter (src/adapters/), saved data from the store (src/core/store.js), and the loop rules
+// from src/core/engine.js.
 
-// This file is also the content script of the Firefox extension (firefox-extension/content.js).
+import { MIN_LEN, NEW_LOOP_LEN, MAX_LOOPS, MAX_COUNT, PALETTE, AFTER } from './core/constants.js';
+import { clamp, round1, fmt, parseTime, segments } from './core/util.js';
+import * as E from './core/engine.js';
+import { el, icon, I, setText, setAttr, setStyle, pct } from './ui/dom.js';
+import { LIGHT_CSS, SHADOW_CSS } from './ui/styles.js';
 
-(function () {
-  'use strict';
-
-  // Only the main page and embedded players have a player worth attaching to.
-  if (window.top !== window.self && !/^\/embed\//.test(location.pathname)) return;
-  // The marker lives in the DOM so the userscript and the extension never both attach to one page.
-  if (document.documentElement.hasAttribute('data-ysl')) return;
-  document.documentElement.setAttribute('data-ysl', '');
-
-  const MIN_LEN = 0.5; // shortest section, in seconds
-  const NEW_LOOP_LEN = 30;
-  const MAX_LOOPS = 12;
-  const MAX_COUNT = 999;
-  const MAX_SAVED = 150;
-  const STORE_KEY = 'ysl:v1';
-  const PALETTE = ['62,166,255', '255,183,77', '110,231,163', '255,126,182', '179,157,255', '77,208,225']; // r,g,b
-
-  /* ------------------------------------------------------------------ */
-  /* Helpers                                                            */
-  /* ------------------------------------------------------------------ */
-
-  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-  const round1 = (x) => Math.round(x * 10) / 10;
-  const pad2 = (n) => String(n).padStart(2, '0');
-  const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
-
-  function fmt(sec, withHours) {
-    const tenthsTotal = Math.max(0, Math.round(sec * 10));
-    const whole = Math.floor(tenthsTotal / 10);
-    const tenths = tenthsTotal % 10;
-    const h = Math.floor(whole / 3600);
-    const m = Math.floor((whole % 3600) / 60);
-    const s = whole % 60;
-    let out = h > 0 || withHours ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
-    if (tenths) out += '.' + tenths;
-    return out;
-  }
-
-  // Accepts 9:00, 1:02:03.5, 540, 90s, 9m30s, 1h2m, "9 30". Returns seconds or null.
-  function parseTime(raw) {
-    const s = String(raw).trim().toLowerCase().replace(/,/g, '.');
-    if (!s) return null;
-    const num = '(\\d+(?:\\.\\d+)?)';
-    const units = new RegExp(`^(?:${num}\\s*h)?\\s*(?:${num}\\s*m(?:in)?)?\\s*(?:${num}\\s*s(?:ec)?)?$`).exec(s);
-    if (units && (units[1] || units[2] || units[3])) {
-      return (+units[1] || 0) * 3600 + (+units[2] || 0) * 60 + (+units[3] || 0);
-    }
-    const parts = s.split(/\s*:\s*|\s+/);
-    if (parts.length > 3) return null;
-    let total = 0;
-    for (let i = 0; i < parts.length; i++) {
-      const last = i === parts.length - 1;
-      const p = parts[i] === '' && parts.length > 1 ? '0' : parts[i];
-      if (!(last ? /^\d+(\.\d+)?$/ : /^\d+$/).test(p)) return null;
-      total = total * 60 + Number(p);
-    }
-    return isFinite(total) ? total : null;
-  }
-
-  // Splits a formatted time into its editable parts: [{start, end, unit}]
-  function segments(val) {
-    const out = [];
-    const parts = val.split(':');
-    let pos = 0;
-    parts.forEach((p, i) => {
-      const unit = [1, 60, 3600][parts.length - 1 - i] || 3600;
-      const dot = p.indexOf('.');
-      if (i === parts.length - 1 && dot >= 0) {
-        out.push({ start: pos, end: pos + dot, unit });
-        out.push({ start: pos + dot + 1, end: pos + p.length, unit: 0.1 });
-      } else {
-        out.push({ start: pos, end: pos + p.length, unit });
-      }
-      pos += p.length + 1;
-    });
-    return out;
-  }
-
-  // DOM writes are skipped when the value is already there, so render() can be called freely.
-  const setText = (node, value) => { if (node.textContent !== value) node.textContent = value; };
-  const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
-  const setStyle = (node, name, value) => { if (node.style.getPropertyValue(name) !== value) node.style.setProperty(name, value); };
-  const pct = (x) => +x.toFixed(3) + '%';
-
-  const SVG_NS = 'http://www.w3.org/2000/svg';
-
-  // No innerHTML anywhere: YouTube enforces Trusted Types.
-  function el(tag, props, ...kids) {
-    const node = document.createElement(tag);
-    if (props) {
-      for (const [k, v] of Object.entries(props)) {
-        if (v == null || v === false) continue;
-        if (k === 'class') node.className = v;
-        else if (k === 'text') node.textContent = v;
-        else node.setAttribute(k, v === true ? '' : v);
-      }
-    }
-    for (const kid of kids) if (kid != null) node.append(kid);
-    return node;
-  }
-
-  function icon(d, size, cls) {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', size);
-    svg.setAttribute('height', size);
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    if (cls) svg.setAttribute('class', cls);
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-    return svg;
-  }
-
-  const I = {
-    loop: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
-    minus: 'M5 11h14v2H5z',
-    plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
-    close: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z',
-    play: 'M8 5v14l11-7z',
-    stop: 'M6 6h12v12H6z',
-    now: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z',
-    zoom: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm.5-7H9v2H7v1h2v2h1v-2h2V9h-2z',
-    trash: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5-1-1h-5l-1 1H5v2h14V4h-3.5z',
-    reset: 'M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
-    power: 'M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.97 6.97 0 0 1 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17A8.96 8.96 0 0 0 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z',
-  };
-
-  /* ------------------------------------------------------------------ */
-  /* Persistence (loops per video + preferences)                        */
-  /* ------------------------------------------------------------------ */
-
-  function readStore() {
-    const base = { prefs: {}, videos: {} };
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (raw && typeof raw === 'object') {
-        if (raw.prefs && typeof raw.prefs === 'object') base.prefs = raw.prefs;
-        if (raw.videos && typeof raw.videos === 'object') base.videos = raw.videos;
-      }
-    } catch (_) { /* storage blocked or corrupt: start clean */ }
-    return base;
-  }
-
-  let store = readStore();
-  const touchedVideos = new Set();
-  let prefsTouched = false;
-  let saveTimer = 0;
-
-  function saveSoon() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(flushStore, 300);
-  }
-
-  // Re-reads before writing so several tabs don't erase each other's entries.
-  function flushStore() {
-    clearTimeout(saveTimer);
-    saveTimer = 0;
-    if (!touchedVideos.size && !prefsTouched) return;
-    const fresh = readStore();
-    for (const id of touchedVideos) {
-      if (store.videos[id]) fresh.videos[id] = store.videos[id];
-      else delete fresh.videos[id];
-    }
-    if (prefsTouched) fresh.prefs = store.prefs;
-    const ids = Object.keys(fresh.videos);
-    if (ids.length > MAX_SAVED) {
-      ids.sort((x, y) => ((fresh.videos[x] || {}).t || 0) - ((fresh.videos[y] || {}).t || 0));
-      for (const id of ids.slice(0, ids.length - MAX_SAVED)) delete fresh.videos[id];
-    }
-    touchedVideos.clear();
-    prefsTouched = false;
-    store = fresh;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(fresh)); } catch (_) { /* ignore */ }
-  }
-
+export function start(adapter, store) {
   /* ------------------------------------------------------------------ */
   /* State                                                              */
   /* ------------------------------------------------------------------ */
 
-  // What happens when a loop has played out: keep playing, jump straight to the next loop, or pause at the end.
-  const AFTER = ['continue', 'next', 'pause'];
+  const prefs = store.getPrefs();
 
   // Defaults for new loops + the "when done" choice.
   const P = {
-    count: clamp(Math.round(Number(store.prefs.count)) || 5, 1, MAX_COUNT),
-    infinite: store.prefs.infinite === true,
-    after: AFTER.includes(store.prefs.after) ? store.prefs.after : 'continue',
+    count: clamp(Math.round(Number(prefs.count)) || 5, 1, MAX_COUNT),
+    infinite: prefs.infinite === true,
+    after: AFTER.includes(prefs.after) ? prefs.after : 'continue',
   };
 
   const S = {
     player: null,
     video: null,
-    videoId: null,
+    videoId: null,   // "<adapter prefix>:<id>", the key loops are saved under
     href: '',
-    splitAt: 0,      // when the URL and the player started disagreeing about the video
     trusted: false,  // the media in <video> is the video this state describes
     dirty: true,     // identity/duration must be re-checked before acting
     duration: 0,
@@ -226,20 +46,16 @@
   };
 
   const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [] };
+  let shadow = null;
+  const focused = () => (shadow && shadow.activeElement) || document.activeElement;
 
   const ready = () => !!S.video && S.ranged && !S.live && S.loops.length > 0;
   const cur = () => S.loops[S.sel];
   const fmtT = (sec) => fmt(sec, S.duration >= 3600);
-  const exhausted = (l) => !l.infinite && l.done >= l.count;
-  // Loops the engine passes over: switched off, or played out in this run.
-  const skipped = (l) => !l.on || exhausted(l);
+  const { exhausted, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
-  // A single loop covering the whole video is the untouched default: nothing worth saving or marking.
-  const isDefaultSet = () => S.loops.length === 1 && S.loops[0].a <= 0.001 && S.loops[0].b >= S.duration - 0.05;
-
-  function newLoop(a, b, c) {
-    return { a, b, c, count: P.count, infinite: P.infinite, on: true, done: 0 };
-  }
+  const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
+  const newLoop = (a, b, c) => E.newLoop(a, b, c, P);
 
   function freeColor() {
     for (let i = 0; i < PALETTE.length; i++) if (!S.loops.some((l) => l.c === i)) return i;
@@ -263,70 +79,15 @@
     S.v1 = Math.min(S.duration, Math.ceil((l.b + pad) * 10) / 10);
   }
 
-  function isAd() {
-    const p = S.player;
-    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'));
-  }
-
-  // What the player itself says is loaded. In a Firefox content script the page's
-  // own methods are only reachable through wrappedJSObject.
-  function apiData() {
-    const p = S.player;
-    try {
-      const raw = (p && p.wrappedJSObject) || p;
-      if (raw && typeof raw.getVideoData === 'function') {
-        const d = raw.getVideoData();
-        if (d) return { id: d.video_id ? String(d.video_id) : null, live: d.isLive === true };
-      }
-    } catch (_) { /* player not initialised yet */ }
-    return null;
-  }
-
-  function idFromUrl() {
-    if (/^\/embed\//.test(location.pathname)) return null; // embedded playlists change video without changing URL
-    if (location.pathname === '/watch') return new URLSearchParams(location.search).get('v') || null;
-    const m = /^\/live\/([\w-]{6,})/.exec(location.pathname);
-    return m ? m[1] : null;
-  }
+  const isAd = () => adapter.isAd(S.player);
 
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
-    if (isDefaultSet()) {
-      delete store.videos[S.videoId];
-    } else {
-      store.videos[S.videoId] = {
-        loops: S.loops.map((l) => ({ a: l.a, b: l.b, n: l.count, inf: l.infinite, on: l.on, c: l.c })),
-        t: Date.now(),
-      };
-    }
-    touchedVideos.add(S.videoId);
-    saveSoon();
+    store.put(S.videoId, isDefaultSet() ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
   }
 
   function rememberPrefs() {
-    store.prefs = { count: P.count, infinite: P.infinite, after: P.after };
-    prefsTouched = true;
-    saveSoon();
-  }
-
-  // Reads a stored entry back into loops, dropping anything malformed.
-  function loopsFromSaved(saved, duration) {
-    if (!saved || !Array.isArray(saved.loops)) return null;
-    const cap = isNum(duration) && duration > 0 ? duration : Infinity;
-    const out = [];
-    for (const r of saved.loops) {
-      if (!r || !isNum(r.a) || !isNum(r.b) || !(r.b > r.a) || r.a < 0) continue;
-      // Clamp before materialising so callers don't briefly see an out-of-range loop.
-      const a = clamp(r.a, 0, Math.max(0, cap - MIN_LEN));
-      const b = clamp(r.b, a + MIN_LEN, cap);
-      const l = newLoop(a, b, Number.isInteger(r.c) ? clamp(r.c, 0, PALETTE.length - 1) : out.length % PALETTE.length);
-      if (isNum(r.n) && r.n >= 1) l.count = clamp(Math.round(r.n), 1, MAX_COUNT);
-      if (typeof r.inf === 'boolean') l.infinite = r.inf;
-      if (typeof r.on === 'boolean') l.on = r.on;
-      out.push(l);
-      if (out.length >= MAX_LOOPS) break;
-    }
-    return out.length ? out : null;
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after });
   }
 
   /* ------------------------------------------------------------------ */
@@ -392,7 +153,7 @@
 
   function applyDuration(d) {
     const wasDefault = !S.ranged || isDefaultSet();
-    const saved = loopsFromSaved(S.videoId ? store.videos[S.videoId] : null, d);
+    const saved = E.loopsFromSaved(S.videoId ? store.get(S.videoId) : null, P);
     S.duration = d;
     S.ranged = d >= MIN_LEN * 2;
     if (!S.ranged) {
@@ -411,10 +172,7 @@
           S.loops = [newLoop(0, d, 0)];
         }
       }
-      for (const l of S.loops) {
-        l.b = clamp(l.b, MIN_LEN, d);
-        l.a = clamp(l.a, 0, l.b - MIN_LEN);
-      }
+      E.clampLoops(S.loops, d);
       S.sel = clamp(S.sel, 0, S.loops.length - 1);
     }
     render();
@@ -426,34 +184,23 @@
     S.href = location.href;
     const p = S.player;
     if (!p) return;
-    const v = p.querySelector('video.html5-main-video') || p.querySelector('video');
+    const v = adapter.findMedia(p);
     if (v !== S.video) bindVideo(v);
     if (!v) return;
 
     const ad = isAd();
-    const data = ad ? null : apiData(); // during an ad the player may report the ad's own id
-    const api = data ? data.id : null;
-    const url = idFromUrl();
-    let id;
-    if (url && api && url !== api) {
-      // Mid-navigation (or an ad that isn't flagged yet): hold until both agree, but not forever.
-      const now = Date.now();
-      if (!S.splitAt) S.splitAt = now;
-      if (now - S.splitAt < 4000) {
-        S.trusted = false;
-        return;
-      }
-      id = api;
-    } else {
-      S.splitAt = 0;
-      id = api || url;
+    const who = adapter.identify(p, ad);
+    if (who.hold) {
+      S.trusted = false;
+      return;
     }
-    if (id && id !== S.videoId) switchVideo(id);
+    const key = who.id ? `${adapter.keyPrefix}:${who.id}` : null;
+    if (key && key !== S.videoId) switchVideo(key);
     S.trusted = !ad;
     if (ad) return;
 
     const d = v.duration;
-    if ((data && data.live) || d === Infinity) {
+    if (who.live || d === Infinity) {
       if (!S.live) {
         S.live = true;
         S.ranged = false;
@@ -492,23 +239,12 @@
   // never reaches "ended" (which would trigger autoplay). Hidden tabs only get coarse timing.
   function turnGuard() {
     const rate = (S.video && S.video.playbackRate) || 1;
-    return document.hidden ? 0.1 + 0.3 * rate : Math.max(0.25, 0.2 * rate);
+    return document.hidden ? 0.1 + 0.3 * rate : 0.25;
   }
 
-  // Where a loop really turns around.
-  function loopEnd(l, guard = turnGuard()) {
-    return Math.max(l.a + 0.2, Math.min(l.b, S.duration - guard));
-  }
-
-  // The loop the playhead is in. When loops overlap, the one that started last (the inner one) wins.
-  function loopAt(t, guard = turnGuard()) {
-    let best = null;
-    for (const l of S.loops) {
-      if (skipped(l)) continue;
-      if (t >= l.a - 0.3 && t < loopEnd(l, guard) && (!best || l.a > best.a)) best = l;
-    }
-    return best;
-  }
+  const loopEnd = (l, guard = turnGuard()) => E.loopEnd(l, S.duration, guard);
+  const loopAt = (t, guard = turnGuard()) => E.loopAt(S.loops, t, S.duration, guard);
+  const nextLoop = (t) => E.nextLoop(S.loops, t);
 
   // Loops are markers on the timeline: when playback runs into the end of one that is switched on
   // and still has repeats left, it goes back to that loop's start. Seeking by hand never counts.
@@ -529,17 +265,12 @@
     const prev = S.lastT;
     S.lastT = t;
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
-    if (prev === null || t <= prev || t - prev > Math.max(1, v.playbackRate * 1.5)) return;
+    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) return;
     const guard = turnGuard();
-    let crossed = null;
-    for (const l of S.loops) {
-      if (skipped(l)) continue;
-      const end = loopEnd(l, guard);
-      if (prev < end && t >= end) (crossed || (crossed = [])).push(l);
-    }
+    const crossed = E.crossedLoops(S.loops, prev, t, S.duration, guard);
     if (!crossed || turnAround(crossed, false)) return;
     // Those loops have played out. Carry on if another one is still ahead.
-    if (S.loops.some((l) => !skipped(l) && loopEnd(l, guard) > t)) {
+    if (E.anyAhead(S.loops, t, S.duration, guard)) {
       if (P.after === 'next' && !loopAt(t, guard)) {
         const next = nextLoop(t); // skip whatever lies between the loops
         if (next) seekTo(next.a);
@@ -550,28 +281,16 @@
     }
   }
 
-  // The closest loop that starts after `t` and still has plays left.
-  function nextLoop(t) {
-    let next = null;
-    for (const l of S.loops) if (!skipped(l) && l.a > t && (!next || l.a < next.a)) next = l;
-    return next;
-  }
-
   // Counts one play for each loop that just ended; goes back to the start of the
   // first one (inner loops first) that still has plays left.
   function turnAround(crossed, fromEnded) {
-    crossed.sort((x, y) => y.a - x.a);
-    for (const l of crossed) {
-      l.done += 1;
-      if (!exhausted(l)) {
-        seekTo(l.a);
-        if (fromEnded) play();
-        render();
-        replay(ui.badge, 'ysl-pop');
-        return true;
-      }
-    }
-    return false;
+    const l = E.countCrossed(crossed);
+    if (!l) return false;
+    seekTo(l.a);
+    if (fromEnded) play();
+    render();
+    replay(ui.badge, 'ysl-pop');
+    return true;
   }
 
   function finishRun() {
@@ -588,8 +307,6 @@
   // The video reached its very end before the regular check caught it.
   function onEnded() {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
-    const v = S.video;
-    if (!v || v.seeking) return;
     const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
     if (tail.length && turnAround(tail, true)) return;
     finishRun();
@@ -664,25 +381,7 @@
   function setPoint(which, value, push) {
     if (!ready() || !isFinite(value)) return;
     const l = cur();
-    const d = S.duration;
-    let a = l.a;
-    let b = l.b;
-    const len = Math.max(MIN_LEN, b - a);
-    if (which === 'a') {
-      a = clamp(round1(value), 0, d - MIN_LEN);
-      if (a > b - MIN_LEN) {
-        if (push) b = Math.min(d, a + len);
-        else a = b - MIN_LEN;
-      }
-    } else {
-      b = round1(value);
-      if (b > d - 0.1) b = d;
-      b = clamp(b, MIN_LEN, d);
-      if (b < a + MIN_LEN) {
-        if (push) a = Math.max(0, b - len);
-        else b = Math.min(d, a + MIN_LEN);
-      }
-    }
+    const { a, b } = E.movePoint(l, which, value, push, S.duration);
     if (a !== l.a || b !== l.b) {
       l.a = a;
       l.b = b;
@@ -958,20 +657,6 @@
     setStyle(ui.lane, '--tip', pct(toPct(cur()[tipWhich])));
   }
 
-  // Loops that overlap in time are drawn on separate rows.
-  function lanesOf(loops) {
-    const order = loops.map((_, i) => i).sort((x, y) => loops[x].a - loops[y].a);
-    const ends = [];
-    const out = new Array(loops.length).fill(0);
-    for (const i of order) {
-      let k = ends.findIndex((e) => e <= loops[i].a);
-      if (k < 0) k = ends.length;
-      ends[k] = loops[i].b;
-      out[i] = k;
-    }
-    return out;
-  }
-
   // Grows or shrinks a list of DOM nodes to `n` items.
   function resize(list, n, create) {
     while (list.length > n) {
@@ -994,7 +679,7 @@
   function renderLoops(ok) {
     const loops = ok ? S.loops : [];
     const d = S.duration;
-    const lanes = lanesOf(loops);
+    const lanes = E.lanesOf(loops);
     const many = loops.length > 1;
 
     resize(ui.chips, loops.length, makeChip);
@@ -1196,9 +881,6 @@
   // Throws away whatever is half-typed.
   function cancelEdits() {
     ui.field.a.editing = ui.field.b.editing = ui.countState.editing = false;
-    for (const f of [ui.field.a, ui.field.b, ui.count]) {
-      if (document.activeElement === f) f.blur();
-    }
   }
 
   function makeField(which, label) {
@@ -1261,7 +943,7 @@
       const next = inp.value;
       const segs = segments(next);
       const seg = segs.find((g) => g.unit === unit) || segs.find((g) => g.unit === 1);
-      if (seg && document.activeElement === inp) {
+      if (seg && focused() === inp) {
         inp.setSelectionRange(seg.start, seg.end);
         f.stick = { val: next, s: seg.start, e: seg.end, unit };
       }
@@ -1291,7 +973,7 @@
         caretStep(e.key === 'ArrowUp' ? 1 : -1, e);
       }
     });
-    wheelSteps(f.input, () => document.activeElement === f.input && ready(), caretStep);
+    wheelSteps(f.input, () => focused() === f.input && ready(), caretStep);
     holdRepeat(minus, (e) => step(-1, e));
     holdRepeat(plus, (e) => step(1, e));
     f.now.addEventListener('click', () => {
@@ -1392,12 +1074,8 @@
     const p = S.player;
     if (!p) return;
     const pr = p.getBoundingClientRect();
-    const chrome = p.querySelector('.ytp-chrome-bottom');
-    let bottom = 62;
-    if (chrome) {
-      const cr = chrome.getBoundingClientRect();
-      if (cr.height > 0) bottom = Math.max(12, Math.round(pr.bottom - cr.top + 8));
-    }
+    const top = adapter.controlsTop(p);
+    const bottom = top == null ? 62 : Math.max(12, Math.round(pr.bottom - top + 8));
     ui.panel.style.bottom = bottom + 'px';
     ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - 10)) + 'px';
     S.laneW = ui.lane.clientWidth;
@@ -1416,7 +1094,7 @@
 
   function closePanel() {
     commitEdits();
-    const hadFocus = ui.panel.contains(document.activeElement);
+    const hadFocus = ui.panel.contains(focused());
     S.open = false;
     hideTip();
     ui.panel.classList.remove('ysl-open');
@@ -1427,7 +1105,7 @@
   function buildUI() {
     ui.badge = el('span', { class: 'ysl-badge' });
     ui.btn = el('button', {
-      class: 'ytp-button ysl-btn', type: 'button', title: 'Section loop', 'aria-label': 'Section loop',
+      class: `${adapter.buttonClass || ''} ysl-btn`.trim(), type: 'button', title: 'Section loop (Loopsmith)', 'aria-label': 'Section loop',
       'aria-haspopup': 'dialog', 'aria-expanded': 'false',
     }, icon(I.loop, 24), ui.badge);
     ui.btn.addEventListener('click', () => (S.open ? closePanel() : openPanel()));
@@ -1514,7 +1192,7 @@
       }
     });
     ui.count.addEventListener('focus', () => {
-      setTimeout(() => { if (document.activeElement === ui.count) ui.count.select(); }, 0);
+      setTimeout(() => { if (focused() === ui.count) ui.count.select(); }, 0);
     });
     ui.count.addEventListener('input', () => {
       const digits = ui.count.value.replace(/\D+/g, '').slice(0, 3);
@@ -1541,7 +1219,7 @@
         ui.count.select();
       }
     });
-    wheelSteps(ui.count, () => document.activeElement === ui.count, (dir, e) => {
+    wheelSteps(ui.count, () => focused() === ui.count, (dir, e) => {
       bumpCount(dir, e);
       ui.count.select();
     });
@@ -1576,6 +1254,12 @@
     ui.body = el('fieldset', { class: 'ysl-body' }, slider, fields, opts, actions);
     ui.panel = el('div', { class: 'ysl-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.notice, ui.body);
 
+    // The panel and the toast live in a shadow root: the site's CSS can't reach them.
+    // Open, so focus and composedPath() still see which field is being typed in.
+    ui.host = el('div', { class: 'ysl-host' });
+    shadow = ui.host.attachShadow({ mode: 'open' });
+    shadow.append(el('style', { text: SHADOW_CSS }), ui.panel, ui.toast);
+
     bindSlider();
 
     // A press anywhere outside a text field applies what was being typed first.
@@ -1604,9 +1288,9 @@
 
   const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.open) place(); }) : null;
 
-  // YouTube is a single-page app and rebuilds parts of the player; re-attach whatever went missing.
+  // Sites like YouTube are single-page apps and rebuild parts of the player; re-attach whatever went missing.
   function ensure() {
-    const p = document.getElementById('movie_player');
+    const p = adapter.findPlayer();
     if (!p) return;
     if (p !== S.player) {
       S.player = p;
@@ -1616,11 +1300,10 @@
         resizeWatch.observe(p);
       }
     }
-    if (ui.panel.parentNode !== p) p.appendChild(ui.panel);
-    if (ui.toast.parentNode !== p) p.appendChild(ui.toast);
-    const host = p.querySelector('.ytp-right-controls-left') || p.querySelector('.ytp-right-controls');
+    if (ui.host.parentNode !== p) p.appendChild(ui.host);
+    const host = adapter.buttonHost(p);
     if (host && ui.btn.parentNode !== host) host.insertBefore(ui.btn, host.firstChild);
-    const bar = p.querySelector('.ytp-progress-bar');
+    const bar = adapter.progressBar(p);
     if (bar && ui.markBox.parentNode !== bar) bar.appendChild(ui.markBox);
   }
 
@@ -1630,7 +1313,6 @@
   }
 
   function onHotkey(e) {
-    if (e.isComposing) return;
     if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (isTyping(e)) return;
     const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : String(e.code || '').replace(/^Key/, '').toLowerCase();
@@ -1648,161 +1330,13 @@
     }
   }
 
-  const CSS = `
-.ysl-btn{position:relative;display:inline-flex!important;align-items:center;justify-content:center;vertical-align:top}
-.ysl-btn>svg{width:24px!important;height:24px!important;padding:0!important;flex:none;pointer-events:none;transition:color .2s,transform .25s cubic-bezier(.3,1.5,.5,1)}
-.ysl-btn>svg path{fill:currentColor!important}
-.ysl-btn[aria-expanded="true"]>svg{transform:scale(1.12)}
-.ysl-btn.ysl-active>svg{color:#3ea6ff}
-.ysl-badge{position:absolute;top:3px;right:5px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:7px;background:#3ea6ff;color:#06121f;font:700 9px/14px Roboto,Arial,sans-serif;text-align:center;transform:scale(0);transition:transform .2s cubic-bezier(.3,1.5,.5,1);pointer-events:none}
-.ysl-btn.ysl-active .ysl-badge{transform:scale(1)}
-.ysl-btn.ysl-active .ysl-badge.ysl-pop{animation:ysl-pop .4s}
-
-.ysl-marks{position:absolute;left:0;right:0;top:0;height:100%;z-index:44;pointer-events:none}
-.ysl-marks[hidden]{display:none}
-.ysl-mark{position:absolute;top:calc(-7px - var(--lane,0) * 5px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.6;transition:opacity .2s,box-shadow .2s}
-.ysl-mark::before,.ysl-mark::after{content:"";position:absolute;top:0;width:2px;height:calc(13px + var(--lane,0) * 5px);border-radius:1px;background:inherit}
-.ysl-mark::before{left:0}
-.ysl-mark::after{right:0}
-.ysl-mark.ysl-sel{opacity:.95}
-.ysl-marks.ysl-live .ysl-mark{opacity:1;box-shadow:0 0 6px rgba(var(--cv),.8)}
-.ysl-marks.ysl-live .ysl-mark.ysl-spent{opacity:.35;box-shadow:none}
-.ysl-mark.ysl-muted,.ysl-marks.ysl-live .ysl-mark.ysl-muted{opacity:.25;box-shadow:none}
-
-.ysl-toast{position:absolute;left:50%;top:12%;z-index:2200;max-width:90%;box-sizing:border-box;padding:8px 14px;border-radius:999px;background:rgba(24,24,27,.94);color:#fff;font:600 13px/1.25 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translate(-50%,-6px);pointer-events:none;transition:opacity .18s,transform .18s}
-.ysl-toast.ysl-show{opacity:1;transform:translate(-50%,0)}
-
-.ysl-panel{--acv:62,166,255;--ac:rgb(var(--acv));--ac-ink:#06121f;--line:rgba(255,255,255,.12);--mute:rgba(255,255,255,.64);
-position:absolute;right:12px;bottom:62px;z-index:2200;width:344px;max-width:calc(100% - 24px);box-sizing:border-box;padding:10px 14px 14px;border-radius:14px;
-background:rgba(24,24,27,.96);
-box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.08);
-color:#fff;font:400 13px/1.3 Roboto,"YouTube Noto",Arial,Helvetica,sans-serif;text-align:left;direction:ltr;cursor:default;-webkit-user-select:none;user-select:none;
-overflow:hidden auto;overscroll-behavior:contain;scrollbar-width:thin;
-opacity:0;visibility:hidden;pointer-events:none;transform:translateY(10px) scale(.97);transform-origin:100% 100%;
-transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibility 0s linear .22s}
-.ysl-panel.ysl-open{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition-delay:0s}
-.ysl-panel *,.ysl-panel *::before,.ysl-panel *::after{box-sizing:border-box}
-.ysl-panel button{-webkit-appearance:none;appearance:none;display:inline-grid;place-items:center;margin:0;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
-.ysl-panel input{-webkit-appearance:none;appearance:none;min-width:0;margin:0;padding:0;border:0;border-radius:0;outline:0;background:none;box-shadow:none;color:inherit;font:inherit;-webkit-user-select:text;user-select:text;cursor:text}
-.ysl-panel [hidden]{display:none!important}
-.ysl-panel svg{display:block;pointer-events:none}
-.ysl-panel svg path{fill:currentColor}
-.ysl-panel :focus-visible{outline:2px solid var(--ac);outline-offset:1px}
-.ysl-panel input:focus-visible{outline:0}
-
-.ysl-panel .ysl-head{display:flex;align-items:flex-start;gap:4px;margin-bottom:8px}
-.ysl-panel .ysl-chips{flex:1;display:flex;flex-wrap:wrap;gap:5px;min-width:0}
-.ysl-panel .ysl-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 7px;border-radius:13px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:background .15s,box-shadow .15s,color .15s,opacity .15s,transform .08s}
-.ysl-panel .ysl-chip i{width:8px;height:8px;border-radius:50%;background:rgb(var(--cv))}
-.ysl-panel .ysl-chip b{color:#fff;font-weight:700}
-.ysl-panel .ysl-chip:hover{background:rgba(255,255,255,.14)}
-.ysl-panel .ysl-chip:active{transform:scale(.95)}
-.ysl-panel .ysl-chip[aria-pressed="true"]{background:rgba(var(--cv),.2);box-shadow:inset 0 0 0 1.5px rgb(var(--cv));color:#fff}
-.ysl-panel .ysl-chip.ysl-spent{opacity:.5}
-.ysl-panel .ysl-chip.ysl-muted{opacity:.55}
-.ysl-panel .ysl-chip.ysl-muted i{background:none;box-shadow:inset 0 0 0 1.5px rgb(var(--cv))}
-.ysl-panel .ysl-chip.ysl-muted b{text-decoration:line-through}
-.ysl-panel .ysl-chip.ysl-new{animation:ysl-in .28s cubic-bezier(.3,1.4,.5,1)}
-.ysl-panel .ysl-hb{flex:none;width:26px;height:26px;border-radius:50%;color:var(--mute);transition:background .12s,color .12s,transform .08s}
-.ysl-panel .ysl-hb:hover{background:rgba(255,255,255,.12);color:#fff}
-.ysl-panel .ysl-hb:active{transform:scale(.9)}
-.ysl-panel .ysl-add{box-shadow:inset 0 0 0 1px var(--line)}
-.ysl-panel .ysl-power[aria-pressed="true"]{color:var(--ac)}
-.ysl-panel .ysl-head>.ysl-hb:last-child{margin-right:-5px}
-
-.ysl-panel .ysl-notice{display:none;margin-bottom:8px;padding:6px 10px;border-radius:8px;background:rgba(255,200,60,.14);color:#ffd874;font-size:12px}
-.ysl-panel .ysl-notice.ysl-show{display:block}
-
-.ysl-panel .ysl-body{display:grid;gap:10px;min-width:0;margin:0;padding:0;border:0;transition:opacity .2s}
-.ysl-panel.ysl-off .ysl-body{opacity:.38;pointer-events:none}
-
-.ysl-panel .ysl-track{position:relative;height:30px;cursor:pointer;touch-action:none}
-.ysl-panel .ysl-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
-.ysl-panel .ysl-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
-.ysl-panel .ysl-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
-.ysl-panel .ysl-ghost.ysl-muted{opacity:.3}
-.ysl-panel .ysl-fill{position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;overflow:hidden;background:var(--ac);transition:background-color .2s,opacity .2s}
-.ysl-panel.ysl-muted .ysl-fill{opacity:.35}
-.ysl-panel.ysl-open.ysl-running .ysl-fill::after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:ysl-flow 1.4s linear infinite}
-.ysl-panel .ysl-play{position:absolute;left:0;top:7px;bottom:7px;width:2px;margin-left:-1px;border-radius:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
-.ysl-panel.ysl-off .ysl-play{display:none}
-.ysl-panel .ysl-thumb{position:absolute;top:50%;display:grid;place-items:center;width:18px;height:26px;margin-top:-13px;background:#fff;color:#0f0f0f;font-size:10px;font-weight:800;line-height:1;cursor:ew-resize;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:background .15s,color .15s,box-shadow .15s}
-.ysl-panel .ysl-thumb-a{left:var(--a);transform:translateX(-100%);border-radius:7px 2px 2px 7px}
-.ysl-panel .ysl-thumb-b{left:var(--b);border-radius:2px 7px 7px 2px}
-.ysl-panel .ysl-thumb:hover,.ysl-panel .ysl-thumb.ysl-grab,.ysl-panel .ysl-thumb:focus-visible{background:var(--ac);color:var(--ac-ink)}
-.ysl-panel .ysl-thumb.ysl-grab{box-shadow:0 0 0 5px rgba(var(--acv),.28)}
-.ysl-panel .ysl-tip{position:absolute;left:var(--tip);bottom:100%;padding:2px 7px;border-radius:6px;background:#fff;color:#0f0f0f;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:0;transform:translate(-50%,4px);pointer-events:none;transition:opacity .12s,transform .12s}
-.ysl-panel .ysl-tip.ysl-show{opacity:1;transform:translate(-50%,0)}
-.ysl-panel .ysl-scale{display:flex;align-items:center;justify-content:space-between;margin-top:1px;color:var(--mute);font-size:11px;font-variant-numeric:tabular-nums}
-.ysl-panel .ysl-scale>span:first-child,.ysl-panel .ysl-scale>span:last-child{flex:1 1 0}
-.ysl-panel .ysl-scale>span:last-child{text-align:right}
-.ysl-panel .ysl-mid{display:flex;align-items:center;gap:5px}
-.ysl-panel .ysl-len{color:#fff;font-weight:600}
-.ysl-panel .ysl-zoom{width:20px;height:18px;border-radius:5px;color:var(--mute);transition:background .12s,color .12s}
-.ysl-panel .ysl-zoom:hover{background:rgba(255,255,255,.14);color:#fff}
-.ysl-panel .ysl-zoom[aria-pressed="true"],.ysl-panel .ysl-zoom[aria-pressed="true"]:hover{background:var(--ac);color:var(--ac-ink)}
-
-.ysl-panel .ysl-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.ysl-panel .ysl-opts{grid-template-columns:116px 1fr}
-.ysl-panel .ysl-field{min-width:0}
-.ysl-panel .ysl-label{display:flex;align-items:center;gap:6px;height:15px;margin-bottom:4px;color:var(--mute);font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase}
-.ysl-panel .ysl-tag{display:grid;place-items:center;width:15px;height:15px;border-radius:4px;background:rgba(255,255,255,.14);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:0}
-.ysl-panel .ysl-box{display:flex;align-items:center;height:34px;padding:0 3px;border-radius:9px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);transition:box-shadow .15s,background .15s}
-.ysl-panel .ysl-box:hover{background:rgba(255,255,255,.11)}
-.ysl-panel .ysl-box:focus-within{background:rgba(var(--acv),.1);box-shadow:inset 0 0 0 1.5px var(--ac)}
-.ysl-panel .ysl-time,.ysl-panel .ysl-num{flex:1 1 0;width:0;height:100%;text-align:center;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.2px}
-.ysl-panel .ysl-num[readonly]{font-size:17px;cursor:pointer}
-.ysl-panel .ysl-ib{flex:none;width:22px;height:26px;border-radius:6px;color:var(--mute);transition:background .12s,color .12s,transform .08s}
-.ysl-panel .ysl-ib:hover{background:rgba(255,255,255,.14);color:#fff}
-.ysl-panel .ysl-ib:active{transform:scale(.88)}
-.ysl-panel .ysl-now{width:24px;color:var(--ac)}
-.ysl-panel .ysl-now:hover{color:var(--ac)}
-.ysl-panel .ysl-now.ysl-flash{animation:ysl-ping .45s}
-.ysl-panel .ysl-inf{width:26px;margin-left:2px;font-size:16px;font-weight:700;line-height:1}
-.ysl-panel .ysl-inf[aria-pressed="true"],.ysl-panel .ysl-inf[aria-pressed="true"]:hover{background:var(--ac);color:var(--ac-ink)}
-.ysl-panel .ysl-shake{animation:ysl-shake .32s}
-.ysl-panel .ysl-shake .ysl-box{box-shadow:inset 0 0 0 1.5px #ff6b6b}
-
-.ysl-panel .ysl-seg{position:relative;display:grid;grid-template-columns:repeat(3,1fr);height:34px;padding:3px;border-radius:9px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);transition:opacity .2s}
-.ysl-panel .ysl-seg::before{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);border-radius:6px;background:rgba(255,255,255,.18);transition:transform .22s cubic-bezier(.3,1.2,.5,1)}
-.ysl-panel .ysl-seg[data-v="next"]::before{transform:translateX(100%)}
-.ysl-panel .ysl-seg[data-v="pause"]::before{transform:translateX(200%)}
-.ysl-panel .ysl-seg button{position:relative;min-width:0;border-radius:6px;color:var(--mute);font-size:11.5px;font-weight:600;white-space:nowrap;transition:color .15s}
-.ysl-panel .ysl-seg button[aria-pressed="true"]{color:#fff}
-.ysl-panel .ysl-seg.ysl-dim{opacity:.45}
-
-.ysl-panel .ysl-actions{display:flex;gap:8px;margin-top:2px}
-.ysl-panel .ysl-main{position:relative;flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0;height:36px;overflow:hidden;border-radius:18px;background:var(--ac);color:var(--ac-ink);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;transition:background .18s,color .18s,box-shadow .18s,transform .08s,filter .12s}
-.ysl-panel .ysl-main:hover{filter:brightness(1.1)}
-.ysl-panel .ysl-main:active{transform:scale(.98)}
-.ysl-panel .ysl-main>*{position:relative}
-.ysl-panel .ysl-main.ysl-on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px var(--line)}
-.ysl-panel .ysl-main-fill{position:absolute;inset:0;background:rgba(var(--acv),.38);opacity:0;transform:scaleX(0);transform-origin:0 50%;pointer-events:none}
-.ysl-panel .ysl-main.ysl-on .ysl-main-fill{opacity:1}
-.ysl-panel .ysl-ic-stop,.ysl-panel .ysl-on .ysl-ic-idle{display:none}
-.ysl-panel .ysl-on .ysl-ic-stop{display:block}
-.ysl-panel .ysl-start{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(var(--acv),.18);color:var(--ac);box-shadow:inset 0 0 0 1px rgba(var(--acv),.5);transition:background .12s,color .12s,transform .08s}
-.ysl-panel .ysl-start:hover{background:var(--ac);color:var(--ac-ink)}
-.ysl-panel .ysl-start:active{transform:scale(.92)}
-.ysl-panel .ysl-reset{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--mute);box-shadow:inset 0 0 0 1px var(--line);transition:background .12s,color .12s,transform .3s}
-.ysl-panel .ysl-reset:hover{background:rgba(255,255,255,.14);color:#fff}
-.ysl-panel .ysl-reset:active{transform:rotate(-120deg)}
-
-@keyframes ysl-pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
-@keyframes ysl-in{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
-@keyframes ysl-flow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-@keyframes ysl-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
-@keyframes ysl-ping{0%{box-shadow:0 0 0 0 rgba(var(--acv),.7)}100%{box-shadow:0 0 0 9px rgba(var(--acv),0)}}
-@media (prefers-reduced-motion:reduce){.ysl-panel,.ysl-panel *,.ysl-panel *::before,.ysl-btn *,.ysl-toast{animation:none!important;transition-duration:.01s!important}}
-`;
-
   /* ------------------------------------------------------------------ */
   /* Boot                                                               */
   /* ------------------------------------------------------------------ */
 
   const style = document.createElement('style');
   style.id = 'ysl-style';
-  style.textContent = CSS;
+  style.textContent = LIGHT_CSS;
   (document.head || document.documentElement).appendChild(style);
 
   buildUI();
@@ -1810,7 +1344,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
   ensure();
   syncVideo();
 
-  // Safety net for whatever YouTube's events don't announce.
+  // Safety net for whatever the site's events don't announce.
   setInterval(() => {
     if (document.hidden && !S.active) return; // nothing to keep current in a tab nobody is watching
     ensure();
@@ -1825,7 +1359,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
     wake();
   });
 
-  for (const t of ['yt-navigate-start', 'yt-navigate-finish', 'yt-page-data-updated', 'yt-player-updated']) {
+  for (const t of adapter.navEvents || []) {
     document.addEventListener(t, () => {
       ensure();
       S.dirty = true;
@@ -1834,5 +1368,5 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
   }
   document.addEventListener('fullscreenchange', () => { if (S.open) requestAnimationFrame(place); });
   window.addEventListener('keydown', onHotkey, true);
-  window.addEventListener('pagehide', flushStore);
-})();
+  window.addEventListener('pagehide', () => { store.flush(); });
+}

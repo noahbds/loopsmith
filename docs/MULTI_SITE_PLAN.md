@@ -1,6 +1,6 @@
 # Plan: from "YouTube Section Loop" to a loop tool for any website
 
-Status: proposal (2026-11-13). Nothing here is built yet.
+Status: Phase 0 built on branch `phase0-foundation` (2026-11-13). Later phases not started.
 
 ## 0. Decisions
 
