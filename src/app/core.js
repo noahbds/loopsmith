@@ -1,10 +1,9 @@
 // The shared state and small helpers every other part of the app builds on.
 
-import { MAX_COUNT, MAX_SETS, PALETTE, AFTER } from '../core/constants.js';
+import { MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, PALETTE, AFTER } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
-import { MAX_GAP, MAX_COUNT_IN } from '../core/practice.js';
 
 export function createCore(adapter, store) {
   const prefs = store.getPrefs();
@@ -78,7 +77,7 @@ export function createCore(adapter, store) {
   const roundText = () => (P.setsForever ? ` · round ${S.round}` : P.sets > 1 ? ` · round ${S.round}/${P.sets}` : '');
   // The small strip shows while looping with the editor closed.
   const stripWanted = () => S.active && !S.open && P.strip && ready() && S.trusted;
-  const { exhausted, finished, skipped } = E;
+  const { finished, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
   const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
   const newLoop = (a, b, c) => E.newLoop(a, b, c, P);
@@ -151,5 +150,5 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, exhausted, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

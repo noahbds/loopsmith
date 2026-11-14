@@ -187,15 +187,21 @@ export function createRun(A) {
     if (!S.open) A.toast(`Round ${S.round}${P.setsForever ? '' : ` of ${P.sets}`}`);
   }
 
+  // Looping off: every count starts over and any pause is dropped (`resume`: the paused video plays on).
+  function endRun(resume) {
+    S.active = false;
+    S.lastT = null;
+    S.round = 1;
+    E.resetRun(S.loops);
+    if (resume) stopWaiting();
+    else cancelWait();
+  }
+
   function finishRun() {
     const on = S.loops.filter((l) => l.on);
     const single = on.length === 1 ? on[0] : null;
     const rounds = S.round;
-    S.round = 1;
-    cancelWait();
-    S.active = false;
-    S.lastT = null;
-    E.resetRun(S.loops);
+    endRun(false);
     if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
     A.render();
     A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
@@ -256,11 +262,7 @@ export function createRun(A) {
 
   function stopRun() {
     if (!S.active) return;
-    S.active = false;
-    S.lastT = null;
-    E.resetRun(S.loops);
-    S.round = 1;
-    stopWaiting();
+    endRun(true);
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -291,8 +293,6 @@ export function createRun(A) {
     if (say) A.toast(say);
   }
 
-  const loopNo = (l) => A.loopLabel(l);
-
   // Skip a repetition or a loop, go back, restart, or jump to loop `arg` (an index). Looping is
   // turned on first if it is off, since these act on the run.
   function navigate(kind, arg) {
@@ -316,11 +316,11 @@ export function createRun(A) {
         break;
       case 'skipLoop':
         step = E.skipLoop(S.loops, target, t, opts);
-        say = step && step.next ? `${loopNo(step.next)} · ${describe(step.next)}` : 'Loop skipped';
+        say = step && step.next ? `${A.loopLabel(step.next)} · ${describe(step.next)}` : 'Loop skipped';
         break;
       case 'prev':
         step = E.prevLoop(S.loops, target, t);
-        say = step && step.prev ? `Back to ${loopNo(step.prev)}` : 'Restarted';
+        say = step && step.prev ? `Back to ${A.loopLabel(step.prev)}` : 'Restarted';
         miss = 'Nothing before this';
         break;
       case 'restart':
@@ -329,7 +329,7 @@ export function createRun(A) {
         break;
       case 'goto':
         step = E.gotoLoop(S.loops[arg]);
-        if (step) say = `${loopNo(step.goto)} · ${describe(step.goto)}`;
+        if (step) say = `${A.loopLabel(step.goto)} · ${describe(step.goto)}`;
         miss = `No loop ${Number(arg) + 1}`;
         break;
     }
@@ -352,12 +352,7 @@ export function createRun(A) {
 
   // After an edit during a run: if nothing is left to play, looping turns itself off.
   function settleRun() {
-    if (S.active && !S.loops.some((l) => !skipped(l))) {
-      S.active = false;
-      S.round = 1;
-      stopWaiting();
-      E.resetRun(S.loops);
-    }
+    if (S.active && !S.loops.some((l) => !skipped(l))) endRun(true);
   }
 
   const IDLE_MS = 250;
@@ -402,5 +397,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { onPlay, cancelWait, IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
+  return { onPlay, cancelWait, armRun, navigate, check, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
 }

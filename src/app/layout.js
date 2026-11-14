@@ -272,5 +272,5 @@ export function createLayout(A) {
     if (bar && ui.markBox.parentNode !== bar) bar.appendChild(ui.markBox);
   }
 
-  return { applyPos, bindDrag, box, closePanel, ensure, layoutHost, markRect, onPointerMove, openPanel, place, placeMarks, queueLayout, resizeWatch, updatePill };
+  return { applyPos, bindDrag, closePanel, ensure, onPointerMove, openPanel, place, queueLayout, updatePill };
 }

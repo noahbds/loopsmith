@@ -151,10 +151,10 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
   };
 }
 
-// Version 1 (YouTube Section Loop 1.x) kept everything in one localStorage entry on youtube.com:
+// Version 1 (YouTube Section Loop 1.x) kept everything in one localStorage entry on youtube.com
+// ("ysl:v1", the YouTube adapter's legacyStoreKey):
 // { prefs, videos: { <video id>: { loops, t } } }. Copies it over once; the old entry is left in
 // place so an older copy of the script still installed somewhere keeps working.
-export const V1_KEY = 'ysl:v1';
 const V1_DONE = 'mig:v1';
 
 /**

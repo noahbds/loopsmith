@@ -29,7 +29,6 @@ export default {
   dockInset: 72, // ytmusic-player-bar
   endGuard: 1.5,
   engaged: () => true,
-  findPlayer: () => document.getElementById('movie_player'),
   buttonHost: undefined,
   progressBar: () => document.querySelector('ytmusic-player-bar #progress-bar #progressContainer') || document.querySelector('ytmusic-player-bar #progress-bar'),
   controlsTop: () => null,

@@ -133,5 +133,5 @@ export function createTracking(A) {
     if (!S.ranged || Math.abs(d - S.duration) > 0.05) applyDuration(d);
   }
 
-  return { MEDIA_EVENTS, WAKE_EVENTS, applyDuration, bindVideo, onMediaEvent, onSeeking, scheduleSync, switchVideo, syncVideo };
+  return { scheduleSync, syncVideo };
 }

@@ -2,12 +2,10 @@
 
 /** @param {number} x @param {number} lo @param {number} hi */
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-/** @param {number} x */
-export const round1 = (x) => Math.round(x * 10) / 10;
 /** Rounds to `digits` decimals (1 = tenths, 2 = hundredths). @param {number} x @param {number} [digits] */
 export const roundT = (x, digits = 1) => { const k = 10 ** digits; return Math.round(x * k) / k; };
 /** @param {number} n */
-export const pad2 = (n) => String(n).padStart(2, '0');
+const pad2 = (n) => String(n).padStart(2, '0');
 /** @param {unknown} x @returns {x is number} */
 export const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 

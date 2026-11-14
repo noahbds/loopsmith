@@ -414,7 +414,7 @@ export function createControls(A) {
       ui.miStrip,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
-      item('Keyboard shortcuts', () => A.toggleHelp()));
+      item('Keyboard shortcuts', toggleHelp));
     return menu;
   }
 
@@ -500,13 +500,13 @@ export function createControls(A) {
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
     ui.panel.scrollTop = 0; // the menu hangs from the top of the panel
     ui.menu.hidden = false;
-    A.setMenuOpen(true);
+    ui.more.setAttribute('aria-expanded', 'true');
   }
 
   function closeMenu() {
     if (ui.menu.hidden) return;
     ui.menu.hidden = true;
-    A.setMenuOpen(false);
+    ui.more.setAttribute('aria-expanded', 'false');
   }
 
   function toggleHelp() {
@@ -682,7 +682,7 @@ export function createControls(A) {
       ui.setsNote);
 
     // Gap between repetitions and count-in: whole seconds / half seconds.
-    const stepper = (label, valueClass, minus, plus, extra) => {
+    const stepper = (label, minus, plus, extra) => {
       const out = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
       const m = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: less` }, icon(I.minus, 14));
       const p = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: more` }, icon(I.plus, 14));
@@ -690,11 +690,11 @@ export function createControls(A) {
       holdRepeat(p, plus);
       return { out, field: el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: label }), el('div', { class: 'lsm-box' }, m, out, p, extra || null)) };
     };
-    const gap = stepper('Gap between plays', 'gap', () => A.setGap(P.gap - 0.5), () => A.setGap(P.gap + 0.5));
+    const gap = stepper('Gap between plays', () => A.setGap(P.gap - 0.5), () => A.setGap(P.gap + 0.5));
     ui.gapVal = gap.out;
     ui.tickBtn = el('button', { class: 'lsm-ib lsm-inf', type: 'button', 'aria-label': 'Tick during the count-in', 'aria-pressed': 'true', title: 'Tick during the count-in', text: '♪' });
     ui.tickBtn.addEventListener('click', () => A.setTick(!P.tick));
-    const count = stepper('Count-in', 'count', () => A.setCountIn(P.countIn - 1), () => A.setCountIn(P.countIn + 1), ui.tickBtn);
+    const count = stepper('Count-in', () => A.setCountIn(P.countIn - 1), () => A.setCountIn(P.countIn + 1), ui.tickBtn);
     ui.countVal = count.out;
 
     ui.practice = el('div', { class: 'lsm-practice', hidden: true },
@@ -783,5 +783,5 @@ export function createControls(A) {
     });
   }
 
-  return { bindSlider, buildUI, syncToolbar, startRename, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
+  return { buildUI, syncToolbar, startRename, openMenu, closeMenu, cancelEdits, commitEdits };
 }

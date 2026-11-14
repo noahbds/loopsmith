@@ -179,8 +179,6 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-main:active{transform:scale(.98)}
 .lsm-panel .lsm-main>*{position:relative}
 .lsm-panel .lsm-main.lsm-on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px var(--line)}
-.lsm-panel .lsm-main-fill{position:absolute;inset:0;background:rgba(var(--acv),.38);opacity:0;transform:scaleX(0);transform-origin:0 50%;pointer-events:none}
-.lsm-panel .lsm-main.lsm-on .lsm-main-fill{opacity:1}
 .lsm-panel .lsm-ic-stop,.lsm-panel .lsm-on .lsm-ic-idle{display:none}
 .lsm-panel .lsm-on .lsm-ic-stop{display:block}
 .lsm-panel .lsm-start{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(var(--acv),.18);color:var(--ac);box-shadow:inset 0 0 0 1px rgba(var(--acv),.5);transition:background .12s,color .12s,transform .08s}

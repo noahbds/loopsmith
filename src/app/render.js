@@ -1,6 +1,6 @@
 // Drawing the state into the panel, the chips, the markers and the toast.
 
-import { MAX_LOOPS, PALETTE } from '../core/constants.js';
+import { MAX_LOOPS, MIN_LEN, FINE_MIN_LEN, PALETTE } from '../core/constants.js';
 import { clamp, roundT, fmt } from '../core/util.js';
 import * as V from '../core/view.js';
 import * as E from '../core/engine.js';
@@ -145,11 +145,6 @@ export function createRender(A) {
     return chip;
   }
 
-  // Open menu: a click on the page or Escape closes it (see controls.js).
-  function setMenuOpen(open) {
-    setAttr(ui.more, 'aria-expanded', String(open));
-  }
-
   function renderLoops(ok) {
     const loops = ok ? S.loops : [];
     const d = S.duration;
@@ -230,7 +225,7 @@ export function createRender(A) {
   function renderChain(ok) {
     const { prev, next } = ok ? V.neighbours(S.loops, S.sel) : { prev: null, next: null };
     const l = ok ? cur() : null;
-    const min = P.fine ? 0.2 : 0.5;
+    const min = P.fine ? FINE_MIN_LEN : MIN_LEN;
     const showA = !!prev && Math.abs(prev.b - l.a) > 0.001 && prev.b < l.b - min;
     const showB = !!next && Math.abs(next.a - l.b) > 0.001 && next.a > l.a + min;
     ui.chainA.hidden = !showA;
@@ -359,5 +354,5 @@ export function createRender(A) {
     toastTimer = setTimeout(() => ui.toast.classList.remove('lsm-show'), action ? 6000 : 1900);
   }
 
-  return { hideTip, live, makeChip, setMenuOpen, render, renderLive, renderLoops, renderTip, replay, resize, showTip, toast };
+  return { hideTip, render, renderLive, replay, showTip, toast };
 }

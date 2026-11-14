@@ -38,9 +38,7 @@ function* elementsIn(root, depth = 0) {
 }
 
 function sliderMax(el) {
-  const v = el.tagName === 'INPUT' ? el.max : el.getAttribute('aria-valuemax');
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : NaN;
+  return parseFloat(el.tagName === 'INPUT' ? el.max : el.getAttribute('aria-valuemax'));
 }
 
 export function findProgressBar(media) {

@@ -43,9 +43,7 @@ export function resetRun(loops) {
  * @returns {Loop}
  */
 export function newLoop(a, b, c, defaults) {
-  /** @type {Loop} */
-  const l = { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
-  return l;
+  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
 }
 
 // A single loop covering the whole media is the untouched default: nothing worth saving or marking.
@@ -166,15 +164,6 @@ export function countCrossed(crossed) {
   return null;
 }
 
-// One step of the loop engine, for forward playback from `prev` to `t`. Counts the plays of the
-// loops whose end was just reached and says what to do:
-//   null                      nothing happened
-//   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
-//   { seek, next: loop }      "Next loop": the loops just played out; jump to the next one's start
-//   { carryOn: true }         those loops are done, others remain: keep playing
-//   { finish: true }          nothing left to play
-// "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
-// them and playback is already inside it: it is played from its own start.
 // Loops that start within this many seconds of where another ends count as joined.
 const ADJACENT = 0.15;
 
@@ -191,9 +180,7 @@ const ADJACENT = 0.15;
 function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'continue' }) {
   if (!anyAhead(loops, t, duration, guard)) return { finish: true };
   if (after === 'next') {
-    /** @type {Loop | null} */
-    let next = null;
-    for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
+    const next = nextLoop(loops, finishedA);
     // A loop that starts right where the finished one ends is already playing: seeking to its
     // start would only cut the sound for a moment.
     if (next && Math.abs(next.a - finishedEnd) <= ADJACENT) return { carryOn: true };
@@ -203,6 +190,15 @@ function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'co
   return { carryOn: true };
 }
 
+// One step of the loop engine, for forward playback from `prev` to `t`. Counts the plays of the
+// loops whose end was just reached and says what to do:
+//   null                      nothing happened
+//   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
+//   { seek, next: loop }      "Next loop": the loops just played out; jump to the next one's start
+//   { carryOn: true }         those loops are done, others remain: keep playing
+//   { finish: true }          nothing left to play
+// "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
+// them and playback is already inside it: it is played from its own start.
 /**
  * @param {Loop[]} loops
  * @param {number} prev
@@ -261,9 +257,7 @@ export function skipRep(loops, target, opts) {
 export function skipLoop(loops, target, t, opts) {
   const from = target ? target.a : t;
   if (target) target.skip = true;
-  /** @type {Loop | null} */
-  let next = null;
-  for (const l of loops) if (!skipped(l) && l.a > from && (!next || l.a < next.a)) next = l;
+  const next = nextLoop(loops, from);
   if (next) return { seek: next.a, next };
   const end = target ? loopEnd(target, opts.duration, opts.guard) : t;
   if (anyAhead(loops, end, opts.duration, opts.guard)) return { seek: end, carryOn: true };
@@ -319,8 +313,6 @@ export function gotoLoop(loop) {
   return { seek: loop.a, goto: loop };
 }
 
-// Moves one end of a loop. push=true: the other end moves out of the way.
-// push=false: this end stops against the other one. Returns the new { a, b }.
 /**
  * Moves one end of a loop. push=true: the other end moves out of the way. push=false: this end
  * stops against it. `digits` is how finely times are kept (1 = tenths, 2 = hundredths).

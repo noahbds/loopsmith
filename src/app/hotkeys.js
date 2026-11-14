@@ -33,5 +33,5 @@ export function createHotkeys(A) {
     }
   }
 
-  return { isTyping, onHotkey };
+  return { onHotkey };
 }
