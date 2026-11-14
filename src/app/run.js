@@ -32,6 +32,14 @@ export function createRun(A) {
     S.waiting = null;
   }
 
+  // Looping stops while the video is held between two plays: the music goes on instead of staying
+  // silent (the pause was ours). A count-in that is cancelled leaves the video where it was.
+  function stopWaiting() {
+    const gap = S.waiting && S.waiting.kind === 'gap';
+    cancelWait();
+    if (gap) play();
+  }
+
   function resume() {
     S.waiting = null;
     if (S.active) play();
@@ -252,7 +260,7 @@ export function createRun(A) {
     S.lastT = null;
     E.resetRun(S.loops);
     S.round = 1;
-    cancelWait();
+    stopWaiting();
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -346,6 +354,8 @@ export function createRun(A) {
   function settleRun() {
     if (S.active && !S.loops.some((l) => !skipped(l))) {
       S.active = false;
+      S.round = 1;
+      stopWaiting();
       E.resetRun(S.loops);
     }
   }

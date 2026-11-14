@@ -552,7 +552,16 @@ for (const mode of ['next', 'continue']) {
     wasPaused = paused;
   }
   check(resumes >= 2, 'it pauses between plays and carries on by itself', String(resumes));
-  await L(page, '.lsm-main').click(); // stop (if still running)
+  // stopping while held between two plays lets the music go on
+  await L(page, '.lsm-start').click();
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(100);
+    if (await page.evaluate(() => document.getElementById('main').paused)) break;
+  }
+  check(await page.evaluate(() => document.getElementById('main').paused), 'held between two plays');
+  await L(page, '.lsm-main').click();
+  await page.waitForTimeout(300);
+  check(!(await page.evaluate(() => document.getElementById('main').paused)), 'stopping looping then lets the music go on');
 
   // count-in: 2 seconds before the loop starts
   await page.evaluate(() => document.getElementById('main').play());

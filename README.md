@@ -33,9 +33,8 @@ for keeping your favourite part of a song on repeat.
   grabbing the current position.
 - Choose how many times a section plays (1 to 999) or forever.
 - Zoom with the mouse wheel, snap loop edges to each other, place a loop right after the previous
-  one, or tap a key while playing to mark sections. A waveform builds up as you play.
-- Practise: a speed for each loop (with a ramp that speeds up as you repeat), a gap between plays,
-  a count-in.
+  one, or tap a key while playing to mark sections.
+- Practise: a gap between plays and a count-in.
 - Several loops per video or track, overlapping or nested; switch one off without deleting it.
 - When a loop is done: play on, jump to the next loop, or pause after the last one. When the last
   loop is done, the whole set can start over (a number of rounds, or again and again).

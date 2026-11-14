@@ -118,7 +118,7 @@ export function createCore(adapter, store) {
 
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
-    store.put(S.videoId, isDefaultSet() ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
+    store.put(S.videoId, E.isPristine(S.loops, S.duration, P) ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
   }
 
   function rememberPrefs() {

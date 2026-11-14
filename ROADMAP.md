@@ -368,11 +368,11 @@ loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and
 
 ### Phase 3: Practice features *(speed, ramp, gap, count-in, tap to mark built on branch `round-3-zoom-waveform-practice`)* (target 1.5)
 
-- [x] **E3** *(per loop, new loops inherit the last speed; 5% steps, no presets; pitch kept; the player's speed comes back between loops and on stop; a speed changed by hand is respected)* Speed control per loop or global (`playbackRate`), presets (50/75/90/100%), ± steps,
+- [x] **E3** **Removed in 1.3.0 (speed control and the ramp were dropped).** *(was: per loop, new loops inherit the last speed; 5% steps, no presets; pitch kept; the player's speed comes back between loops and on stop; a speed changed by hand is respected)* Speed control per loop or global (`playbackRate`), presets (50/75/90/100%), ± steps,
   pitch preservation toggle (`preservesPitch`), restore the original speed on stop or navigation.
   Must not fight sites that also set the rate (YouTube): re-apply on `ratechange` only when the
   change didn't come from us.
-- [x] **E3** *(+N% every M plays up to a target, in Practice options; the status shows the current speed)* Speed ramp: start rate, target rate, step, every N repetitions; shown in the strip.
+- [x] **E3** **Removed in 1.3.0.** *(was: +N% every M plays up to a target, in Practice options; the status shows the current speed)* Speed ramp: start rate, target rate, step, every N repetitions; shown in the strip.
 - [x] **E4** *(gap 0–5 s, count-in 0–8 s with ticks; the count-in runs on ▶ and Run again)* Gap between reps (0–5 s) and count-in (silence before the first rep, optional click
   or tick). Gap implemented as pause plus timer, not as extra video playback.
 - [~] **E2 / 3.4** *(repeat the set N times / ∞ is done; the between-loops / end-of-set split of "When done" is not)* Between-loops and end-of-set settings, including "repeat the set N times / ∞".
@@ -515,7 +515,7 @@ can't read without losing the loops (new fields are optional; old fields are nev
   loops' edges (Alt = free), *Add a loop right after this one*.
 - [x] Zoom: wheel zooms around the pointer, Shift+wheel pans, double-click resets, an overview strip,
   scrolling when an edge is dragged into the border.
-- [x] Waveform built from playback (captureStream + an analyser that is not connected to the speakers).
+- [x] ~~Waveform built from playback~~ **Removed in 1.3.0 (not useful).** Was: waveform built from playback (captureStream + an analyser that is not connected to the speakers).
   *Limits:* only the played parts are drawn; not saved between visits; off for copy-protected media
   and browsers without `captureStream` (Firefox is only enabled when it has the standard method, and
   was **not tested**).

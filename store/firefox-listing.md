@@ -23,7 +23,10 @@ It is made for two things: practising (a guitar riff, the hard part of a song, a
 - Decide what happens when a loop is done: play on, jump straight to the next loop, or pause after the last one.
 - See your loops on the site's own progress bar.
 - Your loops are saved and come back when you return.
-- Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off.
+- Skip to the next or previous loop, skip a repetition, or play all the loops again, a number of times or forever.
+- Zoom the slider with the mouse wheel, snap loops to each other, or tap a key while playing to mark sections.
+- Practise with a gap between plays and a count-in.
+- Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop.
 
 **Where it works**
 

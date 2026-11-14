@@ -57,6 +57,19 @@ export function isDefaultSet(loops, duration) {
   return loops.length === 1 && loops[0].a <= 0.001 && loops[0].b >= duration - 0.05;
 }
 
+/**
+ * The untouched default: the whole media as one loop that has not been named, switched off or given
+ * its own count. Only anything else is worth saving.
+ * @param {Loop[]} loops
+ * @param {number} duration
+ * @param {import('../types.js').LoopDefaults} defaults
+ */
+export function isPristine(loops, duration, defaults) {
+  if (!isDefaultSet(loops, duration)) return false;
+  const l = loops[0];
+  return l.on && !l.name && l.infinite === defaults.infinite && (l.infinite || l.count === defaults.count);
+}
+
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
 // seconds early, so the player never reaches "ended" (which would trigger autoplay).
 /**

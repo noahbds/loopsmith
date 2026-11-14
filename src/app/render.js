@@ -123,9 +123,18 @@ export function createRender(A) {
     const main = el('button', { class: 'lsm-chip-main', type: 'button' }, num, name, meta);
     const root = el('div', { class: 'lsm-chip', role: 'group' }, dot, main);
     const chip = { root, num, name, meta, dot, main };
-    main.addEventListener('dblclick', () => A.startRename(ui.chips.indexOf(chip)));
+    main.addEventListener('dblclick', () => {
+      clearTimeout(chip.seekTimer);
+      A.startRename(ui.chips.indexOf(chip));
+    });
     dot.addEventListener('click', () => A.toggleLoopAt(ui.chips.indexOf(chip)));
-    main.addEventListener('click', () => A.selectLoop(ui.chips.indexOf(chip)));
+    main.addEventListener('click', () => {
+      const i = ui.chips.indexOf(chip);
+      clearTimeout(chip.seekTimer);
+      // A click on the selected loop jumps to its start, unless it is the first half of a double-click (rename).
+      if (i === S.sel) chip.seekTimer = setTimeout(() => A.selectLoop(i), 260);
+      else A.selectLoop(i);
+    });
     root.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const i = ui.chips.indexOf(chip);

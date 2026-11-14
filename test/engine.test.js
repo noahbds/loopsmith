@@ -128,3 +128,18 @@ describe('saving and restoring', () => {
     expect(E.isDefaultSet([loop(0, 90)], 100)).toBe(false);
   });
 });
+
+describe('isPristine', () => {
+  const D = { count: 3, infinite: false };
+  const whole = (more = {}) => [{ ...loop(0, 100), count: 3, ...more }];
+  it('is true for the untouched whole-media loop', () => {
+    expect(E.isPristine(whole(), 100, D)).toBe(true);
+  });
+  it('is false once the loop is named, switched off, made endless or covers less', () => {
+    expect(E.isPristine(whole({ name: 'Song' }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ on: false }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ infinite: true }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ b: 50 }), 100, D)).toBe(false);
+    expect(E.isPristine([...whole(), loop(1, 2)], 100, D)).toBe(false);
+  });
+});
