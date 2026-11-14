@@ -105,7 +105,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-body{display:grid;gap:10px;min-width:0;margin:0;padding:0;border:0;transition:opacity .2s}
 .lsm-panel.lsm-off .lsm-body{opacity:.38;pointer-events:none}
 
-.lsm-panel .lsm-track{position:relative;height:30px;cursor:pointer;touch-action:none}
+.lsm-panel .lsm-track{position:relative;height:30px;margin-top:4px;cursor:pointer;touch-action:none}
 .lsm-panel .lsm-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
 .lsm-panel .lsm-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
 .lsm-panel .lsm-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
@@ -131,7 +131,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-thumb-b{left:var(--b);border-radius:2px 7px 7px 2px}
 .lsm-panel .lsm-thumb:hover,.lsm-panel .lsm-thumb.lsm-grab,.lsm-panel .lsm-thumb:focus-visible{background:var(--ac);color:var(--ac-ink)}
 .lsm-panel .lsm-thumb.lsm-grab{box-shadow:0 0 0 5px rgba(var(--acv),.28)}
-.lsm-panel .lsm-tip{position:absolute;left:var(--tip);bottom:100%;padding:2px 7px;border-radius:6px;background:#fff;color:#0f0f0f;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:0;transform:translate(-50%,4px);pointer-events:none;transition:opacity .12s,transform .12s}
+.lsm-panel .lsm-tip{position:absolute;z-index:5;left:var(--tip);bottom:100%;padding:2px 7px;border-radius:6px;background:#fff;color:#0f0f0f;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:0;transform:translate(-50%,4px);pointer-events:none;transition:opacity .12s,transform .12s}
 .lsm-panel .lsm-tip.lsm-show{opacity:1;transform:translate(-50%,0)}
 .lsm-panel .lsm-scale{display:flex;align-items:center;justify-content:space-between;margin-top:1px;color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
 .lsm-panel .lsm-scale>span:first-child,.lsm-panel .lsm-scale>span:last-child{flex:1 1 0}
