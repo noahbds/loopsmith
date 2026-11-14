@@ -125,6 +125,12 @@ export function createEdit(A) {
     A.render();
   }
 
+  // The ✕ on the strip: it goes away, looping carries on, and the message can bring it back.
+  function hideStrip() {
+    setStrip(false);
+    A.toast('Strip hidden. Looping goes on.', { label: 'Show', run: () => setStrip(true) });
+  }
+
   function setAfter(v) {
     P.after = AFTER.includes(v) ? v : 'continue';
     rememberPrefs();
@@ -398,5 +404,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
   }
 
-  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
+  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, resetAll, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoop, toggleLoopAt };
 }

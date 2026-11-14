@@ -436,6 +436,7 @@ export function createControls(A) {
       button('Next loop  (Shift+])', I.next, () => A.navigate('skipLoop')),
       button('Turn looping off  (Shift+R)', I.stop, () => A.stopRun()),
       button('Open the editor', I.expand, () => A.openPanel()),
+      button('Hide this strip (looping goes on)', I.close, () => A.hideStrip()),
       el('span', { class: 'lsm-strip-bar' }, ui.stripFill));
   }
 

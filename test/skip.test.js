@@ -198,3 +198,34 @@ describe('restartSet', () => {
     expect(E.restartSet([loop(1, 5, 1, { on: false })])).toBeNull();
   });
 });
+
+describe('loops that are joined end to end', () => {
+  const o = { duration: 100, guard: 0.25, after: 'next' };
+
+  it('"Next loop" does not seek when the next loop starts where this one ends', () => {
+    const l1 = loop(10, 20, 1);
+    const l2 = loop(20, 30, 1);
+    expect(E.advance([l1, l2], 19.99, 20.02, o)).toEqual({ carryOn: true });
+  });
+
+  it('still seeks when there is a gap or an overlap', () => {
+    const l1 = loop(10, 20, 1);
+    expect(E.advance([l1, loop(21, 30, 1)], 19.99, 20.02, o)).toMatchObject({ seek: 21 });
+    const l3 = loop(10, 20, 1);
+    expect(E.advance([l3, loop(15, 30, 1)], 19.99, 20.02, o)).toMatchObject({ seek: 15 });
+  });
+
+  it('counts a tiny gap as joined, a bigger one not', () => {
+    expect(E.advance([loop(10, 20, 1), loop(20.1, 30, 1)], 19.99, 20.02, o)).toEqual({ carryOn: true });
+    expect(E.advance([loop(10, 20, 1), loop(20.4, 30, 1)], 19.99, 20.02, o)).toMatchObject({ seek: 20.4 });
+  });
+
+  it('keeps repeating the first loop before moving on, and never seeks at the join', () => {
+    const l1 = loop(10, 20, 2);
+    const l2 = loop(20, 30, 1);
+    const loops = [l1, l2];
+    expect(E.advance(loops, 19.99, 20.02, o)).toMatchObject({ seek: 10, repeat: l1 });
+    expect(E.advance(loops, 19.99, 20.02, o)).toEqual({ carryOn: true });
+    expect(E.advance(loops, 29.99, 30.02, o)).toEqual({ finish: true });
+  });
+});

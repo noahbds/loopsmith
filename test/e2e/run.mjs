@@ -290,7 +290,14 @@ for (const mode of ['next', 'continue']) {
   await page.waitForTimeout(500);
   check(await strip(), 'the strip shows while looping with the editor closed');
   check(/Rep/.test(await shadow(page, (sr) => sr.querySelector('.lsm-strip-text').textContent)), 'it says which repetition is playing');
-  await L(page, '.lsm-strip .lsm-sb:last-of-type').click(); // open the editor
+  await L(page, '[aria-label="Hide this strip (looping goes on)"]').click();
+  await page.waitForTimeout(300);
+  check(!(await strip()), 'the strip can be hidden while looping');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-pill').classList.contains('lsm-active')), 'and looping goes on');
+  await L(page, '.lsm-toast-btn').click();
+  await page.waitForTimeout(300);
+  check(await strip(), 'the message brings it back');
+  await L(page, '[aria-label="Open the editor"]').click(); // open the editor
   await page.waitForTimeout(300);
   check(!(await strip()), 'opening the editor hides the strip');
   const rect = () => shadow(page, (sr) => { const r = sr.querySelector('.lsm-panel').getBoundingClientRect(); return { l: r.left, t: r.bottom }; });
@@ -560,6 +567,32 @@ for (const mode of ['next', 'continue']) {
   check(/Starting in/.test(await shadow(page, (sr) => sr.querySelector('.lsm-status-text').textContent)), 'and the status counts down');
   await page.waitForTimeout(2300);
   check(!(await page.evaluate(() => document.getElementById('main').paused)), 'then it plays');
+  await ctx.close();
+}
+
+// Loops joined end to end ("Next loop"): no seek, so no cut in the sound, where one ends and the next starts.
+{
+  const { ctx, page } = await open('Loops joined end to end', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:08');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:08');
+  await setField(page, '#lsm-time-b', '0:11');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-seg button[data-v="next"]').click();
+  await L(page, '.lsm-chip-main').first().click();
+  await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { window.__seeks = 0; document.getElementById('main').addEventListener('seeking', () => window.__seeks++); });
+  await page.waitForTimeout(3500);
+  const end = await page.evaluate(() => ({ seeks: window.__seeks, t: document.getElementById('main').currentTime, paused: document.getElementById('main').paused }));
+  check(end.seeks === 0, 'playback goes from one loop into the next without a seek', JSON.stringify(end));
+  check(end.t >= 10.5, 'and both loops play through', JSON.stringify(end));
   await ctx.close();
 }
 

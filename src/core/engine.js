@@ -162,21 +162,28 @@ export function countCrossed(crossed) {
 //   { finish: true }          nothing left to play
 // "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
 // them and playback is already inside it: it is played from its own start.
+// Loops that start within this many seconds of where another ends count as joined.
+const ADJACENT = 0.15;
+
 /**
  * What happens once the loops in `finishedLoops` are played out: nothing left (finish), jump to the
  * next loop ("Next loop"), or carry on.
  * @param {Loop[]} loops
  * @param {number} finishedA start of the latest-starting loop that just finished
+ * @param {number} finishedEnd where the latest-ending loop that just finished turns around
  * @param {number} t playhead
  * @param {{ duration: number, guard: number, after?: string }} opts
  * @returns {Step}
  */
-function settle(loops, finishedA, t, { duration, guard, after = 'continue' }) {
+function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'continue' }) {
   if (!anyAhead(loops, t, duration, guard)) return { finish: true };
   if (after === 'next') {
     /** @type {Loop | null} */
     let next = null;
     for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
+    // A loop that starts right where the finished one ends is already playing: seeking to its
+    // start would only cut the sound for a moment.
+    if (next && Math.abs(next.a - finishedEnd) <= ADJACENT) return { carryOn: true };
     if (next) return { seek: next.a, next };
     // Only a loop around the finished one is left: carry on inside it.
   }
@@ -194,9 +201,10 @@ export function advance(loops, prev, t, opts) {
   const crossed = crossedLoops(loops, prev, t, opts.duration, opts.guard);
   if (!crossed) return null;
   const finishedA = Math.max(...crossed.map((l) => l.a));
+  const finishedEnd = Math.max(...crossed.map((l) => loopEnd(l, opts.duration, opts.guard)));
   const back = countCrossed(crossed);
   if (back) return { seek: back.a, repeat: back };
-  return settle(loops, finishedA, t, opts);
+  return settle(loops, finishedA, finishedEnd, t, opts);
 }
 
 /**
@@ -222,7 +230,7 @@ export function skipRep(loops, target, opts) {
   target.done += 1;
   if (!exhausted(target)) return { seek: target.a, repeat: target };
   const end = loopEnd(target, opts.duration, opts.guard);
-  const step = settle(loops, target.a, end, opts);
+  const step = settle(loops, target.a, end, end, opts);
   // Carrying on from the middle of a repetition that was skipped: carry on from its end.
   return step && 'carryOn' in step && !('seek' in step) ? { seek: end, carryOn: true } : step;
 }
