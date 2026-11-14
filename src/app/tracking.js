@@ -39,7 +39,6 @@ export function createTracking(A) {
       for (const t of MEDIA_EVENTS) old.removeEventListener(t, onMediaEvent);
       for (const t of WAKE_EVENTS) old.removeEventListener(t, A.wake);
       old.removeEventListener('play', A.onPlay);
-      old.removeEventListener('ratechange', A.onRateChange);
     }
     S.video = v || null;
     if (v) {
@@ -49,7 +48,6 @@ export function createTracking(A) {
       for (const t of MEDIA_EVENTS) v.addEventListener(t, onMediaEvent);
       for (const t of WAKE_EVENTS) v.addEventListener(t, A.wake);
       v.addEventListener('play', A.onPlay);
-      v.addEventListener('ratechange', A.onRateChange);
     }
   }
 
@@ -64,10 +62,8 @@ export function createTracking(A) {
     S.loops = [];
     S.sel = 0;
     A.cancelWait();
-    A.restoreRate();
     S.undo = [];
     S.tap = null;
-    S.peaks = null;
     A.cancelEdits();
     A.hideTip();
     A.render();

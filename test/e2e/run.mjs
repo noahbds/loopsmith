@@ -521,75 +521,7 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
-// The waveform draws itself from what is heard, and never touches the sound.
-{
-  const { ctx, page } = await open('Waveform', '/overlap.html');
-  await page.evaluate(() => document.getElementById('main').play());
-  await openPanel(page, [640, 300]);
-  const stats = () => shadow(page, (sr) => {
-    const cv = sr.querySelector('.lsm-wave');
-    if (!cv || cv.hidden || !cv.width) return { shown: false };
-    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-    let bars = 0;
-    for (let i = 3; i < d.length; i += 4) if (d[i] > 200) bars++;
-    return { shown: true, bars };
-  });
-  await page.waitForTimeout(5500);
-  const st = await stats();
-  check(st.shown && st.bars > 300, 'bars appear for the part that was played', JSON.stringify(st));
-  const v1 = await page.evaluate(() => { const v = document.getElementById('main'); return { t: v.currentTime, paused: v.paused, muted: v.muted, vol: v.volume }; });
-  await page.waitForTimeout(800);
-  const v2 = await page.evaluate(() => { const v = document.getElementById('main'); return { t: v.currentTime, paused: v.paused }; });
-  check(!v2.paused && v2.t > v1.t + 0.5, 'the media keeps playing', JSON.stringify([v1, v2]));
-  const diag = await page.evaluate(() => document.documentElement.getAttribute('data-lsm') !== null);
-  check(diag, 'Loopsmith is attached');
-  await L(page, '.lsm-more').click();
-  const label = await L(page, '.lsm-mi').filter({ hasText: 'waveform' }).textContent();
-  check(/Hide the waveform/.test(label), 'the menu offers to hide it', label);
-  await L(page, '.lsm-mi').filter({ hasText: 'waveform' }).click();
-  check(!(await stats()).shown, 'hiding it removes the drawing');
-  await ctx.close();
-}
-
-// Practice: speed per loop, the ramp, the gap between repetitions, the count-in.
-{
-  const { ctx, page } = await open('Speed and ramp', '/overlap.html');
-  await page.evaluate(() => document.getElementById('main').play());
-  await openPanel(page, [640, 300]);
-  await L(page, '.lsm-hint-btn').click();
-  await setField(page, '#lsm-time-a', '0:05');
-  await setField(page, '#lsm-time-b', '0:05.5');
-  const rate = () => page.evaluate(() => document.getElementById('main').playbackRate);
-  const speedText = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-row .lsm-val')[0].textContent);
-  check((await speedText()) === '100%', 'the speed shows the player\'s own speed to begin with', await speedText());
-  for (let i = 0; i < 10; i++) await L(page, '[aria-label="Slower"]').click();
-  check((await speedText()) === '50%', 'ten steps down make it 50%', await speedText());
-  await L(page, '.lsm-start').click();
-  await page.waitForTimeout(500);
-  check(near(await rate(), 0.5, 0.01), 'the loop plays at its own speed', String(await rate()));
-  await L(page, '.lsm-main').click(); // stop
-  await page.waitForTimeout(200);
-  check(near(await rate(), 1, 0.01), 'and the player\'s speed comes back when looping stops', String(await rate()));
-
-  // the ramp: 50% for one repetition, then +25% each time, up to 100%
-  await L(page, '.lsm-disclose').click();
-  await L(page, '.lsm-ramp-toggle').click();
-  for (const [label, v] of [['Percent added each time', '25'], ['Repetitions between steps', '1'], ['Speed to stop at, in percent', '100']]) {
-    await L(page, `[aria-label="${label}"]`).fill(v);
-    await L(page, `[aria-label="${label}"]`).press('Enter');
-  }
-  await L(page, '.lsm-start').click();
-  const seen = [];
-  for (let i = 0; i < 50; i++) {
-    await page.waitForTimeout(100);
-    const r = +(await rate()).toFixed(2);
-    if (seen[seen.length - 1] !== r) seen.push(r);
-  }
-  const up = seen.filter((r, i) => i === 0 || r > seen[i - 1]);
-  check(seen.includes(0.5) && seen.includes(0.75) && seen.includes(1) && up.join() === seen.slice(0, up.length).join(), 'the speed goes 50%, 75%, 100% and no further', JSON.stringify(seen));
-  await ctx.close();
-}
-
+// Practice: the gap between repetitions and the count-in.
 {
   const { ctx, page } = await open('Gap between plays and count-in', '/overlap.html');
   await page.evaluate(() => document.getElementById('main').play());

@@ -1,7 +1,6 @@
 // Running the loops: turning playback around, arming and stopping, and the frame scheduling.
 
 import * as E from '../core/engine.js';
-import { rateFor } from '../core/practice.js';
 
 export function createRun(A) {
   const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, skipped } = A;
@@ -24,54 +23,6 @@ export function createRun(A) {
       if (adapter.seek) adapter.seek(v, t, S.player);
       else v.currentTime = t;
     } catch (_) { /* ignore */ }
-  }
-
-  /* Speed: while a loop plays, the player runs at that loop's speed (and the ramp). Between loops,
-     and when looping stops, the player's own speed comes back. */
-
-  function setRate(rate) {
-    const v = S.video;
-    if (!v) return;
-    if (S.baseRate == null) S.baseRate = v.playbackRate;
-    S.ownRate = rate;
-    if (Math.abs(v.playbackRate - rate) > 0.001) {
-      try { v.preservesPitch = true; v.mozPreservesPitch = true; v.webkitPreservesPitch = true; } catch (_) { /* older browsers */ }
-      v.playbackRate = rate;
-    }
-  }
-
-  function restoreRate() {
-    const v = S.video;
-    // Only if nobody changed it since: a speed picked by hand stays.
-    if (v && S.baseRate != null && S.ownRate != null && Math.abs(v.playbackRate - S.ownRate) < 0.002) v.playbackRate = S.baseRate;
-    S.baseRate = S.ownRate = null;
-    S.rateLoop = null;
-    S.rateDone = -1;
-  }
-
-  // The player's speed was changed by someone else (the site's own controls): that is the new normal.
-  function onRateChange() {
-    const v = S.video;
-    if (v && S.ownRate != null && Math.abs(v.playbackRate - S.ownRate) > 0.002) {
-      S.baseRate = null;
-      S.ownRate = null;
-    }
-  }
-
-  // Called each tick of a run: puts the speed of the loop in charge in force when the loop, or its
-  // repetition, changed.
-  function syncRate(t) {
-    const l = loopAt(t);
-    if (!l) {
-      if (S.rateLoop) restoreRate();
-      return;
-    }
-    if (l === S.rateLoop && l.done === S.rateDone) return;
-    const r = rateFor(l, P.ramp);
-    if (r == null) restoreRate();
-    else setRate(r);
-    S.rateLoop = l;
-    S.rateDone = l.done;
   }
 
   /* A pause before playing: the gap between repetitions, or the count-in before a loop starts. */
@@ -178,12 +129,10 @@ export function createRun(A) {
     S.lastT = t;
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
     if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
-      syncRate(t);
       return;
     }
     const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
     if (!step) {
-      syncRate(t);
       return;
     }
     if (step.finish) {
@@ -191,7 +140,6 @@ export function createRun(A) {
       return;
     }
     if (step.seek != null) seekTo(step.seek);
-    syncRate(step.seek != null ? step.seek : t); // judged where playback goes next, so a turn-around doesn't flicker the speed
     A.render();
     if (step.repeat) {
       A.replay(ui.badge, 'lsm-pop');
@@ -237,7 +185,6 @@ export function createRun(A) {
     const rounds = S.round;
     S.round = 1;
     cancelWait();
-    restoreRate();
     S.active = false;
     S.lastT = null;
     E.resetRun(S.loops);
@@ -306,7 +253,6 @@ export function createRun(A) {
     E.resetRun(S.loops);
     S.round = 1;
     cancelWait();
-    restoreRate();
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -446,5 +392,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { onPlay, onRateChange, restoreRate, cancelWait, IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
+  return { onPlay, cancelWait, IDLE_MS, TURN_LEAD, arm, armRun, navigate, runAgain, check, finishRun, frame, kick, loopAt, loopEnd, nextLoop, onEnded, play, seekTo, settleRun, startLoop, stopRun, turnAround, turnGuard, wake, wantsFrames };
 }

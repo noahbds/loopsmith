@@ -398,7 +398,6 @@ export function createControls(A) {
     };
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
-    ui.miWave = item('Hide the waveform', () => A.setWave(!P.wave));
     ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
     ui.miAfter = item('Add a loop right after this one', () => A.addLoopAfter());
     ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
@@ -412,7 +411,6 @@ export function createControls(A) {
       ui.miTap,
       ui.miSort,
       ui.miFine,
-      ui.miWave,
       ui.miStrip,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
@@ -496,10 +494,10 @@ export function createControls(A) {
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
-    ui.miWave.firstChild.textContent = !P.wave ? 'Show the waveform' : S.waveState === 'unavailable' ? 'Waveform: not available on this site' : 'Hide the waveform';
     ui.miStrip.firstChild.textContent = P.strip ? 'Hide the strip while looping' : 'Show a strip while looping';
     ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
+    ui.panel.scrollTop = 0; // the menu hangs from the top of the panel
     ui.menu.hidden = false;
     A.setMenuOpen(true);
   }
@@ -560,9 +558,8 @@ export function createControls(A) {
     ui.tip = el('div', { class: 'lsm-tip' });
     ui.ghostBox = el('div', { class: 'lsm-ghosts' });
     ui.play = el('div', { class: 'lsm-play' });
-    ui.wave = el('canvas', { class: 'lsm-wave', hidden: true, 'aria-hidden': 'true' });
     ui.lane = el('div', { class: 'lsm-lane' },
-      ui.wave, el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
+      el('div', { class: 'lsm-rail' }), ui.ghostBox, el('div', { class: 'lsm-fill' }), ui.play,
       ui.thumb.a, ui.thumb.b, ui.tip);
     ui.track = el('div', { class: 'lsm-track', title: 'Drag the A and B handles, or the bar between them to move the whole loop' }, ui.lane);
     ui.len = el('span', { class: 'lsm-len' });
@@ -666,18 +663,7 @@ export function createControls(A) {
     for (const b of ui.segBtns) b.addEventListener('click', () => A.setAfter(b.dataset.v));
     ui.seg = el('div', { class: 'lsm-seg', role: 'group', 'aria-label': 'When done' }, ...ui.segBtns);
     const afterField = el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: 'When done' }), ui.seg);
-    // Speed of this loop: a step is 5%; the dim value is the player's own speed.
-    ui.rateVal = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
-    const rMinus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'Slower', title: 'Slower (5%)' }, icon(I.minus, 14));
-    const rPlus = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': 'Faster', title: 'Faster (5%)' }, icon(I.plus, 14));
-    ui.rateReset = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': "Back to the player's own speed", title: "Back to the player's own speed" }, icon(I.reset, 14));
-    holdRepeat(rMinus, () => A.stepRate(-1));
-    holdRepeat(rPlus, () => A.stepRate(1));
-    ui.rateReset.addEventListener('click', A.clearRate);
-    const speedField = el('div', { class: 'lsm-field' },
-      el('div', { class: 'lsm-label', text: 'Speed' }),
-      el('div', { class: 'lsm-box' }, rMinus, ui.rateVal, rPlus, ui.rateReset));
-    const opts = el('div', { class: 'lsm-row' }, countField, speedField);
+    const opts = el('div', { class: 'lsm-row lsm-opts' }, countField, afterField);
 
     // Play the whole set of loops again once the last one is done.
     ui.setsVal = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
@@ -710,33 +696,11 @@ export function createControls(A) {
     const count = stepper('Count-in', 'count', () => A.setCountIn(P.countIn - 1), () => A.setCountIn(P.countIn + 1), ui.tickBtn);
     ui.countVal = count.out;
 
-    // Speed ramp: + step % every N repetitions, up to a target.
-    ui.rampBtn = el('button', { class: 'lsm-ramp-toggle', type: 'button', 'aria-pressed': 'false', title: 'Speed up a little every few repetitions' }, el('span', { text: 'Off' }));
-    ui.rampBtn.addEventListener('click', () => A.setRamp({ on: !P.ramp.on }));
-    ui.rampIn = {};
-    const rampInput = (key, label, width) => {
-      const input = el('input', { class: 'lsm-mini-num', type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: String(width), 'aria-label': label });
-      const commit = () => {
-        const n = parseInt(input.value, 10);
-        if (n >= 0) A.setRamp({ [key]: n });
-        else A.render();
-      };
-      input.addEventListener('change', commit);
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); input.select(); } });
-      input.addEventListener('focus', () => setTimeout(() => { if (focused() === input) input.select(); }, 0));
-      input.addEventListener('input', () => { input.value = input.value.replace(/\D+/g, '').slice(0, width); });
-      ui.rampIn[key] = input;
-      return input;
-    };
-    ui.ramp = el('div', { class: 'lsm-ramp lsm-off' },
-      '+', rampInput('step', 'Percent added each time', 2), '% every', rampInput('every', 'Repetitions between steps', 2), 'plays, up to', rampInput('target', 'Speed to stop at, in percent', 3), '%');
     ui.practice = el('div', { class: 'lsm-practice', hidden: true },
       rounds,
-      el('div', { class: 'lsm-row' }, gap.field, count.field),
-      el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: 'Speed ramp' }), el('div', { class: 'lsm-ramp-row' }, ui.rampBtn, ui.ramp)));
+      el('div', { class: 'lsm-row' }, gap.field, count.field));
     ui.practiceBtn = el('button', { class: 'lsm-disclose', type: 'button', 'aria-expanded': 'false', text: '▸ Practice options' });
     ui.practiceBtn.addEventListener('click', A.togglePractice);
-    const whenDone = el('div', { class: 'lsm-row1' }, afterField);
 
     // Actions
     // Turning looping on and starting a loop are separate: the first leaves the video where it is.
@@ -757,7 +721,7 @@ export function createControls(A) {
     ui.statusFill = el('i');
     ui.status = el('div', { class: 'lsm-status', hidden: true }, ui.statusText, el('span', { class: 'lsm-bar' }, ui.statusFill));
 
-    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, ui.snapRow, opts, whenDone, ui.practiceBtn, ui.practice, ui.status, actions);
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, ui.snapRow, opts, ui.practiceBtn, ui.practice, ui.status, actions);
     ui.strip = buildStrip();
     ui.help = buildHelp();
     ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.hint, ui.notice, ui.body, ui.help);
