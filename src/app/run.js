@@ -117,8 +117,9 @@ export function createRun(A) {
   const loopAt = (t, guard = turnGuard()) => E.loopAt(S.loops, t, S.duration, guard);
   const nextLoop = (t) => E.nextLoop(S.loops, t);
 
-  // Loops are markers on the timeline: when playback runs into the end of one that is switched on
-  // and still has repeats left, it goes back to that loop's start. Seeking by hand never counts.
+  // Loops are markers on the timeline: when playback runs into the end of the loop whose turn it is
+  // (the one it is in that started first), it goes back to that loop's start while plays are left.
+  // Seeking by hand never counts.
   function check() {
     if (S.dirty || location.href !== S.href) A.syncVideo();
     const v = S.video;
@@ -153,18 +154,6 @@ export function createRun(A) {
       A.replay(ui.badge, 'lsm-pop');
       if (P.gap > 0) pauseFor(P.gap);
     }
-  }
-
-  // Counts one play for each loop that just ended; goes back to the start of the
-  // first one (inner loops first) that still has plays left.
-  function turnAround(crossed, fromEnded) {
-    const l = E.countCrossed(crossed);
-    if (!l) return false;
-    seekTo(l.a);
-    if (fromEnded) play();
-    A.render();
-    A.replay(ui.badge, 'lsm-pop');
-    return true;
   }
 
   // The last loop is done: play the whole set again if more rounds are wanted, else finish.
@@ -207,12 +196,20 @@ export function createRun(A) {
     A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
   }
 
-  // The video reached its very end before the regular check caught it.
+  // The video reached its very end before the regular check caught it: as if playback had just
+  // run into the turn-around point of a loop that goes to the end.
   function onEnded() {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
-    const tail = S.loops.filter((l) => !skipped(l) && l.b >= S.duration - 1);
-    if (tail.length && turnAround(tail, true)) return;
-    finishOrAgain();
+    const guard = turnGuard();
+    const step = E.advance(S.loops, S.duration - guard - 0.05, S.duration, { duration: S.duration, guard, after: P.after });
+    if (!step || step.seek == null) {
+      finishOrAgain();
+      return;
+    }
+    seekTo(step.seek);
+    play();
+    A.render();
+    if (step.repeat) A.replay(ui.badge, 'lsm-pop');
   }
 
   // Turns looping on, every count starting over. At least one loop has to be switched on:
@@ -366,14 +363,9 @@ export function createRun(A) {
     if (S.open || A.stripWanted()) return true;
     if (!S.active) return false;
     const t = v.currentTime;
-    const lead = TURN_LEAD * (v.playbackRate || 1);
     const guard = turnGuard();
-    for (const l of S.loops) {
-      if (skipped(l)) continue;
-      const left = loopEnd(l, guard) - t;
-      if (left >= 0 && left <= lead) return true;
-    }
-    return false;
+    const l = loopAt(t, guard);
+    return !!l && loopEnd(l, guard) - t <= TURN_LEAD * (v.playbackRate || 1);
   }
 
   function kick() {

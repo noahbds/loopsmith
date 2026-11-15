@@ -202,8 +202,9 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
-{
-  const { ctx, page } = await open('A loop inside another', '/overlap.html');
+// A loop inside another: loop 1 0:02→0:14 ×2, loop 2 0:06→0:09 ×2. Loop 2 never cuts into loop 1's turn.
+for (const mode of ['next', 'continue']) {
+  const { ctx, page } = await open(`A loop inside another, "${mode === 'next' ? 'Next loop' : 'Play on'}"`, '/overlap.html');
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
   await setField(page, '#lsm-time-a', '0:02');
@@ -213,11 +214,18 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:06');
   await setField(page, '#lsm-time-b', '0:09');
   await setField(page, '#lsm-count', '2');
+  await L(page, `.lsm-seg button[data-v="${mode}"]`).click();
   await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
-  const w = await watch(page, mainT, 13000);
-  check(w.jumps.length === 2 && near(w.jumps[0], 6) && near(w.jumps[1], 2), 'inner loop twice, then the outer one again', JSON.stringify(w.jumps));
+  const w = await watch(page, mainT, mode === 'next' ? 17000 : 13000);
+  // Next loop: loop 1 twice (back to 0:02 once), then loop 2 from 0:06, twice.
+  // Play on: loop 1 twice, then playback runs on past loop 2, which is behind it.
+  const want = mode === 'next' ? [2, 6, 6] : [2];
+  check(w.jumps.length === want.length && w.jumps.every((j, i) => near(j, want[i])), `outer loop twice${mode === 'next' ? ', then the inner one twice' : ''}: jumps back to ${want.join(', ')}`, JSON.stringify(w.jumps));
+  const first2 = w.status.findIndex((s) => /Loop 2/.test(s.text));
+  if (mode === 'next') check(first2 >= 0 && !w.status.slice(first2).some((s) => /Loop 1/.test(s.text)), 'status says "Loop 1" until loop 1 is finished, then "Loop 2"');
+  else check(first2 < 0, 'status never says "Loop 2"');
   await ctx.close();
 }
 

@@ -88,25 +88,45 @@ describe('loops that overlap partly (the bug from the screenshot)', () => {
 });
 
 describe('a loop inside another', () => {
-  // Outer 0:00 → 1:00 ×2, inner 0:20 → 0:30 ×3.
+  // Outer 0:00 → 1:00 ×2, inner 0:20 → 0:30 ×3. The inner loop never cuts into the outer one's turn.
   const loops = () => [loop(0, 60, 2), loop(20, 30, 3)];
 
-  it('the inner loop is in charge inside it', () => {
+  it('the outer loop has the turn inside the inner one', () => {
     const [outer, inner] = loops();
-    expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(inner);
+    expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(outer);
   });
 
-  it('plays the inner loop, carries on in the outer one, then the outer one again', () => {
-    for (const after of ['continue', 'next']) {
-      const r = run(loops(), { from: 0, after });
-      expect(r.played).toEqual([[0, 30], [20, 30], [20, 60], [0, 60]]);
-    }
+  it('"Next loop": the outer loop plays out, then the inner one gets its turn', () => {
+    const r = run(loops(), { from: 0, after: 'next' });
+    expect(r.played).toEqual([[0, 60], [0, 60], [20, 30], [20, 30], [20, 30]]);
+    expect(r.finished).toBe(true);
+  });
+
+  it('"Play on": the outer loop plays out and playback carries on past the inner one', () => {
+    const r = run(loops(), { from: 0 });
+    expect(r.played).toEqual([[0, 60], [0, 60]]);
+    expect(r.finished).toBe(true);
+  });
+
+  it('started inside the inner loop, the outer one still has the turn', () => {
+    const r = run(loops(), { from: 25, after: 'next' });
+    expect(r.played).toEqual([[25, 60], [0, 60], [20, 30], [20, 30], [20, 30]]);
+  });
+
+  it('the long loop 1 with a short loop 2 inside (the bug from the screenshot)', () => {
+    // Loop 1: 0:00 → 2:27.5 ×1. Loop 2: 0:15 → 0:40 ×2. "Next loop".
+    const r = run([loop(0, 147.5, 1), loop(15, 40, 2)], { from: 0, after: 'next', duration: 237 });
+    expect(r.played).toEqual([[0, 147.5], [15, 40], [15, 40]]);
+    expect(r.finished).toBe(true);
   });
 });
 
 describe('two loops ending at the same point', () => {
-  it('counts the inner one first', () => {
-    const r = run([loop(0, 30, 2), loop(20, 30, 2)], { from: 0 });
-    expect(r.played).toEqual([[0, 30], [20, 30], [0, 30]]);
+  const loops = () => [loop(0, 30, 2), loop(20, 30, 2)];
+  it('"Play on": the loop that started first plays out; the other is behind', () => {
+    expect(run(loops(), { from: 0 }).played).toEqual([[0, 30], [0, 30]]);
+  });
+  it('"Next loop": then the other one gets its turn', () => {
+    expect(run(loops(), { from: 0, after: 'next' }).played).toEqual([[0, 30], [0, 30], [20, 30], [20, 30]]);
   });
 });
