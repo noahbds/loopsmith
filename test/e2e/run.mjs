@@ -84,11 +84,17 @@ async function setField(page, sel, value) {
   await L(page, sel).press('Enter');
 }
 
-async function openPanel(page, hoverAt) {
+// Opens the panel. Media starts with no loop: unless `create` is false, the first one is made over
+// the whole media (what the "Loop the whole video" button does), the starting point most tests need.
+async function openPanel(page, hoverAt, create = true) {
   if (hoverAt) await page.mouse.move(...hoverAt);
   await page.waitForTimeout(200);
   await L(page, '.lsm-pill').click();
   await page.waitForTimeout(200);
+  if (create && (await L(page, '.lsm-empty').isVisible())) {
+    await L(page, '.lsm-empty .lsm-cta').first().click();
+    await page.waitForTimeout(100);
+  }
 }
 
 // Samples the media position; returns the positions it jumped back to (and the samples).
@@ -157,8 +163,8 @@ const mainT = () => ({
 
   await page.evaluate(() => { document.getElementById('main').pause(); const a = document.getElementById('song'); a.scrollIntoView(); a.play(); });
   await page.waitForTimeout(1500);
-  const dock = await page.evaluate(() => ({ dock: document.querySelector('loopsmith-root').classList.contains('lsm-dock'), b: document.querySelector('loopsmith-root').shadowRoot.querySelector('#lsm-time-b').value }));
-  check(dock.dock && dock.b === '0:40', 'playing the audio docks the panel bottom-right, on the audio', JSON.stringify(dock));
+  const dock = await page.evaluate(() => { const r = document.querySelector('loopsmith-root'); return { dock: r.classList.contains('lsm-dock'), chips: r.shadowRoot.querySelectorAll('.lsm-chip').length }; });
+  check(dock.dock && dock.chips === 0, 'playing the audio docks the panel bottom-right, on the audio (no loop there yet)', JSON.stringify(dock));
   await ctx.close();
 }
 
@@ -173,9 +179,16 @@ const mainT = () => ({
   await ctx.close();
 }
 
+// Sets the two choices for all loops: between loops, and after the last one.
+async function setRun(page, between, end) {
+  await L(page, `.lsm-seg-between button[data-v="${between}"]`).click();
+  await L(page, `.lsm-seg-end button[data-v="${end}"]`).click();
+}
+
 // Overlapping loops (reported bug): loop 1 0:05→0:15 ×2, loop 2 0:12→0:20 ×3.
-for (const mode of ['next', 'continue']) {
-  const { ctx, page } = await open(`Overlapping loops, "${mode === 'next' ? 'Next loop' : 'Play on'}"`, '/overlap.html');
+for (const [between, end] of [['jump', 'pause'], ['play', 'play'], ['jump', 'play']]) {
+  const mode = between === 'jump' ? 'next' : 'continue';
+  const { ctx, page } = await open(`Overlapping loops, ${between === 'jump' ? 'jump' : 'play on'} between, ${end === 'pause' ? 'pause' : 'play on'} after the last`, '/overlap.html');
   await page.evaluate(() => { const v = document.getElementById('main'); v.play(); });
   await openPanel(page, [640, 300]);
   await setField(page, '#lsm-time-a', '0:05');
@@ -185,7 +198,7 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:12');
   await setField(page, '#lsm-time-b', '0:20');
   await setField(page, '#lsm-count', '3');
-  await L(page, `.lsm-seg button[data-v="${mode}"]`).click();
+  await setRun(page, between, end);
   await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
@@ -198,7 +211,8 @@ for (const mode of ['next', 'continue']) {
   const loop1Done = w.ts.findIndex((t, i) => i > 0 && near(t, 12, 1) && w.ts[i - 1] > 14); // first jump to 0:12 (Next loop)
   if (mode === 'next') check(firstLoop2 >= loop1Done - 1, 'status says "Loop 1" until loop 1 is finished', `first "Loop 2" at sample ${firstLoop2}, loop 1 done at ${loop1Done}`);
   else check(!w.status.some((s, i) => /Loop 2/.test(s.text) && s.t < 15 && w.status.slice(i).some((x) => /Loop 1/.test(x.text))), 'status never says "Loop 2" while loop 1 still has plays left');
-  if (mode === 'next') check(await page.evaluate(() => document.getElementById('main').paused), '"Next loop" pauses after the last loop');
+  const paused = await page.evaluate(() => document.getElementById('main').paused);
+  check(paused === (end === 'pause'), end === 'pause' ? 'pauses after the last loop' : 'keeps playing after the last loop');
   await ctx.close();
 }
 
@@ -214,7 +228,7 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:06');
   await setField(page, '#lsm-time-b', '0:09');
   await setField(page, '#lsm-count', '2');
-  await L(page, `.lsm-seg button[data-v="${mode}"]`).click();
+  await setRun(page, mode === 'next' ? 'jump' : 'play', mode === 'next' ? 'pause' : 'play');
   await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
@@ -224,8 +238,11 @@ for (const mode of ['next', 'continue']) {
   const want = mode === 'next' ? [2, 6, 6] : [2];
   check(w.jumps.length === want.length && w.jumps.every((j, i) => near(j, want[i])), `outer loop twice${mode === 'next' ? ', then the inner one twice' : ''}: jumps back to ${want.join(', ')}`, JSON.stringify(w.jumps));
   const first2 = w.status.findIndex((s) => /Loop 2/.test(s.text));
-  if (mode === 'next') check(first2 >= 0 && !w.status.slice(first2).some((s) => /Loop 1/.test(s.text)), 'status says "Loop 1" until loop 1 is finished, then "Loop 2"');
-  else check(first2 < 0, 'status never says "Loop 2"');
+  const selected = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-chip')].findIndex((c) => c.classList.contains('lsm-sel')));
+  if (mode === 'next') {
+    check(first2 >= 0 && !w.status.slice(first2).some((s) => /Loop 1/.test(s.text)), 'status says "Loop 1" until loop 1 is finished, then "Loop 2"');
+    check((await selected()) === 1, 'loop 2 is selected in the editor once it has the turn', String(await selected()));
+  } else check(first2 < 0, 'status never says "Loop 2"');
   await ctx.close();
 }
 
@@ -326,6 +343,21 @@ for (const mode of ['next', 'continue']) {
   await L(page, '.lsm-panel .lsm-grip').dblclick();
   const reset = await rect();
   check(near(reset.l, before.l, 4) && near(reset.t, before.t, 4), 'double-clicking the grip puts it back', JSON.stringify({ before, reset }));
+  // Dragged up as far as it goes, then made taller: it stays inside the video, not above it.
+  const g2 = await L(page, '.lsm-panel .lsm-grip').boundingBox();
+  await page.mouse.move(g2.x + 6, g2.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(g2.x + 6, 0, { steps: 6 });
+  await page.mouse.up();
+  await L(page, '.lsm-seg-end button[data-v="repeat"]').click();
+  await L(page, '.lsm-disclose').click();
+  await page.waitForTimeout(300);
+  const inside = await page.evaluate(() => {
+    const v = document.getElementById('main').getBoundingClientRect();
+    const r = document.querySelector('loopsmith-root').shadowRoot.querySelector('.lsm-panel').getBoundingClientRect();
+    return { panelTop: Math.round(r.top), videoTop: Math.round(v.top) };
+  });
+  check(inside.panelTop >= inside.videoTop - 1, 'a panel that grows stays inside the video', JSON.stringify(inside));
   await ctx.close();
 }
 
@@ -341,11 +373,14 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:10');
   await setField(page, '#lsm-time-b', '0:12');
   await setField(page, '#lsm-count', '1');
-  await L(page, '.lsm-disclose').click(); // the practice options
   const val = () => shadow(page, (sr) => sr.querySelector('.lsm-rounds .lsm-val').textContent);
-  check((await val()) === '1×', 'plays the set once by default');
+  check(!(await L(page, '.lsm-rounds').isVisible()), 'no rounds unless "Repeat" is chosen');
+  await L(page, '.lsm-seg-end button[data-v="repeat"]').click();
+  check((await val()) === '2×', '"Repeat" plays the set twice by default', await val());
   await L(page, '[aria-label="More rounds"]').click();
-  check((await val()) === '2×', 'the + button asks for two rounds', await val());
+  await L(page, '[aria-label="Fewer rounds"]').click();
+  await L(page, '[aria-label="Fewer rounds"]').click();
+  check((await val()) === '2×', 'never fewer than two rounds', await val());
   await L(page, '.lsm-chip-main').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
@@ -357,10 +392,68 @@ for (const mode of ['next', 'continue']) {
   await page.reload();
   await page.waitForTimeout(1200);
   await openPanel(page, [640, 300]);
-  check(await L(page, '.lsm-practice').isVisible(), 'the practice section stays open');
+  check(await L(page, '.lsm-rounds').isVisible(), '"Repeat" is remembered');
   check((await val()) === '2×', 'the number of rounds is remembered');
   await L(page, '.lsm-rounds .lsm-inf').click();
   check((await val()) === '∞', 'the ∞ button plays them again and again');
+  await ctx.close();
+}
+
+// No loop until the user makes one; a loop over the whole media is a loop like any other.
+{
+  const { ctx, page } = await open('No loop by default, whole-video loop', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300], false);
+  const chips = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-chip').length);
+  check((await chips()) === 0, 'starts with no loop');
+  check(await L(page, '.lsm-empty').isVisible(), 'the panel says so and offers to create one');
+  check(!(await L(page, '.lsm-body').isVisible()), 'the editor stays hidden until then');
+  await L(page, '.lsm-empty .lsm-cta').first().click();
+  check((await chips()) === 1, '"Loop the whole video" creates loop 1');
+  const times = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-time')].map((i) => i.value).join('-'));
+  check((await times()) === '0:00-1:00', 'over the whole video', await times());
+  check(!(await shadow(page, (sr) => sr.querySelector('.lsm-marks').hidden)), 'its marker shows on the bar');
+  await L(page, '.lsm-close, .lsm-hb[aria-label="Close"]').first().click();
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await openPanel(page, [640, 300], false);
+  check((await chips()) === 1, 'it is saved like any other loop');
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'Delete the loop' }).click();
+  check((await chips()) === 0, 'deleting the only loop leaves none');
+  await page.reload();
+  await page.waitForTimeout(1200);
+  await openPanel(page, [640, 300], false);
+  check((await chips()) === 0, 'and nothing stays saved');
+  // Shift+A with no loop: a loop from here to the end
+  await page.evaluate(() => { const v = document.getElementById('main'); v.currentTime = 20; v.play(); });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Shift+A');
+  check((await chips()) === 1, 'Shift+A with no loop creates one');
+  const a = await shadow(page, (sr) => sr.querySelector('#lsm-time-a').value);
+  check(/^0:2\d/.test(a), 'starting at the current time', a);
+  await ctx.close();
+}
+
+// Turning looping on by itself when saved loops load (⋯ menu, off by default).
+{
+  const { ctx, page } = await open('Looping on by itself with saved loops', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:08');
+  const on = () => shadow(page, (sr) => sr.querySelector('.lsm-main').classList.contains('lsm-on'));
+  await page.reload();
+  await page.waitForTimeout(1500);
+  check(!(await on()), 'off by default: saved loops alone don\'t turn looping on');
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-more').click();
+  await L(page, '.lsm-mi').filter({ hasText: 'Turn looping on when saved loops load' }).click();
+  await page.reload();
+  await page.waitForTimeout(1500);
+  check(await on(), 'with the option on, looping is on after a reload');
+  const toast = await shadow(page, (sr) => sr.querySelector('.lsm-toast').textContent);
+  check(/saved loops/.test(toast), 'and a message says why', toast);
   await ctx.close();
 }
 
@@ -517,7 +610,7 @@ for (const mode of ['next', 'continue']) {
 {
   const { ctx, page } = await open('Tap to mark', '/overlap.html');
   await page.evaluate(() => { const v = document.getElementById('main'); v.currentTime = 4; v.play(); });
-  await openPanel(page, [640, 300]);
+  await openPanel(page, [640, 300], false);
   const chips = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-chip').length);
   await page.keyboard.press('Shift+KeyM');
   check(/Start/.test(await shadow(page, (sr) => sr.querySelector('.lsm-toast span').textContent)), 'the first tap marks a start');
@@ -526,7 +619,7 @@ for (const mode of ['next', 'continue']) {
   await page.waitForTimeout(150);
   const a = await L(page, '#lsm-time-a').inputValue();
   const b = await L(page, '#lsm-time-b').inputValue();
-  check((await chips()) === 1 && /^0:0[3-5]/.test(a) && /^0:0[6-8]/.test(b), 'the second tap makes the loop (the untouched whole-video loop is replaced)', JSON.stringify([a, b]));
+  check((await chips()) === 1 && /^0:0[3-5]/.test(a) && /^0:0[6-8]/.test(b), 'the second tap makes loop 1', JSON.stringify([a, b]));
   await page.waitForTimeout(2000);
   await page.keyboard.press('Shift+KeyM');
   await page.waitForTimeout(150);
@@ -549,7 +642,7 @@ for (const mode of ['next', 'continue']) {
   const gapMore = L(page, '[aria-label="Gap between plays: more"]');
   await gapMore.click();
   await gapMore.click();
-  check((await shadow(page, (sr) => sr.querySelectorAll('.lsm-practice .lsm-val')[1].textContent)) === '1 s', 'two half-second steps make a 1 s gap');
+  check((await shadow(page, (sr) => sr.querySelectorAll('.lsm-practice .lsm-val')[0].textContent)) === '1 s', 'two half-second steps make a 1 s gap');
   await L(page, '.lsm-start').click();
   let resumes = 0;
   let wasPaused = false;
@@ -600,7 +693,7 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:08');
   await setField(page, '#lsm-time-b', '0:11');
   await setField(page, '#lsm-count', '1');
-  await L(page, '.lsm-seg button[data-v="next"]').click();
+  await L(page, '.lsm-seg-between button[data-v="jump"]').click();
   await L(page, '.lsm-chip-main').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
@@ -644,7 +737,8 @@ for (const mode of ['next', 'continue']) {
   check((await chips()) === 2, 'Undo brings it back');
   await L(page, '.lsm-more').click();
   await L(page, '.lsm-mi').filter({ hasText: 'Remove all loops' }).click();
-  check((await chips()) === 1, 'Remove all loops leaves the whole video');
+  check((await chips()) === 0, 'Remove all loops leaves none');
+  check(await L(page, '.lsm-empty').isVisible(), 'and the panel offers to create one');
   await L(page, '.lsm-toast-btn').click();
   check((await chips()) === 2, 'and that can be undone too');
   // the dot on a chip switches a loop off and on

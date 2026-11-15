@@ -3,7 +3,7 @@
 import * as E from '../core/engine.js';
 
 export function createRun(A) {
-  const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, skipped } = A;
+  const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, runOpts, skipped } = A;
 
   function play() {
     const v = S.video;
@@ -140,7 +140,7 @@ export function createRun(A) {
     if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
       return;
     }
-    const step = E.advance(S.loops, prev, t, { duration: S.duration, guard: turnGuard(), after: P.after });
+    const step = E.advance(S.loops, prev, t, runOpts(turnGuard()));
     if (!step) {
       return;
     }
@@ -149,11 +149,29 @@ export function createRun(A) {
       return;
     }
     if (step.seek != null) seekTo(step.seek);
+    followTurn();
     A.render();
     if (step.repeat) {
       A.replay(ui.badge, 'lsm-pop');
       if (P.gap > 0) pauseFor(P.gap);
     }
+  }
+
+  // The editor follows the run: when another loop gets the turn, it becomes the selected loop
+  // (unless something is being edited or dragged right then).
+  let turnSeen = null;
+  function followTurn() {
+    const v = S.video;
+    if (!S.active || !v || !S.trusted || S.sliding || A.editing()) return;
+    const l = loopAt(v.currentTime);
+    if (!l || l === turnSeen) return;
+    turnSeen = l;
+    const i = S.loops.indexOf(l);
+    if (i < 0 || i === S.sel) return;
+    S.sel = i;
+    A.hideTip();
+    if (S.zoom) A.fitView();
+    A.render();
   }
 
   // The last loop is done: play the whole set again if more rounds are wanted, else finish.
@@ -191,7 +209,7 @@ export function createRun(A) {
     const single = on.length === 1 ? on[0] : null;
     const rounds = S.round;
     endRun(false);
-    if (P.after !== 'continue' && S.video && !S.video.paused) S.video.pause();
+    if (P.end !== 'play' && S.video && !S.video.paused) S.video.pause();
     A.render();
     A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
   }
@@ -201,7 +219,7 @@ export function createRun(A) {
   function onEnded() {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
     const guard = turnGuard();
-    const step = E.advance(S.loops, S.duration - guard - 0.05, S.duration, { duration: S.duration, guard, after: P.after });
+    const step = E.advance(S.loops, S.duration - guard - 0.05, S.duration, runOpts(guard));
     if (!step || step.seek == null) {
       finishOrAgain();
       return;
@@ -218,7 +236,7 @@ export function createRun(A) {
     A.commitEdits();
     A.syncVideo();
     if (!ready()) {
-      A.toast(S.live ? 'Live streams can’t be looped' : 'The video isn’t ready yet');
+      A.toast(S.live ? 'Live streams can’t be looped' : A.mediaOk() ? 'Create a loop first' : `The ${A.mediaWord()} isn’t ready yet`);
       return false;
     }
     if ((needSel || !S.loops.some((l) => l.on)) && !cur().on) {
@@ -229,24 +247,28 @@ export function createRun(A) {
     S.round = 1;
     S.active = true;
     S.lastT = null;
+    turnSeen = null;
     return true;
   }
 
   // Enabling: looping is on from here, but playback is left alone. The loops act
   // when the playhead runs into them.
-  function armRun() {
+  // `saved`: turned on by itself because the media came with saved loops.
+  function armRun(saved = false) {
     if (!arm(false)) return;
     A.render();
     wake();
     if (!S.open) {
       const on = S.loops.filter((l) => l.on);
-      A.toast(on.length > 1 ? `Looping ${on.length} sections` : `Looping ${describe(on[0])}`);
+      const what = on.length > 1 ? `Looping ${on.length} sections` : `Looping ${describe(on[0])}`;
+      A.toast(saved ? `${what} (saved loops)` : what, saved ? { label: 'Turn off', run: stopRun } : undefined);
     }
   }
 
   // Starting: plays the selected loop from its beginning (which needs looping to be on).
   function startLoop() {
     if (!arm(true)) return;
+    E.giveTurn(S.loops, cur());
     const v = S.video;
     if (S.trusted && !isAd()) {
       seekTo(cur().a);
@@ -301,7 +323,7 @@ export function createRun(A) {
     }
     if (!S.active && !arm(false)) return;
     const t = S.video.currentTime;
-    const opts = { duration: S.duration, guard: turnGuard(), after: P.after };
+    const opts = runOpts(turnGuard());
     const target = inCharge();
     let step = null;
     let say = '';
@@ -325,7 +347,7 @@ export function createRun(A) {
         say = 'Restarted';
         break;
       case 'goto':
-        step = E.gotoLoop(S.loops[arg]);
+        step = E.gotoLoop(S.loops[arg], S.loops);
         if (step) say = `${A.loopLabel(step.goto)} · ${describe(step.goto)}`;
         miss = `No loop ${Number(arg) + 1}`;
         break;
@@ -342,7 +364,7 @@ export function createRun(A) {
   function runAgain() {
     if (!arm(false)) return;
     const first = S.loops.filter((l) => l.on).sort((x, y) => x.a - y.a)[0];
-    const step = E.gotoLoop(first);
+    const step = E.gotoLoop(first, S.loops);
     if (step && S.trusted && !isAd()) follow(step, { play: true, countIn: true });
     else A.render();
   }
@@ -378,6 +400,7 @@ export function createRun(A) {
     raf = 0;
     idle = 0;
     check();
+    followTurn();
     A.renderLive();
     kick();
   }

@@ -130,3 +130,33 @@ describe('two loops ending at the same point', () => {
     expect(run(loops(), { from: 0, after: 'next' }).played).toEqual([[0, 30], [0, 30], [20, 30], [20, 30]]);
   });
 });
+
+describe('a loop started on purpose keeps the turn', () => {
+  // Outer 0:00 → 1:00 ×1, inner 0:20 → 0:30 ×2.
+  it('▶ on the inner loop: it plays out first, then the outer one carries on', () => {
+    const outer = loop(0, 60, 1);
+    const inner = loop(20, 30, 2);
+    E.giveTurn([outer, inner], inner);
+    const r = run([outer, inner], { from: 20 });
+    expect(r.played).toEqual([[20, 30], [20, 60]]);
+  });
+  it('go to loop 2 (inside loop 1): loop 2 has the turn', () => {
+    const outer = loop(0, 60, 1);
+    const inner = loop(20, 30, 2);
+    expect(E.gotoLoop(inner, [outer, inner])).toEqual({ seek: 20, goto: inner });
+    expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(inner);
+    expect(outer.turn).toBe(false);
+  });
+  it('a new run forgets it', () => {
+    const outer = loop(0, 60, 1);
+    const inner = loop(20, 30, 2);
+    E.giveTurn([outer, inner], inner);
+    E.resetRun([outer, inner]);
+    expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(outer);
+  });
+  it('is never saved', () => {
+    const l = loop(0, 10, 1);
+    E.giveTurn([l], l);
+    expect(E.serializeLoops([l])[0]).not.toHaveProperty('turn');
+  });
+});

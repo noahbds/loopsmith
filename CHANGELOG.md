@@ -4,6 +4,38 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+## 1.4.0
+
+**Loops take turns**
+- Fixed: a loop placed inside another one cut into it. With loop 1 over a whole song and loop 2 on a
+  passage inside it, playback went back to loop 2's start as soon as it reached loop 2's end, before
+  loop 1 had finished. Now one loop has the turn at a time: of the loops the playback is in, the one
+  that starts first (or the one you started or jumped to). The others wait for their own turn.
+- The editor follows the run: when the next loop gets its turn, it becomes the selected loop.
+
+**Between loops, and after the last one**
+- "When done" is now two choices for all loops: *Between loops* (play on, or jump straight to the
+  next loop) and *After the last* (play on, pause, or repeat). This adds the two missing
+  combinations: jump between loops and then play on, and jump between loops and then pause.
+- *Repeat* replaces *Play all loops* in the practice options: choose it, then the number of rounds
+  (2 to 99) or ∞. Settings from 1.3 carry over.
+- Next to *Times to play*, a line says what happens when the selected loop is done ("Then jumps to
+  loop 2", "Last loop, then pauses"…).
+
+**No loop until you make one**
+- A video or track starts with no loop; the panel offers *Whole video* (or *Whole track*) and
+  *30 s from here*. `Shift+A` / `Shift+B`, tap to mark (`Shift+M`) and **+** create one too.
+- A loop over the whole video is a loop like any other: it is saved and shown on the progress bar.
+  Deleting the last loop leaves none (and can be undone).
+
+**Also**
+- ⋯ → *Turn looping on when saved loops load*: looping starts by itself on a video or track you
+  already have loops for (off by default; the message has a *Turn off* button).
+- While looping, the status and the buttons stay at the bottom of the panel when it scrolls.
+- Fixed: the time shown above a slider handle was cut off by the top of the panel.
+- Fixed: a panel dragged near the top of the player could end up partly above it (under the site's
+  header) once it grew taller; it now stays inside the player.
+
 ## 1.3.0 (2026-11-15)
 
 **Moving around while looping**

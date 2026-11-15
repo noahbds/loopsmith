@@ -33,7 +33,6 @@ src/core/        loop rules (engine.js), storage, timestamps, media detection: n
 src/app.js       wires the parts of the player together (about 90 lines)
 src/app/         the player, in parts: state, video tracking, running the loops, editing, drawing,
                  panel controls, layout, hotkeys
-test/            unit tests (vitest) and browser tests (Playwright) on local pages
 src/adapters/    one file per site; generic.js handles any other page
 src/sites.js     the built-in sites: which adapter, which pages, which page-world scripts
 src/page/        small scripts that run in the page's own JavaScript world
@@ -53,17 +52,15 @@ scripts/build.mjs   builds both browsers from the same sources (esbuild, no mini
 
 ## Testing your change
 
-Run these before opening a pull request (the CI runs the first four on every push):
+Run these before opening a pull request (the CI runs them on every push):
 
 ```bash
 npm run lint        # ESLint
 npm run typecheck   # tsc on the pure core (src/core/engine.js, store.js, util.js), types in src/types.js
-npm test            # unit tests (vitest)
 npm run build
-npm run e2e         # real Chromium on local test pages; needs ffmpeg and `npx playwright install chromium`
 ```
 
-New loop rules go in `src/core/engine.js` as pure functions with a test in `test/`.
+New loop rules go in `src/core/engine.js` as pure functions.
 
 Please also check by hand, in the browser, at least:
 

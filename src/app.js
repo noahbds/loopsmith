@@ -41,6 +41,7 @@ export function start(adapter, store) {
   }
 
   buildUI();
+  A.watchBoxes();
   A.applyPos();
   render();
   ensure();

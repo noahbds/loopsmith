@@ -1,12 +1,12 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
-import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, NAME_MAX, AFTER } from '../core/constants.js';
+import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, NAME_MAX, BETWEEN, ENDS } from '../core/constants.js';
 import { clamp, roundT } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
 
 export function createEdit(A) {
-  const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, isDefaultSet, newLoop, ready, rememberLoops, rememberPrefs } = A;
+  const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, mediaOk, newLoop, ready, rememberLoops, rememberPrefs } = A;
 
   // Gives the selected loop a new start and end (saved only when they changed).
   function applyRange({ a, b }) {
@@ -31,11 +31,16 @@ export function createEdit(A) {
     applyRange(E.moveLoop(cur(), start, S.duration, A.digits()));
   }
 
+  // With no loop yet, the first mark creates one: from here to the end (A), or from the start to here (B).
   function markNow(which) {
     A.syncVideo();
-    if (!ready() || !S.trusted || isAd()) {
+    if (!mediaOk() || !S.trusted || isAd()) {
       A.toast('Not available right now');
       return;
+    }
+    if (!S.loops.length) {
+      pushLoop(newLoop(0, S.duration, freeColor()));
+      showNew();
     }
     setPoint(which, S.video.currentTime, true);
     A.replay(ui.field[which].now, 'lsm-flash');
@@ -72,7 +77,7 @@ export function createEdit(A) {
 
   // How many times the whole set of loops plays (1 = once).
   function setSets(n) {
-    P.sets = clamp(Math.round(n) || 1, 1, MAX_SETS);
+    P.sets = clamp(Math.round(n) || 2, 2, MAX_SETS);
     P.setsForever = false;
     prefChanged();
   }
@@ -123,9 +128,23 @@ export function createEdit(A) {
     A.toast('Strip hidden. Looping goes on.', { label: 'Show', run: () => setStrip(true) });
   }
 
-  function setAfter(v) {
-    P.after = AFTER.includes(v) ? v : 'continue';
+  // Between loops: play on to the next loop, or jump straight to it.
+  function setBetween(v) {
+    P.between = BETWEEN.includes(v) ? v : 'play';
     prefChanged();
+  }
+
+  // After the last loop: play on, pause, or play the whole set again.
+  function setEnd(v) {
+    P.end = ENDS.includes(v) ? v : 'play';
+    prefChanged();
+  }
+
+  // Turn looping on by itself when media with saved loops loads.
+  function setAutoOn(on) {
+    P.autoOn = !!on;
+    prefChanged();
+    A.toast(P.autoOn ? 'Looping turns on by itself when saved loops load' : 'Looping waits for you to turn it on');
   }
 
   // A loop that is switched off stays in the list (and stays saved) but is never played.
@@ -246,6 +265,14 @@ export function createEdit(A) {
   }
 
   // A new loop of the same length, starting where the selected one ends.
+  // A loop over the whole media.
+  function addWhole() {
+    A.syncVideo();
+    if (!mediaOk() || atMax()) return;
+    pushLoop(newLoop(0, S.duration, freeColor()));
+    showNew();
+  }
+
   function addLoopAfter() {
     A.syncVideo();
     if (!ready() || atMax()) return;
@@ -264,7 +291,7 @@ export function createEdit(A) {
   // starts the next one. The first press only marks a start.
   function tapMark() {
     A.syncVideo();
-    if (!ready() || !S.trusted || isAd()) {
+    if (!mediaOk() || !S.trusted || isAd()) {
       A.toast('Not available right now');
       return;
     }
@@ -275,16 +302,9 @@ export function createEdit(A) {
       A.toast(`Start ${fmtT(t)} · tap again to end the section`);
       return;
     }
-    let l;
-    if (isDefaultSet()) {
-      l = cur();
-      l.a = from;
-      l.b = t;
-    } else {
-      if (atMax()) return;
-      l = newLoop(from, t, freeColor());
-      pushLoop(l);
-    }
+    if (atMax()) return;
+    const l = newLoop(from, t, freeColor());
+    pushLoop(l);
     S.tap = t;
     showNew();
     A.toast(`${A.loopLabel(l)} · ${fmtT(l.a)} → ${fmtT(l.b)} · tap again for the next section`);
@@ -306,10 +326,10 @@ export function createEdit(A) {
   // New loops start at the current playback position.
   function addLoop() {
     A.syncVideo();
-    if (!ready() || atMax()) return;
+    if (!mediaOk() || atMax()) return;
     const d = S.duration;
     const len = Math.min(NEW_LOOP_LEN, d);
-    let a = S.trusted && !isAd() ? S.video.currentTime : cur().b;
+    let a = S.trusted && !isAd() ? S.video.currentTime : cur() ? cur().b : 0;
     a = clamp(roundT(a, A.digits()), 0, Math.max(0, d - len));
     let b = roundT(a + len, A.digits());
     if (b > d - 0.1) b = d;
@@ -345,46 +365,36 @@ export function createEdit(A) {
 
   const UNDO = { label: 'Undo', run: undo };
 
-  // Deletes the selected loop. The last one left goes back to the whole video.
+  // Deletes the selected loop. Can be undone.
   function removeLoop() {
     if (!ready()) return;
-    if (S.loops.length === 1) {
-      clearAll();
-      return;
-    }
     const n = S.sel + 1;
     snapshot();
     S.loops.splice(S.sel, 1);
-    S.sel = Math.min(S.sel, S.loops.length - 1);
+    S.sel = Math.max(0, Math.min(S.sel, S.loops.length - 1));
     A.hideTip();
-    if (S.zoom) fitView();
+    if (!S.loops.length) S.zoom = false;
+    else if (S.zoom) fitView();
     A.settleRun();
     rememberLoops();
     A.render();
-    A.toast(`Loop ${n} removed`, UNDO);
+    A.toast(S.loops.length ? `Loop ${n} removed` : 'Loop removed', UNDO);
   }
 
-  function resetAll() {
-    S.active = false;
-    S.lastT = null;
-    S.zoom = false;
-    S.sel = 0;
-    A.hideTip();
-    if (S.ranged) {
-      S.loops = [newLoop(0, S.duration, 0)];
-      rememberLoops();
-    }
-    A.render();
-  }
-
-  // Removes every loop (back to the whole video, looping off). Can be undone.
+  // Removes every loop (looping turns off). Can be undone.
   function clearAll() {
     if (!ready()) return;
     const had = S.loops.length;
     snapshot();
-    resetAll();
-    A.toast(had > 1 ? 'All loops removed' : 'Loop reset', UNDO);
+    S.loops = [];
+    S.sel = 0;
+    S.zoom = false;
+    A.hideTip();
+    A.settleRun();
+    rememberLoops();
+    A.render();
+    A.toast(had > 1 ? 'All loops removed' : 'Loop removed', UNDO);
   }
 
-  return { addLoop, addLoopAfter, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, undo, selectLoop, setAfter, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoopAt };
+  return { addLoop, addLoopAfter, addWhole, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, undo, selectLoop, setAutoOn, setBetween, setEnd, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoopAt };
 }

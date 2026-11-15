@@ -32,7 +32,18 @@ export function resetRun(loops) {
   for (const l of loops) {
     l.done = 0;
     l.skip = false;
+    l.turn = false;
   }
+}
+
+/**
+ * Gives `loop` the turn (it was started or jumped to on purpose): it keeps it, even inside a loop
+ * that starts earlier, until its plays are done.
+ * @param {Loop[]} loops
+ * @param {Loop} loop
+ */
+export function giveTurn(loops, loop) {
+  for (const l of loops) l.turn = l === loop;
 }
 
 /**
@@ -43,29 +54,7 @@ export function resetRun(loops) {
  * @returns {Loop}
  */
 export function newLoop(a, b, c, defaults) {
-  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false };
-}
-
-// A single loop covering the whole media is the untouched default: nothing worth saving or marking.
-/**
- * @param {Loop[]} loops
- * @param {number} duration
- */
-export function isDefaultSet(loops, duration) {
-  return loops.length === 1 && loops[0].a <= 0.001 && loops[0].b >= duration - 0.05;
-}
-
-/**
- * The untouched default: the whole media as one loop that has not been named, switched off or given
- * its own count. Only anything else is worth saving.
- * @param {Loop[]} loops
- * @param {number} duration
- * @param {import('../types.js').LoopDefaults} defaults
- */
-export function isPristine(loops, duration, defaults) {
-  if (!isDefaultSet(loops, duration)) return false;
-  const l = loops[0];
-  return l.on && !l.name && l.infinite === defaults.infinite && (l.infinite || l.count === defaults.count);
+  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false, turn: false };
 }
 
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
@@ -79,9 +68,10 @@ export function loopEnd(l, duration, guard) {
   return Math.max(l.a + 0.2, Math.min(l.b, duration - guard));
 }
 
-// The loop whose turn it is at the playhead: of the loops it is in, the one that started first
-// (same start: the lower-numbered one). Only that loop turns playback around; a loop inside it, or
-// one that overlaps its end, waits for its own turn and never cuts into it.
+// The loop whose turn it is at the playhead: of the loops it is in, the one that was started or
+// jumped to on purpose (giveTurn), otherwise the one that started first (same start: the
+// lower-numbered one). Only that loop turns playback around; a loop inside it, or one that
+// overlaps its end, waits for its own turn and never cuts into it.
 /**
  * @param {Loop[]} loops
  * @param {number} t
@@ -94,7 +84,7 @@ export function loopAt(loops, t, duration, guard) {
   let best = null;
   for (const l of loops) {
     if (skipped(l) || t < l.a - 0.3 || t >= loopEnd(l, duration, guard)) continue;
-    if (!best || l.a < best.a - 1e-6) best = l;
+    if (!best || (l.turn && !best.turn) || (!!l.turn === !!best.turn && l.a < best.a - 1e-6)) best = l;
   }
   return best;
 }
@@ -241,6 +231,7 @@ export function prevLoop(loops, target, t, restartAfter = 2) {
   if (!prev) return target ? { seek: target.a, restart: target } : null;
   prev.skip = false;
   prev.done = 0;
+  giveTurn(loops, prev);
   return { seek: prev.a, prev };
 }
 
@@ -259,15 +250,18 @@ export function restartSet(loops) {
 }
 
 /**
- * Jump to a given loop and play it afresh, whatever it did before in this run.
+ * Jump to a given loop and play it afresh, whatever it did before in this run. It has the turn.
  * @param {Loop | undefined} loop
+ * @param {Loop[]} [loops]
  * @returns {Step}
  */
-export function gotoLoop(loop) {
+export function gotoLoop(loop, loops = []) {
   if (!loop) return null;
   loop.on = true;
   loop.skip = false;
   loop.done = 0;
+  giveTurn(loops, loop);
+  loop.turn = true;
   return { seek: loop.a, goto: loop };
 }
 

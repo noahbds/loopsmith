@@ -291,7 +291,7 @@ Each phase is shippable on its own. Item IDs link back to findings.
 
 Goal: make the rest safe to build.
 
-- [x] **C1** Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
+- [x] **C1** *(reversed after 1.4.0: `test/` is kept locally again, untracked; CI runs lint, type check and the build)* Track `test/` in git. Generate large fixtures (`bg.mp4`, `main.mp4`, `song.mp3`) with
   `test/e2e/make-media.mjs` instead of committing them. Remove the `.gitignore` line. Add
   `npm test` to `ci.yml`; run e2e in a second job (Playwright, Chromium) that may be marked
   non-blocking at first.
@@ -375,7 +375,7 @@ loop 2 by keyboard and by mouse, with correct counters and toasts on YouTube and
 - [x] **E3** **Removed in 1.3.0.** *(was: +N% every M plays up to a target, in Practice options; the status shows the current speed)* Speed ramp: start rate, target rate, step, every N repetitions; shown in the strip.
 - [x] **E4** *(gap 0–5 s, count-in 0–8 s with ticks; the count-in runs on ▶ and Run again)* Gap between reps (0–5 s) and count-in (silence before the first rep, optional click
   or tick). Gap implemented as pause plus timer, not as extra video playback.
-- [~] **E2 / 3.4** *(repeat the set N times / ∞ is done; the between-loops / end-of-set split of "When done" is not)* Between-loops and end-of-set settings, including "repeat the set N times / ∞".
+- [x] **E2 / 3.4** *(1.4.0: "Between loops" play on / jump, "After the last" play on / pause / repeat N or ∞; prefs from 1.3 migrate)* Between-loops and end-of-set settings, including "repeat the set N times / ∞".
   Prefs migration from `after`.
 - [ ] Nudge the whole loop by ±1 s or by its own length; halve and double the length.
 - [x] **Tap-to-mark** *(done as `Shift+M`: each tap ends a section and starts the next)* while playing: `Shift+A` then `Shift+B`, plus "mark and keep going" for

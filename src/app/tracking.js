@@ -5,11 +5,12 @@ import { clamp } from '../core/util.js';
 import * as E from '../core/engine.js';
 
 export function createTracking(A) {
-  const { S, P, adapter, store, isAd, isDefaultSet, newLoop } = A;
+  const { S, P, adapter, store, isAd } = A;
 
   const MEDIA_EVENTS = ['loadstart', 'emptied', 'loadedmetadata', 'durationchange'];
   const WAKE_EVENTS = ['play', 'playing', 'pause', 'seeked', 'ratechange'];
   let syncTimer = 0;
+  let autoDone = false; // looping was already turned on by itself for the media now loaded
 
   function scheduleSync() {
     if (syncTimer) return;
@@ -64,13 +65,14 @@ export function createTracking(A) {
     A.cancelWait();
     S.undo = [];
     S.tap = null;
+    autoDone = false;
     A.cancelEdits();
     A.hideTip();
     A.render();
   }
 
   function applyDuration(d) {
-    const wasDefault = !S.ranged || isDefaultSet();
+    const oldD = S.ranged ? S.duration : 0;
     const saved = E.loopsFromSaved(S.videoId ? store.get(S.videoId) : null, P);
     S.duration = d;
     S.ranged = d >= MIN_LEN * 2;
@@ -82,18 +84,24 @@ export function createTracking(A) {
         // Same loops as before (only the duration was corrected): keep the run's progress.
         if (saved.length === S.loops.length) saved.forEach((l, i) => { l.done = S.loops[i].done; });
         S.loops = saved;
-      } else if (wasDefault) {
-        if (S.loops.length === 1) {
-          S.loops[0].a = 0;
-          S.loops[0].b = d;
-        } else {
-          S.loops = [newLoop(0, d, 0)];
-        }
       }
+      // The length was corrected: a loop that ran to the old end still runs to the end.
+      if (oldD) for (const l of S.loops) if (Math.abs(l.b - oldD) < 0.05) l.b = d;
       E.clampLoops(S.loops, d);
-      S.sel = clamp(S.sel, 0, S.loops.length - 1);
+      S.sel = clamp(S.sel, 0, Math.max(0, S.loops.length - 1));
+      if (saved && P.autoOn && !autoDone) autoOn();
     }
     A.render();
+  }
+
+  // The media came with saved loops and the user wants looping on right away. Once per media
+  // item: turning it off afterwards sticks until another one loads.
+  function autoOn() {
+    autoDone = true;
+    const key = S.videoId;
+    setTimeout(() => {
+      if (S.videoId === key && !S.active && A.ready() && S.trusted) A.armRun(true);
+    }, 0);
   }
 
   // Works out which video is loaded and whether its metadata is usable.

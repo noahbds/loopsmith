@@ -8,8 +8,10 @@ export const MAX_SETS = 99; // most times the whole set of loops can be played
 export const MAX_SAVED = 1000; // media items with saved loops, across all sites
 export const PALETTE = ['62,166,255', '255,183,77', '110,231,163', '255,126,182', '179,157,255', '77,208,225', '255,112,90', '198,229,84', '64,120,255', '38,198,160', '224,64,251', '214,196,150']; // r,g,b: 12, one per possible loop
 
-// What happens when a loop has played out: keep playing, jump straight to the next loop, or pause at the end.
-export const AFTER = ['continue', 'next', 'pause'];
+// Between loops: play the stretch up to the next loop, or jump straight to its start.
+export const BETWEEN = ['play', 'jump'];
+// After the last loop: keep playing the media, pause, or play the whole set again (a number of rounds).
+export const ENDS = ['play', 'pause', 'repeat'];
 
 // Limits for the gap between plays and the count-in, in seconds.
 export const MAX_GAP = 5;

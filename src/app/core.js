@@ -1,9 +1,16 @@
 // The shared state and small helpers every other part of the app builds on.
 
-import { MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, PALETTE, AFTER } from '../core/constants.js';
+import { MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, PALETTE, BETWEEN, ENDS } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
+
+// Before 1.4 one "when done" choice covered both: continue = play / play, next = jump / pause,
+// pause = play / pause; and playing the set again was a separate number of rounds (1 = once).
+function legacyEnd(prefs) {
+  if (prefs.setsForever === true || Number(prefs.sets) > 1) return 'repeat';
+  return prefs.after === 'next' || prefs.after === 'pause' ? 'pause' : 'play';
+}
 
 export function createCore(adapter, store) {
   const prefs = store.getPrefs();
@@ -12,7 +19,8 @@ export function createCore(adapter, store) {
   const P = {
     count: clamp(Math.round(Number(prefs.count)) || 5, 1, MAX_COUNT),
     infinite: prefs.infinite === true,
-    after: AFTER.includes(prefs.after) ? prefs.after : 'continue',
+    between: BETWEEN.includes(prefs.between) ? prefs.between : prefs.after === 'next' ? 'jump' : 'play',
+    end: ENDS.includes(prefs.end) ? prefs.end : legacyEnd(prefs),
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
@@ -20,8 +28,9 @@ export function createCore(adapter, store) {
     countIn: clamp(Math.round(Number(prefs.countIn) || 0), 0, MAX_COUNT_IN),    // seconds of count-in before a loop starts
     tick: prefs.tick !== false,     // tick during the count-in
     practiceOpen: prefs.practiceOpen === true,
-    sets: clamp(Math.round(Number(prefs.sets)) || 1, 1, MAX_SETS), // how many times the whole set of loops plays
+    sets: clamp(Math.round(Number(prefs.sets)) || 2, 2, MAX_SETS), // rounds when the set plays again
     setsForever: prefs.setsForever === true,
+    autoOn: prefs.autoOn === true,  // turn looping on by itself when media with saved loops loads
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
   };
 
@@ -64,7 +73,9 @@ export function createCore(adapter, store) {
   const engaged = (p) => (adapter.engaged ? adapter.engaged(p) : true);
   const focused = () => (ui.shadow && ui.shadow.activeElement) || document.activeElement;
 
-  const ready = () => !!S.video && S.ranged && !S.live && S.loops.length > 0;
+  // The media can have loops (known length, not live); ready: and it has at least one.
+  const mediaOk = () => !!S.video && S.ranged && !S.live;
+  const ready = () => mediaOk() && S.loops.length > 0;
   const cur = () => S.loops[S.sel];
   const digits = () => (P.fine ? 2 : 1); // decimals of a second that times are kept to
   const fineStep = () => 10 ** -digits(); // the smallest step: 0.1 s, or 0.01 s in fine mode
@@ -72,14 +83,15 @@ export function createCore(adapter, store) {
   // "Loop 2" (or its name); just "Loop" when there is only one.
   const loopLabel = (l) => l.name || (S.loops.length > 1 ? `Loop ${S.loops.indexOf(l) + 1}` : 'Loop');
   // Whether the set of loops plays again once the last loop is done.
-  const moreRounds = () => P.setsForever || S.round < P.sets;
+  const moreRounds = () => P.end === 'repeat' && (P.setsForever || S.round < P.sets);
   // "Round 2/3" or "Round 2" (endless); empty when the set only plays once.
-  const roundText = () => (P.setsForever ? ` · round ${S.round}` : P.sets > 1 ? ` · round ${S.round}/${P.sets}` : '');
+  const roundText = () => (P.end !== 'repeat' ? '' : P.setsForever ? ` · round ${S.round}` : ` · round ${S.round}/${P.sets}`);
+  // What the loop engine needs to know for a step.
+  const runOpts = (guard) => ({ duration: S.duration, guard, after: P.between === 'jump' ? 'next' : 'continue' });
   // The small strip shows while looping with the editor closed.
   const stripWanted = () => S.active && !S.open && P.strip && ready() && S.trusted;
   const { finished, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
-  const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
   const newLoop = (a, b, c) => E.newLoop(a, b, c, P);
 
   function freeColor() {
@@ -114,14 +126,16 @@ export function createCore(adapter, store) {
   }
 
   const isAd = () => adapter.isAd(S.player);
+  // "video" or "track", for messages.
+  const mediaWord = () => (adapter.dockOnly || (S.video && S.video.tagName === 'AUDIO') ? 'track' : 'video');
 
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
-    store.put(S.videoId, E.isPristine(S.loops, S.duration, P) ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
+    store.put(S.videoId, S.loops.length ? { loops: E.serializeLoops(S.loops), t: Date.now() } : null);
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, gap: P.gap, countIn: P.countIn, tick: P.tick, practiceOpen: P.practiceOpen, sets: P.sets, setsForever: P.setsForever });
+    store.setPrefs({ count: P.count, infinite: P.infinite, between: P.between, end: P.end, autoOn: P.autoOn, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, gap: P.gap, countIn: P.countIn, tick: P.tick, practiceOpen: P.practiceOpen, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -143,12 +157,14 @@ export function createCore(adapter, store) {
       ad,
       loops: S.loops.length,
       running: S.active,
-      after: P.after,
-      rounds: P.setsForever ? 'forever' : P.sets,
+      between: P.between,
+      end: P.end,
+      rounds: P.end !== 'repeat' ? 1 : P.setsForever ? 'forever' : P.sets,
+      autoOn: P.autoOn,
     };
   }
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, loopLabel, mediaOk, mediaWord, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, runOpts, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

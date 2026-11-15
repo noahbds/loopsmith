@@ -35,12 +35,19 @@ export function createLayout(A) {
     }
   }
 
-  // Brings the panel back inside the player if the window or the player got smaller than where it was left.
+  // Brings the panel back inside the player if the window or the player got smaller than where it was
+  // left, or the panel itself got taller. Worked out from the layout, not measured on screen: while
+  // the panel opens it is still scaled down by its animation.
   function clampPos(pr) {
     const box = visibleBox();
     if (!box) return;
-    const r = box.getBoundingClientRect();
-    if (!r.width || !r.height) return;
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    if (!w || !h) return;
+    const cs = getComputedStyle(box);
+    const right = pr.right - (parseFloat(cs.right) || 0) + S.pos.dx;
+    const bottom = pr.bottom - (parseFloat(cs.bottom) || 0) + S.pos.dy;
+    const r = { left: right - w, right, top: bottom - h, bottom };
     let ddx = 0;
     let ddy = 0;
     if (r.left < pr.left) ddx = pr.left - r.left;
@@ -109,6 +116,7 @@ export function createLayout(A) {
     place();
     A.render();
     ui.panel.classList.add('lsm-open');
+    place(); // now that the panel shows what it holds (it may be taller), keep it inside the player
     A.wake();
   }
 
@@ -123,6 +131,13 @@ export function createLayout(A) {
   }
 
   const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (visibleBox()) place(); }) : null;
+  // The panel and the strip change height too (no loop yet / editor, rounds, practice options).
+  // Called once the panel is built.
+  function watchBoxes() {
+    if (!resizeWatch) return;
+    resizeWatch.observe(ui.panel);
+    resizeWatch.observe(ui.strip);
+  }
 
   // Floating mode: the overlay follows the media. Big enough and mostly on screen: laid over the
   // video. Otherwise (audio, small or scrolled-away video): docked to the bottom-right corner.
@@ -254,12 +269,12 @@ export function createLayout(A) {
       return;
     }
     if (p !== S.player) {
-      S.player = p;
-      S.dirty = true;
       if (resizeWatch) {
-        resizeWatch.disconnect();
+        if (S.player) resizeWatch.unobserve(S.player); // the panel and strip stay watched
         resizeWatch.observe(p);
       }
+      S.player = p;
+      S.dirty = true;
     }
     if (floating) {
       layoutHost();
@@ -272,5 +287,5 @@ export function createLayout(A) {
     if (bar && ui.markBox.parentNode !== bar) bar.appendChild(ui.markBox);
   }
 
-  return { applyPos, bindDrag, closePanel, ensure, onPointerMove, openPanel, place, queueLayout, updatePill };
+  return { applyPos, bindDrag, closePanel, watchBoxes, ensure, onPointerMove, openPanel, place, queueLayout, updatePill };
 }

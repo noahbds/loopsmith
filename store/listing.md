@@ -17,10 +17,10 @@ WHAT YOU CAN DO
 • Set the start and end by dragging the A and B handles, typing a time (1:23, 90s, 1m30s), or grabbing the current position.
 • Choose how many times a section plays, from 1 to 999, or forever.
 • Add several loops on the same video or track, even overlapping ones. Switch a loop off without deleting it.
-• Decide what happens when a loop is done: play on, jump straight to the next loop, or pause after the last one.
+• Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, or play them all again).
 • See your loops on the site's own progress bar.
 • Your loops are saved and come back when you return.
-• Skip to the next or previous loop, skip a repetition, or play all the loops again, a number of times or forever.
+• Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
 • Zoom the slider with the mouse wheel, snap loops to each other, or tap a key while playing to mark sections.
 • Practise with a gap between plays and a count-in.
 • Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop.

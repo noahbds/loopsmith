@@ -36,8 +36,11 @@ for keeping your favourite part of a song on repeat.
   one, or tap a key while playing to mark sections.
 - Practise: a gap between plays and a count-in.
 - Several loops per video or track, overlapping or nested; switch one off without deleting it.
-- When a loop is done: play on, jump to the next loop, or pause after the last one. When the last
-  loop is done, the whole set can start over (a number of rounds, or again and again).
+- Loops take turns: a loop inside another one waits until the outer one is done. Between loops:
+  play on or jump straight to the next one. After the last: play on, pause, or play them all again
+  (a number of rounds, or again and again).
+- No loop until you make one: one click loops the whole video or track. Optionally, looping turns
+  on by itself on media you already have loops for.
 - Loops show on the site's own progress bar, and are saved per video or track.
 - Skip ahead without waiting: next / previous loop, skip a repetition, restart it, or jump to loop 1–9.
   Deleting loops can be undone.

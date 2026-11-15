@@ -12,6 +12,7 @@
  * @property {number} done     plays completed in the current run
  * @property {string} [name]   optional label
  * @property {boolean} [skip]  skipped by the user in the current run (never saved)
+ * @property {boolean} [turn]  started or jumped to on purpose: has the turn while it plays (never saved)
  */
 
 /**

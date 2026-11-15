@@ -7,7 +7,7 @@ import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
-  const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
+  const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, loopLabel, mediaOk, mediaWord, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
   const live = { wait: '', round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
@@ -210,15 +210,35 @@ export function createRender(A) {
     });
 
     const which = many ? `loop ${S.sel + 1}` : 'this loop';
-    ui.add.hidden = !ok || loops.length >= MAX_LOOPS;
+    ui.add.hidden = !mediaOk() || loops.length >= MAX_LOOPS;
     ui.more.hidden = !ok;
     if (!ok) A.closeMenu();
     const startTitle = `Play ${which} from its start`;
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
     A.syncToolbar();
-    ui.markBox.hidden = !(ok && (S.active || !isDefaultSet()) && (!floating || L.barPlaced));
+    ui.markBox.hidden = !(ok && (!floating || L.barPlaced));
     ui.markBox.classList.toggle('lsm-live', S.active);
+  }
+
+  function renderSeg(seg, value, dim) {
+    setStyle(seg.box, '--i', String(Math.max(0, seg.btns.findIndex((b) => b.dataset.v === value))));
+    for (const b of seg.btns) setAttr(b, 'aria-pressed', String(b.dataset.v === value));
+    seg.box.classList.toggle('lsm-dim', dim);
+  }
+
+  // What happens once the loop `l` is done, given the settings for all loops.
+  function thenText(l) {
+    if (!l.on) return 'Switched off: kept, but not played';
+    if (l.infinite) return 'Repeats until you skip it or turn looping off';
+    const order = E.sortedByStart(S.loops.filter((x) => x.on));
+    const next = order[order.indexOf(l) + 1];
+    if (next) {
+      if (P.between === 'jump') return `Then jumps to ${(next.name || `loop ${S.loops.indexOf(next) + 1}`)}`;
+      return next.b > l.b ? `Then plays on into ${(next.name || `loop ${S.loops.indexOf(next) + 1}`)}` : 'Then plays on';
+    }
+    const last = order.length > 1 ? 'Last loop, then ' : 'Then ';
+    return last + (P.end === 'pause' ? 'pauses' : P.end === 'repeat' ? 'all loops start over' : 'plays on');
   }
 
   // The two buttons that join the loop to its neighbours (shown when there is something to join to).
@@ -249,6 +269,11 @@ export function createRender(A) {
     const pa = ok ? toPct(l.a) : 0;
     const pb = ok ? toPct(l.b) : 100;
 
+    // No loop yet: the panel offers to create one instead of showing the editor.
+    const empty = mediaOk() && !S.loops.length;
+    ui.empty.hidden = !empty;
+    ui.body.hidden = empty;
+    if (empty) setText(ui.wholeBtn, `Whole ${mediaWord()}`);
     ui.body.disabled = !ok;
     ui.panel.classList.toggle('lsm-off', !ok);
     ui.panel.classList.toggle('lsm-running', S.active);
@@ -284,7 +309,7 @@ export function createRender(A) {
     if (!ui.countState.editing && ui.count.value !== count) ui.count.value = count;
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
-    setAttr(ui.seg, 'data-v', P.after);
+    setText(ui.thenNote, ok ? thenText(l) : '');
     // Practice options
     ui.practiceBtn.setAttribute('aria-expanded', String(P.practiceOpen));
     setText(ui.practiceBtn, P.practiceOpen ? '▾ Practice options' : '▸ Practice options');
@@ -295,9 +320,12 @@ export function createRender(A) {
     ui.tickBtn.hidden = !P.countIn;
     setText(ui.setsVal, P.setsForever ? '∞' : `${P.sets}×`);
     setAttr(ui.setsInf, 'aria-pressed', String(P.setsForever));
-    setText(ui.setsNote, P.setsForever ? 'Then starts over, again and again' : P.sets > 1 ? `Then starts over: ${P.sets} rounds in all` : 'Stops after the last loop');
-    ui.seg.classList.toggle('lsm-dim', ok && S.loops.every((x) => !x.on || x.infinite));
-    for (const b of ui.segBtns) setAttr(b, 'aria-pressed', String(b.dataset.v === P.after));
+    setText(ui.setsNote, P.setsForever ? 'Again and again, until you stop' : `${P.sets} times through in all, then pauses`);
+    ui.rounds.hidden = P.end !== 'repeat';
+    // Nothing ever ends while every loop that is on repeats forever: the choices don't apply.
+    const endless = ok && S.loops.every((x) => !x.on || x.infinite);
+    renderSeg(ui.segBetween, P.between, endless);
+    renderSeg(ui.segEnd, P.end, endless);
 
     ui.main.classList.toggle('lsm-on', S.active);
     setAttr(ui.main, 'aria-pressed', String(S.active));
