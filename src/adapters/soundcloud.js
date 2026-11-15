@@ -20,11 +20,6 @@ export default {
   engaged: () => true,
   waitingText: 'Press play to load the track, then set your loops.',
 
-  // The media playing (or last played) in the hidden box.
-  findPlayer(keep) {
-    return generic.findPlayer(keep);
-  },
-
   identify(p) {
     const d = p.duration;
     const track = trackPath();

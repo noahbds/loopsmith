@@ -10,3 +10,7 @@ export const PALETTE = ['62,166,255', '255,183,77', '110,231,163', '255,126,182'
 
 // What happens when a loop has played out: keep playing, jump straight to the next loop, or pause at the end.
 export const AFTER = ['continue', 'next', 'pause'];
+
+// Limits for the gap between plays and the count-in, in seconds.
+export const MAX_GAP = 5;
+export const MAX_COUNT_IN = 8;

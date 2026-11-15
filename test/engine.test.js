@@ -22,10 +22,19 @@ describe('loopAt', () => {
     expect(E.loopAt([l], 15, 100, 0.25)).toBe(l);
     expect(E.loopAt([l], 25, 100, 0.25)).toBe(null);
   });
-  it('prefers the inner loop when loops overlap', () => {
+  it('gives the turn to the loop that started first, even with another inside it', () => {
     const outer = loop(0, 60);
     const inner = loop(20, 30);
+    expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(outer);
+    expect(E.loopAt([inner, outer], 25, 100, 0.25)).toBe(outer);
+    outer.done = 3; // its turn is over
     expect(E.loopAt([outer, inner], 25, 100, 0.25)).toBe(inner);
+  });
+  it('same start: the lower-numbered loop has the turn', () => {
+    const one = loop(10, 40);
+    const two = loop(10, 20);
+    expect(E.loopAt([one, two], 15, 100, 0.25)).toBe(one);
+    expect(E.loopAt([two, one], 15, 100, 0.25)).toBe(two);
   });
   it('ignores switched-off and played-out loops', () => {
     expect(E.loopAt([loop(10, 20, { on: false })], 15, 100, 0.25)).toBe(null);
@@ -44,32 +53,31 @@ describe('nextLoop', () => {
 });
 
 describe('crossing a loop end', () => {
-  it('detects forward playback running into the end', () => {
+  const o = { duration: 100, guard: 0.25 };
+
+  it('turns around when forward playback runs into the end', () => {
     const l = loop(10, 20);
-    expect(E.crossedLoops([l], 19.9, 20.05, 100, 0.25)).toEqual([l]);
-    expect(E.crossedLoops([l], 19.0, 19.5, 100, 0.25)).toBe(null);
+    expect(E.advance([l], 19.9, 20.05, o)).toEqual({ seek: 10, repeat: l });
+    expect(E.advance([l], 19.0, 19.5, o)).toBe(null);
   });
 
-  it('goes back to the inner loop first, then the outer one', () => {
-    const outer = loop(0, 30, { count: 2 });
-    const inner = loop(20, 30, { count: 1 });
-    // Both end at 30: the inner one is played out after one play, the outer one goes back.
-    const back = E.countCrossed([outer, inner]);
-    expect(back).toBe(outer);
-    expect(inner.done).toBe(1);
-    expect(outer.done).toBe(1);
+  it('passes over the end of a loop whose turn it is not', () => {
+    const outer = loop(0, 60);
+    const inner = loop(20, 30);
+    expect(E.advance([outer, inner], 29.9, 30.05, o)).toBe(null);
+    expect(inner.done).toBe(0);
   });
 
   it('counts plays until the loop is exhausted', () => {
     const l = loop(10, 20, { count: 2 });
-    expect(E.countCrossed([l])).toBe(l);
-    expect(E.countCrossed([l])).toBe(null);
+    expect(E.advance([l], 19.9, 20.05, o)).toMatchObject({ repeat: l });
+    expect(E.advance([l], 19.9, 20.05, o)).toEqual({ finish: true });
     expect(E.exhausted(l)).toBe(true);
   });
 
   it('never exhausts an infinite loop', () => {
     const l = loop(10, 20, { infinite: true });
-    for (let i = 0; i < 50; i++) expect(E.countCrossed([l])).toBe(l);
+    for (let i = 0; i < 50; i++) expect(E.advance([l], 19.9, 20.05, o)).toMatchObject({ repeat: l });
   });
 
   it('knows whether anything is left ahead', () => {
@@ -126,5 +134,20 @@ describe('saving and restoring', () => {
   it('recognises the untouched default', () => {
     expect(E.isDefaultSet([loop(0, 100)], 100)).toBe(true);
     expect(E.isDefaultSet([loop(0, 90)], 100)).toBe(false);
+  });
+});
+
+describe('isPristine', () => {
+  const D = { count: 3, infinite: false };
+  const whole = (more = {}) => [{ ...loop(0, 100), count: 3, ...more }];
+  it('is true for the untouched whole-media loop', () => {
+    expect(E.isPristine(whole(), 100, D)).toBe(true);
+  });
+  it('is false once the loop is named, switched off, made endless or covers less', () => {
+    expect(E.isPristine(whole({ name: 'Song' }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ on: false }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ infinite: true }), 100, D)).toBe(false);
+    expect(E.isPristine(whole({ b: 50 }), 100, D)).toBe(false);
+    expect(E.isPristine([...whole(), loop(1, 2)], 100, D)).toBe(false);
   });
 });

@@ -55,6 +55,19 @@ export function isDefaultSet(loops, duration) {
   return loops.length === 1 && loops[0].a <= 0.001 && loops[0].b >= duration - 0.05;
 }
 
+/**
+ * The untouched default: the whole media as one loop that has not been named, switched off or given
+ * its own count. Only anything else is worth saving.
+ * @param {Loop[]} loops
+ * @param {number} duration
+ * @param {import('../types.js').LoopDefaults} defaults
+ */
+export function isPristine(loops, duration, defaults) {
+  if (!isDefaultSet(loops, duration)) return false;
+  const l = loops[0];
+  return l.on && !l.name && l.infinite === defaults.infinite && (l.infinite || l.count === defaults.count);
+}
+
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
 // seconds early, so the player never reaches "ended" (which would trigger autoplay).
 /**
@@ -66,9 +79,9 @@ export function loopEnd(l, duration, guard) {
   return Math.max(l.a + 0.2, Math.min(l.b, duration - guard));
 }
 
-// The loop in charge at the playhead: of the loops it is in, the one whose turn-around point comes
-// first, since that is the one that will send playback back (an inner loop inside an outer one;
-// the earlier of two loops that overlap partly). Same end: the one that starts later.
+// The loop whose turn it is at the playhead: of the loops it is in, the one that started first
+// (same start: the lower-numbered one). Only that loop turns playback around; a loop inside it, or
+// one that overlaps its end, waits for its own turn and never cuts into it.
 /**
  * @param {Loop[]} loops
  * @param {number} t
@@ -79,15 +92,9 @@ export function loopEnd(l, duration, guard) {
 export function loopAt(loops, t, duration, guard) {
   /** @type {Loop | null} */
   let best = null;
-  let bestEnd = Infinity;
   for (const l of loops) {
-    if (skipped(l)) continue;
-    const end = loopEnd(l, duration, guard);
-    if (t < l.a - 0.3 || t >= end) continue;
-    if (!best || end < bestEnd - 1e-6 || (Math.abs(end - bestEnd) <= 1e-6 && l.a > best.a)) {
-      best = l;
-      bestEnd = end;
-    }
+    if (skipped(l) || t < l.a - 0.3 || t >= loopEnd(l, duration, guard)) continue;
+    if (!best || l.a < best.a - 1e-6) best = l;
   }
   return best;
 }
@@ -105,26 +112,6 @@ export function nextLoop(loops, t) {
   return next;
 }
 
-// Loops whose end playback ran into between `prev` and `t` (forward playback only), or null.
-/**
- * @param {Loop[]} loops
- * @param {number} prev
- * @param {number} t
- * @param {number} duration
- * @param {number} guard
- * @returns {Loop[] | null}
- */
-export function crossedLoops(loops, prev, t, duration, guard) {
-  /** @type {Loop[] | null} */
-  let crossed = null;
-  for (const l of loops) {
-    if (skipped(l)) continue;
-    const end = loopEnd(l, duration, guard);
-    if (prev < end && t >= end) (crossed || (crossed = [])).push(l);
-  }
-  return crossed;
-}
-
 // Whether any playable loop still ends after `t`.
 /**
  * @param {Loop[]} loops
@@ -136,51 +123,40 @@ export function anyAhead(loops, t, duration, guard) {
   return loops.some((l) => !skipped(l) && loopEnd(l, duration, guard) > t);
 }
 
-// Counts one play for each loop that just ended and returns the loop to go back to: the first
-// one (inner loops first) that still has plays left. Null when they have all played out.
-/**
- * @param {Loop[]} crossed
- * @returns {Loop | null}
- */
-export function countCrossed(crossed) {
-  crossed.sort((x, y) => y.a - x.a);
-  for (const l of crossed) {
-    l.done += 1;
-    if (!exhausted(l)) return l;
-  }
-  return null;
-}
+// Loops that start within this many seconds of where another ends count as joined.
+const ADJACENT = 0.15;
 
-// One step of the loop engine, for forward playback from `prev` to `t`. Counts the plays of the
-// loops whose end was just reached and says what to do:
-//   null                      nothing happened
-//   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
-//   { seek, next: loop }      "Next loop": the loops just played out; jump to the next one's start
-//   { carryOn: true }         those loops are done, others remain: keep playing
-//   { finish: true }          nothing left to play
-// "Next loop" means the loop that starts after the one(s) just finished, even when it overlaps
-// them and playback is already inside it: it is played from its own start.
 /**
- * What happens once the loops in `finishedLoops` are played out: nothing left (finish), jump to the
- * next loop ("Next loop"), or carry on.
+ * What happens once a loop's turn is over: nothing left (finish), jump to the next loop
+ * ("Next loop"), or carry on.
  * @param {Loop[]} loops
- * @param {number} finishedA start of the latest-starting loop that just finished
+ * @param {number} finishedA start of the loop that just finished
+ * @param {number} finishedEnd where it turned around
  * @param {number} t playhead
  * @param {{ duration: number, guard: number, after?: string }} opts
  * @returns {Step}
  */
-function settle(loops, finishedA, t, { duration, guard, after = 'continue' }) {
-  if (!anyAhead(loops, t, duration, guard)) return { finish: true };
-  if (after === 'next') {
-    /** @type {Loop | null} */
-    let next = null;
-    for (const l of loops) if (!skipped(l) && l.a > finishedA && (!next || l.a < next.a)) next = l;
-    if (next) return { seek: next.a, next };
-    // Only a loop around the finished one is left: carry on inside it.
+function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'continue' }) {
+  // "Next loop" goes to the loop that starts after this one, even one that lies behind the playhead
+  // (inside the loop that just finished).
+  const next = after === 'next' ? nextLoop(loops, finishedA) : null;
+  if (next) {
+    // A loop that starts right where the finished one ends is already playing: seeking to its
+    // start would only cut the sound for a moment.
+    return Math.abs(next.a - finishedEnd) <= ADJACENT ? { carryOn: true } : { seek: next.a, next };
   }
-  return { carryOn: true };
+  return anyAhead(loops, t, duration, guard) ? { carryOn: true } : { finish: true };
 }
 
+// One step of the loop engine, for forward playback from `prev` to `t`. When playback just ran
+// into the end of the loop whose turn it is (see loopAt), counts a play and says what to do:
+//   null                      nothing happened (the end of any other loop is passed over)
+//   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
+//   { seek, next: loop }      "Next loop": its turn is over; jump to the next one's start
+//   { carryOn: true }         its turn is over, others remain: keep playing
+//   { finish: true }          nothing left to play
+// "Next loop" means the loop that starts after the one just finished, even when it lies inside it
+// or overlaps it and playback is already past its start: it is played from its own start.
 /**
  * @param {Loop[]} loops
  * @param {number} prev
@@ -189,12 +165,13 @@ function settle(loops, finishedA, t, { duration, guard, after = 'continue' }) {
  * @returns {Step}
  */
 export function advance(loops, prev, t, opts) {
-  const crossed = crossedLoops(loops, prev, t, opts.duration, opts.guard);
-  if (!crossed) return null;
-  const finishedA = Math.max(...crossed.map((l) => l.a));
-  const back = countCrossed(crossed);
-  if (back) return { seek: back.a, repeat: back };
-  return settle(loops, finishedA, t, opts);
+  const l = loopAt(loops, prev, opts.duration, opts.guard);
+  if (!l) return null;
+  const end = loopEnd(l, opts.duration, opts.guard);
+  if (t < end) return null;
+  l.done += 1;
+  if (!exhausted(l)) return { seek: l.a, repeat: l };
+  return settle(loops, l.a, end, t, opts);
 }
 
 /**
@@ -220,7 +197,7 @@ export function skipRep(loops, target, opts) {
   target.done += 1;
   if (!exhausted(target)) return { seek: target.a, repeat: target };
   const end = loopEnd(target, opts.duration, opts.guard);
-  const step = settle(loops, target.a, end, opts);
+  const step = settle(loops, target.a, end, end, opts);
   // Carrying on from the middle of a repetition that was skipped: carry on from its end.
   return step && 'carryOn' in step && !('seek' in step) ? { seek: end, carryOn: true } : step;
 }
@@ -238,9 +215,7 @@ export function skipRep(loops, target, opts) {
 export function skipLoop(loops, target, t, opts) {
   const from = target ? target.a : t;
   if (target) target.skip = true;
-  /** @type {Loop | null} */
-  let next = null;
-  for (const l of loops) if (!skipped(l) && l.a > from && (!next || l.a < next.a)) next = l;
+  const next = nextLoop(loops, from);
   if (next) return { seek: next.a, next };
   const end = target ? loopEnd(target, opts.duration, opts.guard) : t;
   if (anyAhead(loops, end, opts.duration, opts.guard)) return { seek: end, carryOn: true };
@@ -296,8 +271,6 @@ export function gotoLoop(loop) {
   return { seek: loop.a, goto: loop };
 }
 
-// Moves one end of a loop. push=true: the other end moves out of the way.
-// push=false: this end stops against the other one. Returns the new { a, b }.
 /**
  * Moves one end of a loop. push=true: the other end moves out of the way. push=false: this end
  * stops against it. `digits` is how finely times are kept (1 = tenths, 2 = hundredths).

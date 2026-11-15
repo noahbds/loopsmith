@@ -202,8 +202,9 @@ for (const mode of ['next', 'continue']) {
   await ctx.close();
 }
 
-{
-  const { ctx, page } = await open('A loop inside another', '/overlap.html');
+// A loop inside another: loop 1 0:02→0:14 ×2, loop 2 0:06→0:09 ×2. Loop 2 never cuts into loop 1's turn.
+for (const mode of ['next', 'continue']) {
+  const { ctx, page } = await open(`A loop inside another, "${mode === 'next' ? 'Next loop' : 'Play on'}"`, '/overlap.html');
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
   await setField(page, '#lsm-time-a', '0:02');
@@ -213,11 +214,18 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:06');
   await setField(page, '#lsm-time-b', '0:09');
   await setField(page, '#lsm-count', '2');
+  await L(page, `.lsm-seg button[data-v="${mode}"]`).click();
   await L(page, '.lsm-chip').first().click();
   await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
   await L(page, '.lsm-start').click();
-  const w = await watch(page, mainT, 13000);
-  check(w.jumps.length === 2 && near(w.jumps[0], 6) && near(w.jumps[1], 2), 'inner loop twice, then the outer one again', JSON.stringify(w.jumps));
+  const w = await watch(page, mainT, mode === 'next' ? 17000 : 13000);
+  // Next loop: loop 1 twice (back to 0:02 once), then loop 2 from 0:06, twice.
+  // Play on: loop 1 twice, then playback runs on past loop 2, which is behind it.
+  const want = mode === 'next' ? [2, 6, 6] : [2];
+  check(w.jumps.length === want.length && w.jumps.every((j, i) => near(j, want[i])), `outer loop twice${mode === 'next' ? ', then the inner one twice' : ''}: jumps back to ${want.join(', ')}`, JSON.stringify(w.jumps));
+  const first2 = w.status.findIndex((s) => /Loop 2/.test(s.text));
+  if (mode === 'next') check(first2 >= 0 && !w.status.slice(first2).some((s) => /Loop 1/.test(s.text)), 'status says "Loop 1" until loop 1 is finished, then "Loop 2"');
+  else check(first2 < 0, 'status never says "Loop 2"');
   await ctx.close();
 }
 
@@ -290,7 +298,14 @@ for (const mode of ['next', 'continue']) {
   await page.waitForTimeout(500);
   check(await strip(), 'the strip shows while looping with the editor closed');
   check(/Rep/.test(await shadow(page, (sr) => sr.querySelector('.lsm-strip-text').textContent)), 'it says which repetition is playing');
-  await L(page, '.lsm-strip .lsm-sb:last-of-type').click(); // open the editor
+  await L(page, '[aria-label="Hide this strip (looping goes on)"]').click();
+  await page.waitForTimeout(300);
+  check(!(await strip()), 'the strip can be hidden while looping');
+  check(await shadow(page, (sr) => sr.querySelector('.lsm-pill').classList.contains('lsm-active')), 'and looping goes on');
+  await L(page, '.lsm-toast-btn').click();
+  await page.waitForTimeout(300);
+  check(await strip(), 'the message brings it back');
+  await L(page, '[aria-label="Open the editor"]').click(); // open the editor
   await page.waitForTimeout(300);
   check(!(await strip()), 'opening the editor hides the strip');
   const rect = () => shadow(page, (sr) => { const r = sr.querySelector('.lsm-panel').getBoundingClientRect(); return { l: r.left, t: r.bottom }; });
@@ -326,6 +341,7 @@ for (const mode of ['next', 'continue']) {
   await setField(page, '#lsm-time-a', '0:10');
   await setField(page, '#lsm-time-b', '0:12');
   await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-disclose').click(); // the practice options
   const val = () => shadow(page, (sr) => sr.querySelector('.lsm-rounds .lsm-val').textContent);
   check((await val()) === '1×', 'plays the set once by default');
   await L(page, '[aria-label="More rounds"]').click();
@@ -341,6 +357,7 @@ for (const mode of ['next', 'continue']) {
   await page.reload();
   await page.waitForTimeout(1200);
   await openPanel(page, [640, 300]);
+  check(await L(page, '.lsm-practice').isVisible(), 'the practice section stays open');
   check((await val()) === '2×', 'the number of rounds is remembered');
   await L(page, '.lsm-rounds .lsm-inf').click();
   check((await val()) === '∞', 'the ∞ button plays them again and again');
@@ -439,6 +456,160 @@ for (const mode of ['next', 'continue']) {
   await page.evaluate(() => document.getElementById('main').play());
   await openPanel(page, [640, 300]);
   check(!(await L(page, '.lsm-hint').isVisible()), 'and it stays hidden');
+  await ctx.close();
+}
+
+// Placing loops next to each other, zooming, and tapping marks.
+{
+  const { ctx, page } = await open('Chaining, zoom and tapping', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:10');
+  await setField(page, '#lsm-time-b', '0:20');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:30');
+  await setField(page, '#lsm-time-b', '0:40');
+  const a = () => L(page, '#lsm-time-a').inputValue();
+  const b = () => L(page, '#lsm-time-b').inputValue();
+  const chain = L(page, '.lsm-chain').first();
+  check((await chain.textContent()).includes('Start after Loop 1'), 'a button offers to start right after the previous loop', await chain.textContent());
+  await chain.click();
+  check((await a()) === '0:20', 'it puts the start at the previous loop\'s end', await a());
+  check(!(await L(page, '.lsm-chain').first().isVisible().catch(() => false)), 'and the button goes away once joined');
+
+  await L(page, '.lsm-add').click({ modifiers: ['Shift'] });
+  check((await a()) === '0:40' && (await b()) === '1:00', 'Shift+add makes a loop right after the selected one', JSON.stringify([await a(), await b()]));
+
+  // zoom with the wheel around the pointer, move with Shift+wheel, reset by double-click
+  const scale = () => shadow(page, (sr) => [...sr.querySelectorAll('.lsm-scale > span:not(.lsm-mid)')].map((x) => x.textContent).join('-'));
+  const track = await L(page, '.lsm-track').boundingBox();
+  await page.mouse.move(track.x + track.width / 2, track.y + 15);
+  check((await scale()) === '0:00-1:00', 'starts on the whole video', await scale());
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(150);
+  const zoomed = await scale();
+  check(zoomed !== '0:00-1:00' && await L(page, '.lsm-mini').isVisible(), 'the wheel zooms and the overview strip appears', zoomed);
+  await page.keyboard.down('Shift');
+  await page.mouse.wheel(0, 300);
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(150);
+  check((await scale()) !== zoomed, 'Shift+wheel moves the window', await scale());
+  await page.mouse.dblclick(track.x + track.width / 2, track.y + 4);
+  await page.waitForTimeout(150);
+  check((await scale()) === '0:00-1:00', 'double-click goes back to the whole video', await scale());
+
+  // dragging an edge snaps to another loop's edge
+  await L(page, '.lsm-chip-main').nth(1).click();
+  const tr = await L(page, '.lsm-lane').boundingBox();
+  const px = (t) => tr.x + (t / 60) * tr.width;
+  await page.mouse.move(px(20), tr.y + 15);
+  const thumbA = await L(page, '.lsm-thumb-a').boundingBox();
+  await page.mouse.move(thumbA.x + thumbA.width / 2, thumbA.y + thumbA.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(thumbA.x + thumbA.width / 2 + (px(11) - px(20)), thumbA.y + 10, { steps: 8 }); // about 0:11, 1 s from the edge at 0:10
+  await page.mouse.up();
+  check((await a()) === '0:10' || (await a()) === '0:20', 'a dragged edge snaps to a neighbour\'s edge', await a());
+  await page.keyboard.press('Escape');
+  await ctx.close();
+}
+
+{
+  const { ctx, page } = await open('Tap to mark', '/overlap.html');
+  await page.evaluate(() => { const v = document.getElementById('main'); v.currentTime = 4; v.play(); });
+  await openPanel(page, [640, 300]);
+  const chips = () => shadow(page, (sr) => sr.querySelectorAll('.lsm-chip').length);
+  await page.keyboard.press('Shift+KeyM');
+  check(/Start/.test(await shadow(page, (sr) => sr.querySelector('.lsm-toast span').textContent)), 'the first tap marks a start');
+  await page.waitForTimeout(2200);
+  await page.keyboard.press('Shift+KeyM');
+  await page.waitForTimeout(150);
+  const a = await L(page, '#lsm-time-a').inputValue();
+  const b = await L(page, '#lsm-time-b').inputValue();
+  check((await chips()) === 1 && /^0:0[3-5]/.test(a) && /^0:0[6-8]/.test(b), 'the second tap makes the loop (the untouched whole-video loop is replaced)', JSON.stringify([a, b]));
+  await page.waitForTimeout(2000);
+  await page.keyboard.press('Shift+KeyM');
+  await page.waitForTimeout(150);
+  check((await chips()) === 2, 'the third tap makes the next section', String(await chips()));
+  const a2 = await L(page, '#lsm-time-a').inputValue();
+  check(a2 === b, 'which starts where the last one ended', JSON.stringify([a2, b]));
+  await ctx.close();
+}
+
+// Practice: the gap between repetitions and the count-in.
+{
+  const { ctx, page } = await open('Gap between plays and count-in', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:06');
+  await setField(page, '#lsm-count', '3');
+  await L(page, '.lsm-disclose').click();
+  const gapMore = L(page, '[aria-label="Gap between plays: more"]');
+  await gapMore.click();
+  await gapMore.click();
+  check((await shadow(page, (sr) => sr.querySelectorAll('.lsm-practice .lsm-val')[1].textContent)) === '1 s', 'two half-second steps make a 1 s gap');
+  await L(page, '.lsm-start').click();
+  let resumes = 0;
+  let wasPaused = false;
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(100);
+    const paused = await page.evaluate(() => document.getElementById('main').paused);
+    if (wasPaused && !paused) resumes++;
+    wasPaused = paused;
+  }
+  check(resumes >= 2, 'it pauses between plays and carries on by itself', String(resumes));
+  // stopping while held between two plays lets the music go on
+  await L(page, '.lsm-start').click();
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(100);
+    if (await page.evaluate(() => document.getElementById('main').paused)) break;
+  }
+  check(await page.evaluate(() => document.getElementById('main').paused), 'held between two plays');
+  await L(page, '.lsm-main').click();
+  await page.waitForTimeout(300);
+  check(!(await page.evaluate(() => document.getElementById('main').paused)), 'stopping looping then lets the music go on');
+
+  // count-in: 2 seconds before the loop starts
+  await page.evaluate(() => document.getElementById('main').play());
+  await L(page, '[aria-label="Gap between plays: less"]').click();
+  await L(page, '[aria-label="Gap between plays: less"]').click();
+  const countMore = L(page, '[aria-label="Count-in: more"]');
+  await countMore.click();
+  await countMore.click();
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.getElementById('main').paused), 'the count-in holds the video at the loop start');
+  check(/Starting in/.test(await shadow(page, (sr) => sr.querySelector('.lsm-status-text').textContent)), 'and the status counts down');
+  await page.waitForTimeout(2300);
+  check(!(await page.evaluate(() => document.getElementById('main').paused)), 'then it plays');
+  await ctx.close();
+}
+
+// Loops joined end to end ("Next loop"): no seek, so no cut in the sound, where one ends and the next starts.
+{
+  const { ctx, page } = await open('Loops joined end to end', '/overlap.html');
+  await page.evaluate(() => document.getElementById('main').play());
+  await openPanel(page, [640, 300]);
+  await L(page, '.lsm-hint-btn').click();
+  await setField(page, '#lsm-time-a', '0:05');
+  await setField(page, '#lsm-time-b', '0:08');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:08');
+  await setField(page, '#lsm-time-b', '0:11');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-seg button[data-v="next"]').click();
+  await L(page, '.lsm-chip-main').first().click();
+  await page.evaluate(() => { document.getElementById('main').playbackRate = 2; });
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { window.__seeks = 0; document.getElementById('main').addEventListener('seeking', () => window.__seeks++); });
+  await page.waitForTimeout(3500);
+  const end = await page.evaluate(() => ({ seeks: window.__seeks, t: document.getElementById('main').currentTime, paused: document.getElementById('main').paused }));
+  check(end.seeks === 0, 'playback goes from one loop into the next without a seek', JSON.stringify(end));
+  check(end.t >= 10.5, 'and both loops play through', JSON.stringify(end));
   await ctx.close();
 }
 

@@ -1,8 +1,9 @@
 // The shared state and small helpers every other part of the app builds on.
 
-import { MAX_COUNT, MAX_SETS, PALETTE, AFTER } from '../core/constants.js';
+import { MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, PALETTE, AFTER } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
+import * as V from '../core/view.js';
 
 export function createCore(adapter, store) {
   const prefs = store.getPrefs();
@@ -15,6 +16,10 @@ export function createCore(adapter, store) {
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
+    gap: clamp(Math.round((Number(prefs.gap) || 0) * 2) / 2, 0, MAX_GAP),       // seconds of pause between repetitions
+    countIn: clamp(Math.round(Number(prefs.countIn) || 0), 0, MAX_COUNT_IN),    // seconds of count-in before a loop starts
+    tick: prefs.tick !== false,     // tick during the count-in
+    practiceOpen: prefs.practiceOpen === true,
     sets: clamp(Math.round(Number(prefs.sets)) || 1, 1, MAX_SETS), // how many times the whole set of loops plays
     setsForever: prefs.setsForever === true,
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
@@ -33,12 +38,15 @@ export function createCore(adapter, store) {
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
     round: 1,        // which time through the whole set of loops this run is on
+    waiting: null,   // { kind: 'gap' | 'count', until, timer, left }: a pause before playing again
+    tap: null,       // tap to mark: the time of the last mark (the start of the section being tapped)
     undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
     lastT: null,     // previous playback position seen by the loop check
     open: false,
     sliding: false,  // a slider handle is held down
-    zoom: false,     // the slider shows only the area around the selected loop
+    zoom: false,     // the slider shows only part of the media (v0..v1)
+    panned: false,   // the user moved the window by hand: don't snap it back to the loop
     v0: 0,
     v1: 0,
     laneW: 0,        // slider width in CSS pixels (measured when the panel is placed)
@@ -48,7 +56,7 @@ export function createCore(adapter, store) {
   const saved = P.pos[adapter.id];
   if (saved && Number.isFinite(saved.dx) && Number.isFinite(saved.dy)) S.pos = { dx: saved.dx, dy: saved.dy };
 
-  const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [] };
+  const ui = { field: {}, thumb: {}, chips: [], ghosts: [], marks: [], miniTicks: [] };
   // Floating mode (sites without a control bar to join): the panel, toast and a small loop button
   // sit in an overlay laid over the video, or docked bottom-right for audio and small videos.
   const floating = !!adapter.floating;
@@ -69,7 +77,7 @@ export function createCore(adapter, store) {
   const roundText = () => (P.setsForever ? ` · round ${S.round}` : P.sets > 1 ? ` · round ${S.round}/${P.sets}` : '');
   // The small strip shows while looping with the editor closed.
   const stripWanted = () => S.active && !S.open && P.strip && ready() && S.trusted;
-  const { exhausted, finished, skipped } = E;
+  const { finished, skipped } = E;
   const describe = (l) => `${fmtT(l.a)} → ${fmtT(l.b)} · ${l.infinite ? '∞' : l.count + '×'}`;
   const isDefaultSet = () => E.isDefaultSet(S.loops, S.duration);
   const newLoop = (a, b, c) => E.newLoop(a, b, c, P);
@@ -89,22 +97,31 @@ export function createCore(adapter, store) {
     return span > 0 ? clamp((t - viewStart()) / span, 0, 1) * 100 : 0;
   }
 
+  // Zoomed in on the selected loop, with room around it.
   function fitView() {
-    const l = cur();
-    const pad = Math.max((l.b - l.a) * 0.4, 3);
-    S.v0 = Math.max(0, Math.floor((l.a - pad) * 10) / 10);
-    S.v1 = Math.min(S.duration, Math.ceil((l.b + pad) * 10) / 10);
+    const v = V.fitLoop(cur(), S.duration);
+    S.v0 = v.v0;
+    S.v1 = v.v1;
+    S.panned = false;
+  }
+
+  // The window the user zoomed or panned to (whole media when it covers all of it).
+  function setView(v) {
+    S.v0 = v.v0;
+    S.v1 = v.v1;
+    S.zoom = !V.isFull(v.v0, v.v1, S.duration);
+    S.panned = true;
   }
 
   const isAd = () => adapter.isAd(S.player);
 
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
-    store.put(S.videoId, isDefaultSet() ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
+    store.put(S.videoId, E.isPristine(S.loops, S.duration, P) ? null : { loops: E.serializeLoops(S.loops), t: Date.now() });
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever });
+    store.setPrefs({ count: P.count, infinite: P.infinite, after: P.after, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, gap: P.gap, countIn: P.countIn, tick: P.tick, practiceOpen: P.practiceOpen, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -133,5 +150,5 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, exhausted, finished, fitView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, isDefaultSet, loopLabel, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

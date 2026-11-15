@@ -15,13 +15,7 @@ let lastPlayed = null;
 let current = null;
 const bar = { media: null, el: null, at: 0 };
 
-function snapshot() {
-  const items = [];
-  for (const m of allMedia()) {
-    items.push({ m, video: m.tagName === 'VIDEO', rect: m.getBoundingClientRect() });
-  }
-  return items;
-}
+const snapshot = () => allMedia().map((m) => ({ m, video: m.tagName === 'VIDEO', rect: m.getBoundingClientRect() }));
 
 export default {
   id: 'generic',
@@ -74,5 +68,4 @@ export default {
     }
     return bar.el;
   },
-  navEvents: [],
 };

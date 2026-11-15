@@ -29,7 +29,7 @@ export function visibleArea(r, vw, vh) {
   return w > 0 && h > 0 ? w * h : 0;
 }
 
-export const MIN_VIDEO_AREA = 200 * 112;
+const MIN_VIDEO_AREA = 200 * 112;
 
 // Picks the media element to attach to:
 //   1. the one currently attached, while looping is on or the panel is open (keep);

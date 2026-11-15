@@ -51,7 +51,7 @@ async function watch(page, getT, ms, every = 250) {
   for (let i = 1; i < ts.length; i++) if (ts[i] < ts[i - 1] - 0.5) jumps.push(+ts[i].toFixed(1));
   return { ts, jumps };
 }
-const toast = (page) => page.evaluate(() => document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.lsm-toast')?.textContent);
+const toast = (page) => page.evaluate(() => document.querySelector('loopsmith-root')?.shadowRoot.querySelector('.lsm-toast span')?.textContent);
 
 /* ---------------- YouTube ---------------- */
 try {
@@ -76,6 +76,43 @@ try {
   const w = await watch(page, () => document.querySelector('#movie_player video').currentTime, 11000);
   check(w.jumps.length === 1 && near(w.jumps[0], 20), 'plays 0:20→0:24 twice', JSON.stringify(w.jumps));
   check((await toast(page)) === 'Loop finished · played 2×', 'loop finishes');
+
+  // what the popup's "Copy diagnostics" gets from the page, asked the way the popup asks
+  const sw = ctx.serviceWorkers()[0];
+  if (sw) {
+    const report = await sw.evaluate(async () => {
+      // the page under test is the active tab (a url filter needs the "tabs" permission, which the extension doesn't ask for)
+      const tabs = await chrome.tabs.query({ active: true });
+      return chrome.tabs.sendMessage(tabs[tabs.length - 1].id, { type: 'loopsmith:diagnostics' });
+    });
+    check(report && report.adapter === 'youtube' && report.hasPlayer && report.loops === 1, 'the page answers the diagnostics request', JSON.stringify(report));
+  }
+
+  // two loops end to end with "Next loop": no seek where the first ends and the second begins
+  await L(page, '.lsm-add').click();
+  await setField(page, '#lsm-time-a', '0:24');
+  await setField(page, '#lsm-time-b', '0:27');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-chip-main').first().click();
+  await setField(page, '#lsm-time-a', '0:21');
+  await setField(page, '#lsm-time-b', '0:24');
+  await setField(page, '#lsm-count', '1');
+  await L(page, '.lsm-seg button[data-v="next"]').click();
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(800);
+  await page.evaluate(() => { window.__seeks = 0; document.querySelector('#movie_player video').addEventListener('seeking', () => window.__seeks++); });
+  await page.waitForTimeout(6500);
+  const joined = await page.evaluate(() => ({ seeks: window.__seeks, t: document.querySelector('#movie_player video').currentTime }));
+  check(joined.seeks === 0 && joined.t > 26, 'loops joined end to end play on without a seek', JSON.stringify(joined));
+
+  // next / previous loop by keyboard
+  await L(page, '.lsm-chip-main').first().click();
+  await L(page, '.lsm-start').click();
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Shift+BracketRight');
+  await page.waitForTimeout(800);
+  const afterNext = await page.evaluate(() => document.querySelector('#movie_player video').currentTime);
+  check(near(afterNext, 24.8, 1.5), 'Shift+] skips to the next loop', String(afterNext));
   await page.close();
 } catch (e) { check(false, 'ran without errors', e.message.split('\n')[0]); }
 

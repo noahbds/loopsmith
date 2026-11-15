@@ -1,14 +1,15 @@
 // Drawing the state into the panel, the chips, the markers and the toast.
 
-import { MAX_LOOPS, PALETTE } from '../core/constants.js';
+import { MAX_LOOPS, MIN_LEN, FINE_MIN_LEN, PALETTE } from '../core/constants.js';
 import { clamp, roundT, fmt } from '../core/util.js';
+import * as V from '../core/view.js';
 import * as E from '../core/engine.js';
 import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 
 export function createRender(A) {
   const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, isDefaultSet, loopLabel, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
-  const live = { round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
+  const live = { wait: '', round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
   // Cheap, frequent updates: playhead, run status, progress fill, transient notices.
   function renderLive() {
@@ -33,8 +34,10 @@ export function createRender(A) {
       const l = A.loopAt(t, guard);
       const next = l ? null : A.nextLoop(t);
       const done = l ? l.done : -1;
-      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round) {
+      const wait = S.waiting ? (S.waiting.kind === 'count' ? `Starting in ${S.waiting.left}` : 'Next repetition…') : '';
+      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round || wait !== live.wait) {
         live.round = S.round;
+        live.wait = wait;
         live.stale = false;
         live.loop = l;
         live.next = next;
@@ -52,6 +55,7 @@ export function createRender(A) {
           text = 'Past the loops';
         }
         text += roundText();
+        if (wait) text = wait;
         setText(ui.statusText, text);
         setText(ui.stripText, text);
         setStyle(ui.strip, '--acv', PALETTE[(l || next || cur()).c]);
@@ -119,9 +123,18 @@ export function createRender(A) {
     const main = el('button', { class: 'lsm-chip-main', type: 'button' }, num, name, meta);
     const root = el('div', { class: 'lsm-chip', role: 'group' }, dot, main);
     const chip = { root, num, name, meta, dot, main };
-    main.addEventListener('dblclick', () => A.startRename(ui.chips.indexOf(chip)));
+    main.addEventListener('dblclick', () => {
+      clearTimeout(chip.seekTimer);
+      A.startRename(ui.chips.indexOf(chip));
+    });
     dot.addEventListener('click', () => A.toggleLoopAt(ui.chips.indexOf(chip)));
-    main.addEventListener('click', () => A.selectLoop(ui.chips.indexOf(chip)));
+    main.addEventListener('click', () => {
+      const i = ui.chips.indexOf(chip);
+      clearTimeout(chip.seekTimer);
+      // A click on the selected loop jumps to its start, unless it is the first half of a double-click (rename).
+      if (i === S.sel) chip.seekTimer = setTimeout(() => A.selectLoop(i), 260);
+      else A.selectLoop(i);
+    });
     root.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const i = ui.chips.indexOf(chip);
@@ -130,11 +143,6 @@ export function createRender(A) {
     });
     ui.chipRow.insertBefore(root, ui.add);
     return chip;
-  }
-
-  // Open menu: a click on the page or Escape closes it (see controls.js).
-  function setMenuOpen(open) {
-    setAttr(ui.more, 'aria-expanded', String(open));
   }
 
   function renderLoops(ok) {
@@ -146,6 +154,7 @@ export function createRender(A) {
     resize(ui.chips, loops.length, makeChip);
     resize(ui.ghosts, loops.length, () => ui.ghostBox.appendChild(el('div', { class: 'lsm-ghost' })));
     resize(ui.marks, loops.length, () => ui.markBox.appendChild(el('div', { class: 'lsm-mark' })));
+    resize(ui.miniTicks, loops.length, () => ui.miniMarks.appendChild(el('i')));
 
     loops.forEach((l, i) => {
       const rgb = PALETTE[l.c];
@@ -184,6 +193,12 @@ export function createRender(A) {
         setStyle(ghost, '--lane', String(lanes[i] % 2));
       }
 
+      const tick = ui.miniTicks[i];
+      setStyle(tick, 'left', pct((l.a / d) * 100));
+      setStyle(tick, 'width', pct(Math.max(0.6, ((l.b - l.a) / d) * 100)));
+      setStyle(tick, '--cv', rgb);
+      tick.classList.toggle('lsm-muted', !l.on);
+
       const mark = ui.marks[i];
       setStyle(mark, 'left', pct((l.a / d) * 100));
       setStyle(mark, 'width', pct(((l.b - l.a) / d) * 100));
@@ -206,11 +221,31 @@ export function createRender(A) {
     ui.markBox.classList.toggle('lsm-live', S.active);
   }
 
+  // The two buttons that join the loop to its neighbours (shown when there is something to join to).
+  function renderChain(ok) {
+    const { prev, next } = ok ? V.neighbours(S.loops, S.sel) : { prev: null, next: null };
+    const l = ok ? cur() : null;
+    const min = P.fine ? FINE_MIN_LEN : MIN_LEN;
+    const showA = !!prev && Math.abs(prev.b - l.a) > 0.001 && prev.b < l.b - min;
+    const showB = !!next && Math.abs(next.a - l.b) > 0.001 && next.a > l.a + min;
+    ui.chainA.hidden = !showA;
+    ui.chainB.hidden = !showB;
+    ui.snapRow.hidden = !(showA || showB);
+    if (showA) {
+      setText(ui.chainA, `⇤ Start after ${loopLabel(prev)}`);
+      setAttr(ui.chainA, 'title', `Start this loop at ${fmtT(prev.b)}, right where ${loopLabel(prev)} ends`);
+    }
+    if (showB) {
+      setText(ui.chainB, `End before ${loopLabel(next)} ⇥`);
+      setAttr(ui.chainB, 'title', `End this loop at ${fmtT(next.a)}, right where ${loopLabel(next)} starts`);
+    }
+  }
+
   function render() {
     const ok = ready();
     const l = ok ? cur() : null;
     if (!ok) S.zoom = false;
-    else if (S.zoom && !S.sliding && (l.a < S.v0 || l.b > S.v1)) fitView();
+    else if (S.zoom && !S.sliding && !S.panned && (l.a < S.v0 || l.b > S.v1)) fitView();
     const pa = ok ? toPct(l.a) : 0;
     const pb = ok ? toPct(l.b) : 100;
 
@@ -236,6 +271,12 @@ export function createRender(A) {
     setText(ui.scaleStart, ok ? fmtT(viewStart()) : '0:00');
     setText(ui.scaleEnd, ok ? fmtT(viewEnd()) : '–:––');
     setAttr(ui.zoom, 'aria-pressed', String(S.zoom));
+    ui.mini.hidden = !(ok && S.zoom);
+    if (ok && S.zoom) {
+      setStyle(ui.miniWin, 'left', pct((S.v0 / S.duration) * 100));
+      setStyle(ui.miniWin, 'width', pct(((S.v1 - S.v0) / S.duration) * 100));
+    }
+    renderChain(ok);
     renderTip();
 
     const inf = ok && l.infinite;
@@ -244,6 +285,14 @@ export function createRender(A) {
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setAttr(ui.seg, 'data-v', P.after);
+    // Practice options
+    ui.practiceBtn.setAttribute('aria-expanded', String(P.practiceOpen));
+    setText(ui.practiceBtn, P.practiceOpen ? '▾ Practice options' : '▸ Practice options');
+    ui.practice.hidden = !P.practiceOpen;
+    setText(ui.gapVal, P.gap ? `${P.gap} s` : 'off');
+    setText(ui.countVal, P.countIn ? `${P.countIn} s` : 'off');
+    setAttr(ui.tickBtn, 'aria-pressed', String(P.tick));
+    ui.tickBtn.hidden = !P.countIn;
     setText(ui.setsVal, P.setsForever ? '∞' : `${P.sets}×`);
     setAttr(ui.setsInf, 'aria-pressed', String(P.setsForever));
     setText(ui.setsNote, P.setsForever ? 'Then starts over, again and again' : P.sets > 1 ? `Then starts over: ${P.sets} rounds in all` : 'Stops after the last loop');
@@ -305,5 +354,5 @@ export function createRender(A) {
     toastTimer = setTimeout(() => ui.toast.classList.remove('lsm-show'), action ? 6000 : 1900);
   }
 
-  return { hideTip, live, makeChip, setMenuOpen, render, renderLive, renderLoops, renderTip, replay, resize, showTip, toast };
+  return { hideTip, render, renderLive, replay, showTip, toast };
 }

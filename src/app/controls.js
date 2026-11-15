@@ -2,11 +2,12 @@
 
 import { NAME_MAX } from '../core/constants.js';
 import { clamp, parseTime, segments } from '../core/util.js';
+import * as V from '../core/view.js';
 import { el, icon, I } from '../ui/dom.js';
 import { SHADOW_CSS } from '../ui/styles.js';
 
 export function createControls(A) {
-  const { S, P, ui, adapter, floating, cur, fmtT, focused, fromFrac, ready, toPct } = A;
+  const { S, P, ui, adapter, floating, cur, fmtT, focused, fromFrac, ready, toPct, viewEnd, viewStart } = A;
 
   function holdRepeat(btn, fn) {
     let delay = 0;
@@ -179,20 +180,66 @@ export function createControls(A) {
       return r.width > 0 ? clamp((x - r.left) / r.width, 0, 1) : 0;
     };
 
+    // Close to another loop's edge, a dragged edge snaps to it (hold Alt to drag freely).
+    const spanPerPx = () => {
+      const r = ui.lane.getBoundingClientRect();
+      return r.width > 0 ? (viewEnd() - viewStart()) / r.width : 0;
+    };
+
+    const apply = (x, alt) => {
+      const edges = V.edgesOf(S.loops, S.sel);
+      const near = alt ? -1 : 7 * spanPerPx();
+      let snapped = false;
+      if (drag.whole) {
+        const l = cur();
+        const start = drag.a0 + fromFrac(laneFrac(x)) - drag.t0;
+        const s = near > 0 ? V.snapWhole(start, l.b - l.a, edges, near) : null;
+        snapped = s != null;
+        A.moveWhole(snapped ? s : start);
+      } else {
+        const v = fromFrac(laneFrac(x - drag.off));
+        const s = near > 0 ? V.snapTo(v, edges, near) : null;
+        snapped = s != null;
+        A.setPoint(drag.which, snapped ? s : v, false);
+      }
+      ui.lane.classList.toggle('lsm-snapped', snapped);
+      ui.tip.classList.toggle('lsm-snap', snapped && !drag.whole);
+    };
+
+    // Dragging an edge into the border of a zoomed slider scrolls it along.
+    let edge = 0;
+    let lastX = 0;
+    let lastAlt = false;
+    let panRaf = 0;
+    const autoPan = () => {
+      panRaf = 0;
+      if (!drag || !edge) return;
+      A.panView(edge * (viewEnd() - viewStart()) * 0.5 / 60);
+      apply(lastX, lastAlt);
+      panRaf = requestAnimationFrame(autoPan);
+    };
+
     const move = (e) => {
       if (!drag || e.pointerId !== drag.id || !ready()) return;
       if (!drag.moved) {
         if (Math.abs(e.clientX - drag.x0) < 3) return;
         drag.moved = true;
       }
-      if (drag.whole) A.moveWhole(drag.a0 + fromFrac(laneFrac(e.clientX)) - drag.t0);
-      else A.setPoint(drag.which, fromFrac(laneFrac(e.clientX - drag.off)), false);
+      lastX = e.clientX;
+      lastAlt = e.altKey;
+      const r = ui.lane.getBoundingClientRect();
+      edge = S.zoom ? (e.clientX < r.left + 16 && S.v0 > 0 ? -1 : e.clientX > r.right - 16 && S.v1 < S.duration ? 1 : 0) : 0;
+      if (edge && !panRaf) panRaf = requestAnimationFrame(autoPan);
+      apply(e.clientX, e.altKey);
     };
 
     const end = (e) => {
       if (!drag || (e && e.pointerId !== drag.id)) return;
       const d = drag;
       drag = null;
+      edge = 0;
+      ui.lane.classList.remove('lsm-snapped');
+      ui.tip.classList.remove('lsm-snap');
       try { track.releasePointerCapture(d.id); } catch (_) { /* already released */ }
       track.classList.remove('lsm-dragging');
       if (!d.whole) {
@@ -239,6 +286,39 @@ export function createControls(A) {
     track.addEventListener('pointerup', end);
     track.addEventListener('pointercancel', end);
     track.addEventListener('lostpointercapture', end);
+
+    // Wheel: zoom around the pointer. Shift (or a sideways swipe) moves the zoomed window.
+    track.addEventListener('wheel', (e) => {
+      if (!ready()) return;
+      e.preventDefault();
+      const px = e.deltaMode === 1 ? 16 : 1;
+      const sideways = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (sideways) {
+        A.panView(((e.deltaX || e.deltaY) * px) * spanPerPx());
+      } else {
+        const factor = clamp(Math.exp(-e.deltaY * px * 0.0025), 0.6, 1.6);
+        A.zoomView(factor, fromFrac(laneFrac(e.clientX)));
+      }
+    }, { passive: false });
+    track.addEventListener('dblclick', (e) => {
+      if (e.target.closest && e.target.closest('.lsm-thumb')) return;
+      if (S.zoom) A.setZoom(false);
+    });
+
+    // The overview strip: a press centres the window there, dragging moves it.
+    let mini = null;
+    const miniTime = (x) => {
+      const r = ui.mini.getBoundingClientRect();
+      return r.width > 0 ? clamp((x - r.left) / r.width, 0, 1) * S.duration : 0;
+    };
+    ui.mini.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !ready()) return;
+      mini = e.pointerId;
+      try { ui.mini.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      A.centerView(miniTime(e.clientX));
+    });
+    ui.mini.addEventListener('pointermove', (e) => { if (e.pointerId === mini) A.centerView(miniTime(e.clientX)); });
+    for (const t of ['pointerup', 'pointercancel']) ui.mini.addEventListener(t, () => { mini = null; });
 
     for (const w of ['a', 'b']) {
       const th = ui.thumb[w];
@@ -319,18 +399,22 @@ export function createControls(A) {
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
     ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
+    ui.miAfter = item('Add a loop right after this one', () => A.addLoopAfter());
+    ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miDelete = item('Delete loop', () => A.removeLoop());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
       item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\'),
       item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z'),
       ui.miRename,
+      ui.miAfter,
+      ui.miTap,
       ui.miSort,
       ui.miFine,
       ui.miStrip,
       ui.miDelete,
       item('Remove all loops', () => A.clearAll()),
-      item('Keyboard shortcuts', () => A.toggleHelp()));
+      item('Keyboard shortcuts', toggleHelp));
     return menu;
   }
 
@@ -352,6 +436,7 @@ export function createControls(A) {
       button('Next loop  (Shift+])', I.next, () => A.navigate('skipLoop')),
       button('Turn looping off  (Shift+R)', I.stop, () => A.stopRun()),
       button('Open the editor', I.expand, () => A.openPanel()),
+      button('Hide this strip (looping goes on)', I.close, () => A.hideStrip()),
       el('span', { class: 'lsm-strip-bar' }, ui.stripFill));
   }
 
@@ -364,6 +449,7 @@ export function createControls(A) {
       ['Shift+]  /  Shift+[', 'Next / previous loop'],
       ['Shift+\\', 'Skip this repetition'],
       ['Shift+Z', 'Restart this repetition'],
+      ['Shift+M', 'Tap to mark: each press ends a section and starts the next'],
       ['Shift+1 … 9', 'Go to loop 1 … 9'],
     ];
     const list = el('div', { class: 'lsm-help-rows' });
@@ -412,14 +498,15 @@ export function createControls(A) {
     ui.miStrip.firstChild.textContent = P.strip ? 'Hide the strip while looping' : 'Show a strip while looping';
     ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
     ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Reset the loop to the whole video';
+    ui.panel.scrollTop = 0; // the menu hangs from the top of the panel
     ui.menu.hidden = false;
-    A.setMenuOpen(true);
+    ui.more.setAttribute('aria-expanded', 'true');
   }
 
   function closeMenu() {
     if (ui.menu.hidden) return;
     ui.menu.hidden = true;
-    A.setMenuOpen(false);
+    ui.more.setAttribute('aria-expanded', 'false');
   }
 
   function toggleHelp() {
@@ -446,8 +533,8 @@ export function createControls(A) {
     ui.toast = el('div', { class: 'lsm-toast', role: 'status', 'aria-live': 'polite' });
 
     // Header: one chip per loop
-    ui.add = el('button', { class: 'lsm-hb lsm-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time' }, icon(I.plus, 14));
-    ui.add.addEventListener('click', A.addLoop);
+    ui.add = el('button', { class: 'lsm-hb lsm-add', type: 'button', 'aria-label': 'Add a loop', title: 'Add a loop at the current time\nShift+click: right after this loop' }, icon(I.plus, 14));
+    ui.add.addEventListener('click', (e) => (e.shiftKey ? A.addLoopAfter() : A.addLoop()));
     ui.chipRow = el('div', { class: 'lsm-chips', role: 'toolbar', 'aria-label': 'Loops' }, ui.add);
     bindToolbar(ui.chipRow);
     ui.more = el('button', { class: 'lsm-hb lsm-more', type: 'button', 'aria-label': 'More', title: 'More', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon(I.more, 16));
@@ -479,15 +566,26 @@ export function createControls(A) {
     ui.len = el('span', { class: 'lsm-len' });
     ui.scaleStart = el('span', { text: '0:00' });
     ui.scaleEnd = el('span');
-    ui.zoom = el('button', { class: 'lsm-zoom', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Zoom the slider on this loop', title: 'Zoom the slider on this loop (finer dragging)' }, icon(I.zoom, 14));
+    ui.zoom = el('button', { class: 'lsm-zoom', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Zoom the slider on this loop', title: 'Zoom on this loop, or back to the whole video\nMouse wheel on the slider zooms freely · Shift+wheel moves · double-click resets' }, icon(I.zoom, 14));
     ui.zoom.addEventListener('click', () => A.setZoom(!S.zoom));
-    const slider = el('div', { class: 'lsm-slider' }, ui.track,
+    // Overview of the whole media while zoomed in: the window is the bracket; drag it to move.
+    ui.miniMarks = el('div', { class: 'lsm-mini-marks' });
+    ui.miniWin = el('div', { class: 'lsm-mini-win' });
+    ui.mini = el('div', { class: 'lsm-mini', hidden: true, title: 'Overview: drag to move the zoomed window' }, ui.miniMarks, ui.miniWin);
+    const slider = el('div', { class: 'lsm-slider' }, ui.track, ui.mini,
       el('div', { class: 'lsm-scale' }, ui.scaleStart, el('span', { class: 'lsm-mid' }, ui.len, ui.zoom), ui.scaleEnd));
 
     // Timestamps
     ui.field.a = makeField('a', 'Start');
     ui.field.b = makeField('b', 'End');
     const fields = el('div', { class: 'lsm-row' }, ui.field.a.root, ui.field.b.root);
+
+    // Join this loop to its neighbours: start where the previous loop ends, end where the next starts.
+    ui.chainA = el('button', { class: 'lsm-chain', type: 'button' });
+    ui.chainA.addEventListener('click', A.chainStart);
+    ui.chainB = el('button', { class: 'lsm-chain', type: 'button' });
+    ui.chainB.addEventListener('click', A.chainEnd);
+    ui.snapRow = el('div', { class: 'lsm-snaprow', hidden: true }, ui.chainA, ui.chainB);
 
     // Repeat count
     ui.countState = { editing: false };
@@ -583,6 +681,28 @@ export function createControls(A) {
         el('div', { class: 'lsm-box' }, sMinus, ui.setsVal, sPlus, ui.setsInf)),
       ui.setsNote);
 
+    // Gap between repetitions and count-in: whole seconds / half seconds.
+    const stepper = (label, minus, plus, extra) => {
+      const out = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
+      const m = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: less` }, icon(I.minus, 14));
+      const p = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: more` }, icon(I.plus, 14));
+      holdRepeat(m, minus);
+      holdRepeat(p, plus);
+      return { out, field: el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: label }), el('div', { class: 'lsm-box' }, m, out, p, extra || null)) };
+    };
+    const gap = stepper('Gap between plays', () => A.setGap(P.gap - 0.5), () => A.setGap(P.gap + 0.5));
+    ui.gapVal = gap.out;
+    ui.tickBtn = el('button', { class: 'lsm-ib lsm-inf', type: 'button', 'aria-label': 'Tick during the count-in', 'aria-pressed': 'true', title: 'Tick during the count-in', text: '♪' });
+    ui.tickBtn.addEventListener('click', () => A.setTick(!P.tick));
+    const count = stepper('Count-in', () => A.setCountIn(P.countIn - 1), () => A.setCountIn(P.countIn + 1), ui.tickBtn);
+    ui.countVal = count.out;
+
+    ui.practice = el('div', { class: 'lsm-practice', hidden: true },
+      rounds,
+      el('div', { class: 'lsm-row' }, gap.field, count.field));
+    ui.practiceBtn = el('button', { class: 'lsm-disclose', type: 'button', 'aria-expanded': 'false', text: '▸ Practice options' });
+    ui.practiceBtn.addEventListener('click', A.togglePractice);
+
     // Actions
     // Turning looping on and starting a loop are separate: the first leaves the video where it is.
     ui.start = el('button', { class: 'lsm-start', type: 'button' }, icon(I.play, 18));
@@ -602,7 +722,7 @@ export function createControls(A) {
     ui.statusFill = el('i');
     ui.status = el('div', { class: 'lsm-status', hidden: true }, ui.statusText, el('span', { class: 'lsm-bar' }, ui.statusFill));
 
-    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, opts, rounds, ui.status, actions);
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, ui.snapRow, opts, ui.practiceBtn, ui.practice, ui.status, actions);
     ui.strip = buildStrip();
     ui.help = buildHelp();
     ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.hint, ui.notice, ui.body, ui.help);
@@ -663,5 +783,5 @@ export function createControls(A) {
     });
   }
 
-  return { bindSlider, buildUI, syncToolbar, startRename, openMenu, closeMenu, toggleHelp, cancelEdits, commitEdits, holdRepeat, makeField, shake, wheelSteps };
+  return { buildUI, syncToolbar, startRename, openMenu, closeMenu, cancelEdits, commitEdits };
 }
