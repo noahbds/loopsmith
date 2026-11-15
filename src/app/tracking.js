@@ -40,7 +40,6 @@ export function createTracking(A) {
       old.removeEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) old.removeEventListener(t, onMediaEvent);
       for (const t of WAKE_EVENTS) old.removeEventListener(t, A.wake);
-      old.removeEventListener('play', A.onPlay);
     }
     S.video = v || null;
     if (v) {
@@ -49,7 +48,6 @@ export function createTracking(A) {
       v.addEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) v.addEventListener(t, onMediaEvent);
       for (const t of WAKE_EVENTS) v.addEventListener(t, A.wake);
-      v.addEventListener('play', A.onPlay);
     }
   }
 
@@ -63,7 +61,6 @@ export function createTracking(A) {
     S.zoom = false;
     S.loops = [];
     S.sel = 0;
-    A.cancelWait();
     S.undo = [];
     S.tap = null;
     autoDone = false;

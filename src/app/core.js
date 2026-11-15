@@ -1,6 +1,6 @@
 // The shared state and small helpers every other part of the app builds on.
 
-import { MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, PALETTE, BETWEEN, ENDS } from '../core/constants.js';
+import { MAX_COUNT, MAX_SETS, PALETTE, BETWEEN, ENDS } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
@@ -22,13 +22,10 @@ function readPrefs(prefs) {
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
-    gap: clamp(Math.round((Number(prefs.gap) || 0) * 2) / 2, 0, MAX_GAP),       // seconds of pause between repetitions
-    countIn: clamp(Math.round(Number(prefs.countIn) || 0), 0, MAX_COUNT_IN),    // seconds of count-in before a loop starts
-    tick: prefs.tick !== false,     // tick during the count-in
-    practiceOpen: prefs.practiceOpen === true,
     sets: clamp(Math.round(Number(prefs.sets)) || 2, 2, MAX_SETS), // rounds when the set plays again
     setsForever: prefs.setsForever === true,
     autoOn: prefs.autoOn === true,  // turn looping on by itself when media with saved loops loads
+    autoStart: prefs.autoStart === true, // ...and play from the first loop's start
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
   };
 }
@@ -50,7 +47,6 @@ export function createCore(adapter, store) {
     loops: [],       // [{ a, b, count, infinite, on (not switched off), c (palette index), done (plays completed this run) }]
     sel: 0,          // loop shown in the editor
     round: 1,        // which time through the whole set of loops this run is on
-    waiting: null,   // { kind: 'gap' | 'count', until, timer, left }: a pause before playing again
     tap: null,       // tap to mark: the time of the last mark (the start of the section being tapped)
     undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
@@ -140,7 +136,7 @@ export function createCore(adapter, store) {
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, between: P.between, end: P.end, autoOn: P.autoOn, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, gap: P.gap, countIn: P.countIn, tick: P.tick, practiceOpen: P.practiceOpen, sets: P.sets, setsForever: P.setsForever });
+    store.setPrefs({ count: P.count, infinite: P.infinite, between: P.between, end: P.end, autoOn: P.autoOn, autoStart: P.autoStart, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -166,6 +162,7 @@ export function createCore(adapter, store) {
       end: P.end,
       rounds: P.end !== 'repeat' ? 1 : P.setsForever ? 'forever' : P.sets,
       autoOn: P.autoOn,
+      autoStart: P.autoStart,
     };
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "loopsmith",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "A-B loop for any song or video: repeat one or several sections, a chosen number of times or forever.",
   "keywords": [

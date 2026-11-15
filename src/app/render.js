@@ -9,7 +9,7 @@ import { el, setText, setAttr, setStyle, pct } from '../ui/dom.js';
 export function createRender(A) {
   const { S, P, ui, adapter, floating, L, cur, describe, digits, finished, fitView, fmtT, isAd, loopLabel, mediaOk, mediaWord, ready, roundText, stripWanted, toPct, viewEnd, viewStart } = A;
 
-  const live = { wait: '', round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
+  const live = { round: 1, notice: null, stale: true, loop: null, next: null, done: -1, prog: -1, px: -1, out: null };
 
   // Cheap, frequent updates: playhead, run status, progress fill, transient notices.
   function renderLive() {
@@ -34,10 +34,8 @@ export function createRender(A) {
       const l = A.loopAt(t, guard);
       const next = l ? null : A.nextLoop(t);
       const done = l ? l.done : -1;
-      const wait = S.waiting ? (S.waiting.kind === 'count' ? `Starting in ${S.waiting.left}` : 'Next repetition…') : '';
-      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round || wait !== live.wait) {
+      if (live.stale || l !== live.loop || next !== live.next || done !== live.done || S.round !== live.round) {
         live.round = S.round;
-        live.wait = wait;
         live.stale = false;
         live.loop = l;
         live.next = next;
@@ -55,10 +53,16 @@ export function createRender(A) {
           text = 'Past the loops';
         }
         text += roundText();
-        if (wait) text = wait;
         setText(ui.statusText, text);
         setText(ui.stripText, text);
-        setStyle(ui.strip, '--acv', PALETTE[(l || next || cur()).c]);
+        // The status and its progress line take the colour of the loop that is playing, which
+        // isn't always the one selected in the editor.
+        const rgb = PALETTE[(l || next || cur()).c];
+        setStyle(ui.strip, '--acv', rgb);
+        setStyle(ui.status, '--ac', `rgb(${rgb})`);
+        // Skip / restart act on the loop that is playing: only there when one is.
+        ui.repRestart.hidden = !l;
+        ui.repSkip.hidden = !l;
         ui.badge.textContent = badge;
       }
       if (S.open || stripWanted()) {
@@ -311,18 +315,14 @@ export function createRender(A) {
     ui.count.readOnly = inf;
     setAttr(ui.inf, 'aria-pressed', String(inf));
     setText(ui.thenNote, ok ? thenText(l) : '');
-    // Practice options
-    ui.practiceBtn.setAttribute('aria-expanded', String(P.practiceOpen));
-    setText(ui.practiceBtn, P.practiceOpen ? '▾ Practice options' : '▸ Practice options');
-    ui.practice.hidden = !P.practiceOpen;
-    setText(ui.gapVal, P.gap ? `${P.gap} s` : 'off');
-    setText(ui.countVal, P.countIn ? `${P.countIn} s` : 'off');
-    setAttr(ui.tickBtn, 'aria-pressed', String(P.tick));
-    ui.tickBtn.hidden = !P.countIn;
     setText(ui.setsVal, P.setsForever ? '∞' : `${P.sets}×`);
     setAttr(ui.setsInf, 'aria-pressed', String(P.setsForever));
     setText(ui.setsNote, P.setsForever ? 'Again and again, until you stop' : `${P.sets} times through in all, then pauses`);
     ui.rounds.hidden = P.end !== 'repeat';
+    renderSeg(ui.segAuto, !P.autoOn ? 'wait' : P.autoStart ? 'start' : 'on', false);
+    const delLabel = S.loops.length > 1 ? `Delete loop ${S.sel + 1}` : 'Delete the loop';
+    setAttr(ui.del, 'aria-label', delLabel);
+    setAttr(ui.del, 'title', `${delLabel} (can be undone)`);
     // Nothing ever ends while every loop that is on repeats forever: the choices don't apply.
     const endless = ok && S.loops.every((x) => !x.on || x.infinite);
     renderSeg(ui.segBetween, P.between, endless);
@@ -346,7 +346,7 @@ export function createRender(A) {
       ui.strip.classList.toggle('lsm-open', strip);
       if (strip) A.place();
     }
-    setStyle(ui.strip, '--acv', PALETTE[ok ? l.c : 0]);
+    if (!S.active) setStyle(ui.strip, '--acv', PALETTE[ok ? l.c : 0]);
 
     ui.btn.classList.toggle('lsm-active', S.active);
     setAttr(ui.btn, 'aria-expanded', String(S.open));

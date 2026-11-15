@@ -131,7 +131,7 @@ export function createLayout(A) {
   }
 
   const resizeWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (visibleBox()) place(); }) : null;
-  // The panel and the strip change height too (no loop yet / editor, rounds, practice options).
+  // The panel and the strip change height too (no loop yet / editor, rounds).
   // Called once the panel is built.
   function watchBoxes() {
     if (!resizeWatch) return;

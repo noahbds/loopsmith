@@ -14,94 +14,21 @@ export function createRun(A) {
     } catch (_) { /* ignore */ }
   }
 
+  // When Loopsmith itself last seeked. Its seeks go to a loop's start, so where the playhead lands
+  // right after one never makes a loop "partly played" (the player may still report the old
+  // position for a moment, which would stop that loop's plays from counting).
+  let ownSeekAt = 0;
+
   function seekTo(t) {
     const v = S.video;
     if (!v) return;
     S.lastT = null;
+    ownSeekAt = Date.now();
     try {
       // Some players (Spotify) must seek through their own controls to stay in step.
       if (adapter.seek) adapter.seek(v, t, S.player);
       else v.currentTime = t;
     } catch (_) { /* ignore */ }
-  }
-
-  /* A pause before playing: the gap between repetitions, or the count-in before a loop starts. */
-
-  function cancelWait() {
-    if (S.waiting) clearTimeout(S.waiting.timer);
-    S.waiting = null;
-  }
-
-  // Looping stops while the video is held between two plays: the music goes on instead of staying
-  // silent (the pause was ours). A count-in that is cancelled leaves the video where it was.
-  function stopWaiting() {
-    const gap = S.waiting && S.waiting.kind === 'gap';
-    cancelWait();
-    if (gap) play();
-  }
-
-  function resume() {
-    S.waiting = null;
-    if (S.active) play();
-  }
-
-  // Waits `sec` seconds (the video is paused) and plays on.
-  function pauseFor(sec) {
-    const v = S.video;
-    if (!v || v.paused || !(sec > 0)) return;
-    cancelWait();
-    const w = { kind: 'gap', until: Date.now() + sec * 1000, timer: 0, left: 0 };
-    w.timer = setTimeout(resume, sec * 1000);
-    S.waiting = w;
-    v.pause();
-  }
-
-  // A short tick (the count-in). Its own audio context: it never touches the media.
-  let beepCtx = null;
-  function beep(freq) {
-    try {
-      beepCtx = beepCtx || new AudioContext();
-      if (beepCtx.state === 'suspended') beepCtx.resume();
-      const o = beepCtx.createOscillator();
-      const g = beepCtx.createGain();
-      o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, beepCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.15, beepCtx.currentTime + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, beepCtx.currentTime + 0.09);
-      o.connect(g).connect(beepCtx.destination);
-      o.start();
-      o.stop(beepCtx.currentTime + 0.1);
-    } catch (_) { /* no audio available */ }
-  }
-
-  // Counts in (with ticks) from the loop start, then plays. False when the count-in is off.
-  function startCountIn() {
-    const v = S.video;
-    const sec = P.countIn;
-    if (!v || !(sec > 0)) return false;
-    cancelWait();
-    v.pause();
-    let left = sec;
-    const w = { kind: 'count', until: Date.now() + sec * 1000, timer: 0, left };
-    S.waiting = w;
-    const tick = () => {
-      if (S.waiting !== w) return;
-      if (left <= 0) {
-        resume();
-        return;
-      }
-      w.left = left;
-      if (P.tick) beep(left === 1 ? 1320 : 880);
-      left -= 1;
-      w.timer = setTimeout(tick, 1000);
-    };
-    tick();
-    return true;
-  }
-
-  // The user pressed play during a pause: they don't want to wait.
-  function onPlay() {
-    if (S.waiting && Date.now() < S.waiting.until - 150) cancelWait();
   }
 
   // A loop that runs to the end of the video turns around this much early, so the player
@@ -139,7 +66,7 @@ export function createRun(A) {
     // The playhead just landed here (a seek, or looping was just turned on): a loop it landed in
     // after its start is only partly played this time.
     if (prev === null) {
-      E.enter(S.loops, t, S.duration, turnGuard());
+      if (Date.now() - ownSeekAt > 1500) E.enter(S.loops, t, S.duration, turnGuard());
       return;
     }
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
@@ -157,10 +84,7 @@ export function createRun(A) {
     if (step.seek != null) seekTo(step.seek);
     followTurn();
     A.render();
-    if (step.repeat) {
-      A.replay(ui.badge, 'lsm-pop');
-      if (P.gap > 0) pauseFor(P.gap);
-    }
+    if (step.repeat) A.replay(ui.badge, 'lsm-pop');
   }
 
   // The editor follows the run: when another loop gets the turn, it becomes the selected loop
@@ -200,14 +124,12 @@ export function createRun(A) {
     if (!S.open) A.toast(`Round ${S.round}${P.setsForever ? '' : ` of ${P.sets}`}`);
   }
 
-  // Looping off: every count starts over and any pause is dropped (`resume`: the paused video plays on).
-  function endRun(resume) {
+  // Looping off: every count starts over.
+  function endRun() {
     S.active = false;
     S.lastT = null;
     S.round = 1;
     E.resetRun(S.loops);
-    if (resume) stopWaiting();
-    else cancelWait();
   }
 
   function finishRun() {
@@ -215,7 +137,7 @@ export function createRun(A) {
     const single = on.length === 1 ? on[0] : null;
     const played = single ? single.done : 0; // fewer than its count when it was skipped
     const rounds = S.round;
-    endRun(false);
+    endRun();
     if (P.end !== 'play' && S.video && !S.video.paused) S.video.pause();
     A.render();
     A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single && played ? `Loop finished · played ${played}×` : single ? 'Loop finished' : 'Loops finished', { label: 'Run again', run: runAgain });
@@ -262,6 +184,11 @@ export function createRun(A) {
   // when the playhead runs into them.
   // `saved`: turned on by itself because the media came with saved loops.
   function armRun(saved = false) {
+    // Saved loops and "start from the first loop": play from there instead of where the media is.
+    if (saved && P.autoStart) {
+      startFirst(true);
+      return;
+    }
     if (!arm(false)) return;
     A.render();
     wake();
@@ -279,7 +206,7 @@ export function createRun(A) {
     const v = S.video;
     if (S.trusted && !isAd()) {
       seekTo(cur().a);
-      if (!startCountIn() && (v.paused || v.ended)) play();
+      if (v.paused || v.ended) play();
     }
     A.render();
     wake();
@@ -288,7 +215,7 @@ export function createRun(A) {
 
   function stopRun() {
     if (!S.active) return;
-    endRun(true);
+    endRun();
     A.render();
     if (!S.open) A.toast('Looping off');
   }
@@ -297,7 +224,7 @@ export function createRun(A) {
   const inCharge = () => (S.trusted && S.video ? loopAt(S.video.currentTime) : null);
 
   // Carries out what an engine action decided: seek, show which loop is now in play, say what happened.
-  function follow(step, { play: andPlay = false, countIn = false, say = '' } = {}) {
+  function follow(step, { play: andPlay = false, say = '' } = {}) {
     if (step.finish) {
       finishOrAgain();
       return;
@@ -312,7 +239,7 @@ export function createRun(A) {
         if (S.zoom) A.fitView();
       }
     }
-    if (andPlay && S.video && !(countIn && startCountIn()) && (S.video.paused || S.video.ended)) play();
+    if (andPlay && S.video && (S.video.paused || S.video.ended)) play();
     A.render();
     wake();
     if (step.repeat || step.restart) A.replay(ui.badge, 'lsm-pop');
@@ -369,16 +296,25 @@ export function createRun(A) {
 
   // From the top: every count starts over, playback goes to the first loop that is switched on.
   function runAgain() {
+    startFirst(false);
+  }
+
+  // Looping on, every count starting over, playing from the first loop (in play order) that is on.
+  function startFirst(saved) {
     if (!arm(false)) return;
-    const first = S.loops.filter((l) => l.on).sort((x, y) => x.a - y.a)[0];
+    const first = E.playOrder(S.loops.filter((l) => l.on))[0];
     const step = E.gotoLoop(first, S.loops);
-    if (step && S.trusted && !isAd()) follow(step, { play: true, countIn: true });
-    else A.render();
+    if (!step || !S.trusted || isAd()) {
+      A.render();
+      return;
+    }
+    follow(step, { play: true });
+    if (saved && !S.open) A.toast(`From ${A.loopLabel(first)} · ${describe(first)} (saved loops)`, { label: 'Turn off', run: stopRun });
   }
 
   // After an edit during a run: if nothing is left to play, looping turns itself off.
   function settleRun() {
-    if (S.active && !S.loops.some((l) => !skipped(l))) endRun(true);
+    if (S.active && !S.loops.some((l) => !skipped(l))) endRun();
   }
 
   const IDLE_MS = 250;
@@ -419,5 +355,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { onPlay, cancelWait, armRun, navigate, check, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
+  return { armRun, navigate, check, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
 }

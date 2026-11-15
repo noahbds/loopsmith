@@ -1,6 +1,6 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
-import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, MAX_GAP, MAX_COUNT_IN, NAME_MAX, BETWEEN, ENDS } from '../core/constants.js';
+import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, BETWEEN, ENDS } from '../core/constants.js';
 import { clamp, roundT } from '../core/util.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
@@ -94,28 +94,6 @@ export function createEdit(A) {
     A.toast(P.fine ? 'Times to hundredths of a second' : 'Times to tenths of a second');
   }
 
-  /* Practice: the gap between repetitions and the count-in. */
-
-  function setGap(sec) {
-    P.gap = clamp(Math.round(sec * 2) / 2, 0, MAX_GAP);
-    prefChanged();
-  }
-
-  function setCountIn(sec) {
-    P.countIn = clamp(Math.round(sec), 0, MAX_COUNT_IN);
-    prefChanged();
-  }
-
-  function setTick(on) {
-    P.tick = !!on;
-    prefChanged();
-  }
-
-  function togglePractice() {
-    P.practiceOpen = !P.practiceOpen;
-    prefChanged();
-  }
-
   // Whether the small strip shows while looping with the editor closed.
   function setStrip(on) {
     P.strip = !!on;
@@ -140,11 +118,11 @@ export function createEdit(A) {
     prefChanged();
   }
 
-  // Turn looping on by itself when media with saved loops loads.
-  function setAutoOn(on) {
-    P.autoOn = !!on;
+  // When media with saved loops loads: 'wait', turn looping 'on', or 'start' from the first loop.
+  function setAuto(v) {
+    P.autoOn = v === 'on' || v === 'start';
+    P.autoStart = v === 'start';
     prefChanged();
-    A.toast(P.autoOn ? 'Looping turns on by itself when saved loops load' : 'Looping waits for you to turn it on');
   }
 
   // A loop that is switched off stays in the list (and stays saved) but is never played.
@@ -396,5 +374,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop removed', UNDO);
   }
 
-  return { addLoop, addLoopAfter, addWhole, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, undo, selectLoop, setAutoOn, setBetween, setEnd, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setGap, setCountIn, setTick, togglePractice, setSets, setSetsForever, setZoom, toggleLoopAt };
+  return { addLoop, addLoopAfter, addWhole, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, undo, selectLoop, setAuto, setBetween, setEnd, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setSets, setSetsForever, setZoom, toggleLoopAt };
 }

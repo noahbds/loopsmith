@@ -109,7 +109,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 
 .lsm-panel .lsm-track{position:relative;height:30px;margin-top:4px;cursor:pointer;touch-action:none}
 .lsm-panel .lsm-lane{position:absolute;left:18px;right:18px;top:0;bottom:0;--a:0%;--b:100%;--tip:0%}
-.lsm-panel .lsm-rail{position:absolute;left:-18px;right:-18px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
+.lsm-panel .lsm-rail{position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.16)}
 .lsm-panel .lsm-ghost{position:absolute;top:calc(50% + 5px + var(--lane,0) * 4px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.8;pointer-events:none}
 .lsm-panel .lsm-ghost.lsm-muted{opacity:.3}
 .lsm-panel .lsm-fill{cursor:grab;position:absolute;left:var(--a);width:calc(var(--b) - var(--a));top:50%;height:6px;margin-top:-3px;overflow:hidden;background:var(--ac);transition:background-color .2s,opacity .2s}
@@ -135,7 +135,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-thumb.lsm-grab{box-shadow:0 0 0 5px rgba(var(--acv),.28)}
 .lsm-panel .lsm-tip{position:absolute;z-index:5;left:var(--tip);bottom:100%;padding:2px 7px;border-radius:6px;background:#fff;color:#0f0f0f;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:0;transform:translate(-50%,4px);pointer-events:none;transition:opacity .12s,transform .12s}
 .lsm-panel .lsm-tip.lsm-show{opacity:1;transform:translate(-50%,0)}
-.lsm-panel .lsm-scale{display:flex;align-items:center;justify-content:space-between;margin-top:1px;color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
+.lsm-panel .lsm-scale{display:flex;align-items:center;justify-content:space-between;margin:1px 18px 0;color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
 .lsm-panel .lsm-scale>span:first-child,.lsm-panel .lsm-scale>span:last-child{flex:1 1 0}
 .lsm-panel .lsm-scale>span:last-child{text-align:right}
 .lsm-panel .lsm-mid{display:flex;align-items:center;gap:5px}
@@ -145,7 +145,12 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-zoom[aria-pressed="true"],.lsm-panel .lsm-zoom[aria-pressed="true"]:hover{background:var(--ac);color:var(--ac-ink)}
 
 .lsm-panel .lsm-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.lsm-panel .lsm-opts{grid-template-columns:116px 1fr}
+.lsm-panel .lsm-opts{grid-template-columns:116px 1fr auto}
+.lsm-panel .lsm-del{align-self:end;margin-bottom:2px}
+.lsm-panel .lsm-del:hover{color:#ff8a80}
+.lsm-panel .lsm-status-row{display:flex;align-items:center;gap:2px;min-width:0}
+.lsm-panel .lsm-status-row .lsm-status-text{flex:1;min-width:0}
+.lsm-panel .lsm-status-row .lsm-ib{width:24px;height:22px}
 .lsm-panel .lsm-field{min-width:0}
 .lsm-panel .lsm-val{display:grid;place-items:center;cursor:default;-webkit-user-select:none;user-select:none}
 .lsm-panel .lsm-note{align-self:end;padding-bottom:9px;color:var(--mute);font-size:11.5px;line-height:1.3}
@@ -200,9 +205,6 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 
 .lsm-panel .lsm-head{position:sticky;top:-10px;z-index:4;margin:-10px -14px 8px;padding:10px 14px 6px;background:rgb(24,24,27)}
 .lsm-panel .lsm-foot{position:sticky;bottom:-14px;z-index:3;display:grid;gap:8px;margin:0 -14px -14px;padding:8px 14px 14px;background:rgb(24,24,27)}
-.lsm-panel .lsm-disclose{justify-self:start;height:28px;padding:0 6px;border-radius:6px;color:var(--mute);font-size:12px;font-weight:600;letter-spacing:.2px}
-.lsm-panel .lsm-disclose:hover{background:rgba(255,255,255,.1);color:#fff}
-.lsm-panel .lsm-practice{display:grid;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line)}
 .lsm-panel .lsm-grip,.lsm-strip .lsm-grip{flex:none;display:grid;place-items:center;width:16px;height:26px;color:var(--mute);cursor:grab;touch-action:none;opacity:.7}
 .lsm-panel .lsm-grip:hover,.lsm-strip .lsm-grip:hover,.lsm-grip.lsm-grab{opacity:1}
 .lsm-grip.lsm-grab{cursor:grabbing}

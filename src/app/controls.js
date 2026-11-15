@@ -401,25 +401,17 @@ export function createControls(A) {
     ui.miRename = item('Rename loop', () => A.startRename(S.sel));
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
     ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
-    ui.miAuto = item('Turn looping on when saved loops load', () => A.setAutoOn(!P.autoOn));
     ui.miAfter = item('Add a loop right after this one', () => A.addLoopAfter());
     ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
-    ui.miDelete = item('Delete loop', () => A.removeLoop());
-    ui.miSkip = item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\');
-    ui.miRestart = item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z');
     ui.miClear = item('Remove all loops', () => A.clearAll());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
-      ui.miSkip,
-      ui.miRestart,
       ui.miRename,
       ui.miAfter,
       ui.miTap,
       ui.miSort,
       ui.miFine,
       ui.miStrip,
-      ui.miAuto,
-      ui.miDelete,
       ui.miClear,
       item('Keyboard shortcuts', toggleHelp));
     return menu;
@@ -500,14 +492,12 @@ export function createControls(A) {
   // Opens without a loop too: the settings and the shortcut sheet don't need one.
   function openMenu() {
     const has = ready();
-    for (const mi of [ui.miSkip, ui.miRestart, ui.miRename, ui.miAfter, ui.miDelete, ui.miClear]) mi.hidden = !has;
+    for (const mi of [ui.miRename, ui.miAfter, ui.miClear]) mi.hidden = !has;
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
     ui.miStrip.firstChild.textContent = P.strip ? 'Hide the strip while looping' : 'Show a strip while looping';
-    ui.miAuto.firstChild.textContent = P.autoOn ? 'Don’t turn looping on by itself' : 'Turn looping on when saved loops load';
     ui.miFine.firstChild.textContent = P.fine ? 'Round times to tenths of a second' : 'Times to hundredths of a second';
-    ui.miDelete.firstChild.textContent = many ? `Delete loop ${S.sel + 1}` : 'Delete the loop';
     ui.panel.scrollTop = 0; // the menu hangs from the top of the panel
     ui.menu.hidden = false;
     ui.more.setAttribute('aria-expanded', 'true');
@@ -667,7 +657,9 @@ export function createControls(A) {
 
     // What happens once this loop is done, in words (it depends on the settings for all loops below).
     ui.thenNote = el('span', { class: 'lsm-note' });
-    const opts = el('div', { class: 'lsm-row lsm-opts' }, countField, ui.thenNote);
+    ui.del = el('button', { class: 'lsm-ib lsm-del', type: 'button' }, icon(I.trash, 16));
+    ui.del.addEventListener('click', () => A.removeLoop());
+    const opts = el('div', { class: 'lsm-row lsm-opts' }, countField, ui.thenNote, ui.del);
 
     // Settings for the whole set of loops: between two loops, and after the last one.
     const seg = (label, cls, options, set) => {
@@ -704,31 +696,18 @@ export function createControls(A) {
         el('div', { class: 'lsm-box' }, sMinus, ui.setsVal, sPlus, ui.setsInf)),
       ui.setsNote);
 
-    // Gap between repetitions and count-in: whole seconds / half seconds.
-    const stepper = (label, minus, plus, extra) => {
-      const out = el('output', { class: 'lsm-num lsm-val', 'aria-live': 'off' });
-      const m = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: less` }, icon(I.minus, 14));
-      const p = el('button', { class: 'lsm-ib', type: 'button', 'aria-label': `${label}: more` }, icon(I.plus, 14));
-      holdRepeat(m, minus);
-      holdRepeat(p, plus);
-      return { out, field: el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: label }), el('div', { class: 'lsm-box' }, m, out, p, extra || null)) };
-    };
-    const gap = stepper('Gap between plays', () => A.setGap(P.gap - 0.5), () => A.setGap(P.gap + 0.5));
-    ui.gapVal = gap.out;
-    ui.tickBtn = el('button', { class: 'lsm-ib lsm-inf', type: 'button', 'aria-label': 'Tick during the count-in', 'aria-pressed': 'true', title: 'Tick during the count-in', text: '♪' });
-    ui.tickBtn.addEventListener('click', () => A.setTick(!P.tick));
-    const count = stepper('Count-in', () => A.setCountIn(P.countIn - 1), () => A.setCountIn(P.countIn + 1), ui.tickBtn);
-    ui.countVal = count.out;
+    // When media with saved loops loads: leave it, turn looping on, or play from the first loop.
+    ui.segAuto = seg('If the video or track has saved loops', 'lsm-seg-auto', [
+      ['wait', 'Do nothing', 'Looping stays off until you turn it on'],
+      ['on', 'Turn looping on', 'Looping turns on by itself as soon as it loads; playback stays where it is'],
+      ['start', 'Play loop 1', 'Looping turns on and playback jumps to the start of the first loop'],
+    ], A.setAuto);
 
     const run = el('div', { class: 'lsm-run' },
       el('div', { class: 'lsm-sect', text: 'for all loops' }),
       el('div', { class: 'lsm-row' }, ui.segBetween.field, ui.segEnd.field),
-      ui.rounds);
-
-    ui.practice = el('div', { class: 'lsm-practice', hidden: true },
-      el('div', { class: 'lsm-row' }, gap.field, count.field));
-    ui.practiceBtn = el('button', { class: 'lsm-disclose', type: 'button', 'aria-expanded': 'false', text: '▸ Practice options' });
-    ui.practiceBtn.addEventListener('click', A.togglePractice);
+      ui.rounds,
+      ui.segAuto.field);
 
     // Actions
     // Turning looping on and starting a loop are separate: the first leaves the video where it is.
@@ -748,7 +727,13 @@ export function createControls(A) {
     // What is playing now: shown while looping.
     ui.statusText = el('span', { class: 'lsm-status-text' });
     ui.statusFill = el('i');
-    ui.status = el('div', { class: 'lsm-status', hidden: true }, ui.statusText, el('span', { class: 'lsm-bar' }, ui.statusFill));
+    const restartRep = ui.repRestart = el('button', { class: 'lsm-ib lsm-rep-restart', type: 'button', 'aria-label': 'Restart this repetition', title: 'Restart this repetition  (Shift+Z)' }, icon(I.replay, 15));
+    restartRep.addEventListener('click', () => A.navigate('restart'));
+    const skipRep = ui.repSkip = el('button', { class: 'lsm-ib lsm-rep-skip', type: 'button', 'aria-label': 'Skip this repetition', title: 'Skip this repetition: it counts as played  (Shift+\\)' }, icon(I.forward, 15));
+    skipRep.addEventListener('click', () => A.navigate('skipRep'));
+    ui.status = el('div', { class: 'lsm-status', hidden: true },
+      el('div', { class: 'lsm-status-row' }, ui.statusText, restartRep, skipRep),
+      el('span', { class: 'lsm-bar' }, ui.statusFill));
     const foot = el('div', { class: 'lsm-foot' }, ui.status, actions);
 
     // No loop yet.
@@ -761,7 +746,7 @@ export function createControls(A) {
       el('div', { class: 'lsm-empty-btns' }, ui.wholeBtn, hereBtn),
       el('p', { class: 'lsm-empty-tip', text: 'Or, while it plays, press Shift+A at the start and Shift+B at the end, or tap Shift+M at each section.' }));
 
-    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, ui.snapRow, opts, run, ui.practiceBtn, ui.practice, foot);
+    ui.body = el('fieldset', { class: 'lsm-body' }, slider, fields, ui.snapRow, opts, run, foot);
     ui.strip = buildStrip();
     ui.help = buildHelp();
     ui.panel = el('div', { class: 'lsm-panel', role: 'dialog', 'aria-label': 'Section loop' }, head, ui.menu, ui.hint, ui.notice, ui.empty, ui.body, ui.help);

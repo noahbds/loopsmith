@@ -13,6 +13,3 @@ export const BETWEEN = ['play', 'jump'];
 // After the last loop: keep playing the media, pause, or play the whole set again (a number of rounds).
 export const ENDS = ['play', 'pause', 'repeat'];
 
-// Limits for the gap between plays and the count-in, in seconds.
-export const MAX_GAP = 5;
-export const MAX_COUNT_IN = 8;

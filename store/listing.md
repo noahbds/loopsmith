@@ -23,7 +23,6 @@ WHAT YOU CAN DO
 • Your loops are saved and come back when you return. If you like, looping turns on by itself when you do.
 • Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
 • Zoom the slider with the mouse wheel, snap loops to each other, or tap a key while playing to mark sections.
-• Practise with a gap between plays and a count-in.
 • Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
 
 WHERE IT WORKS

@@ -4,7 +4,18 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
-Bug fixes from the 1.4.0 audit (see [AUDIT.md](AUDIT.md)).
+## 1.5.0
+
+Bug fixes from the 1.4.0 audit (see [AUDIT.md](AUDIT.md)), and a simpler panel.
+
+**Panel**
+- Removed: the practice options (gap between plays, count-in and its tick) are gone.
+- Skip and restart a repetition are buttons on the status line while looping (they were in ⋯).
+- Delete loop is a button in the loop editor (it was in ⋯); it can still be undone.
+- *If the video or track has saved loops* (under *for all loops*, it was in ⋯): *Do nothing*,
+  *Turn looping on*, or the new *Play loop 1*: looping turns on and playback starts from the first loop.
+- The slider's rail now spans exactly the media, so a loop at 0:00 starts at its left edge.
+- The status line takes the colour of the loop that is playing, not the one selected in the editor.
 
 **Loops play in the right order**
 - Fixed (B1): with *Between loops: Play on*, a loop inside another one never played (including any
