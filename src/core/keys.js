@@ -21,8 +21,10 @@ export function hotkeyAction(e) {
     return action ? { action } : null;
   }
   if (CODES[code]) return { action: CODES[code] };
+  // Shift+1…9, unless Shift is how this layout types digits (AZERTY): there the key is the site's
+  // own digit shortcut (YouTube: jump to 10 %…90 %).
   const digit = /^Digit([1-9])$/.exec(code);
-  if (digit) return { action: 'goto', index: Number(digit[1]) - 1 };
+  if (digit) return /^[0-9]$/.test(key) ? null : { action: 'goto', index: Number(digit[1]) - 1 };
   // A layout whose letters aren't Latin: the physical key still says which letter it is.
   const letter = /^Key([A-Z])$/.exec(code);
   if (letter) {

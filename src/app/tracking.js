@@ -28,6 +28,7 @@ export function createTracking(A) {
   // A seek (by the user or by us) is never "playback running into the end of a loop".
   function onSeeking() {
     S.lastT = null;
+    S.tap = null; // tap to mark: a section never spans a seek
     A.wake();
   }
 
@@ -71,9 +72,40 @@ export function createTracking(A) {
     A.render();
   }
 
+  // Loops read back from storage replace the ones in memory: the run's progress stays with them
+  // when they are the same loops (same number of them).
+  function keepRun(saved) {
+    if (saved.length !== S.loops.length) return;
+    saved.forEach((l, i) => {
+      const old = S.loops[i];
+      l.done = old.done;
+      l.skip = old.skip;
+      l.turn = old.turn;
+      l.partial = old.partial;
+    });
+  }
+
+  // The saved entry for the media. Some sites key loops by page and rounded duration: when that
+  // shifted a little (an ad, a re-encode) or the key format changed, the loops saved under a nearby
+  // key are copied over (never moved: they may belong to another track of the same page).
+  function savedEntry() {
+    if (!S.videoId) return null;
+    const own = store.get(S.videoId);
+    if (own || !adapter.nearKeys) return own;
+    for (const k of adapter.nearKeys(S.videoId)) {
+      const e = store.get(k);
+      if (e) {
+        store.put(S.videoId, { loops: e.loops, t: Date.now() });
+        return store.get(S.videoId);
+      }
+    }
+    return null;
+  }
+
   function applyDuration(d) {
     const oldD = S.ranged ? S.duration : 0;
-    const saved = E.loopsFromSaved(S.videoId ? store.get(S.videoId) : null, P);
+    const saved = E.loopsFromSaved(savedEntry(), P);
+    if (saved) store.touch(S.videoId);
     S.duration = d;
     S.ranged = d >= MIN_LEN * 2;
     if (!S.ranged) {
@@ -82,7 +114,7 @@ export function createTracking(A) {
     } else {
       if (saved) {
         // Same loops as before (only the duration was corrected): keep the run's progress.
-        if (saved.length === S.loops.length) saved.forEach((l, i) => { l.done = S.loops[i].done; });
+        keepRun(saved);
         S.loops = saved;
       }
       // The length was corrected: a loop that ran to the old end still runs to the end.
@@ -141,5 +173,31 @@ export function createTracking(A) {
     if (!S.ranged || Math.abs(d - S.duration) > 0.05) applyDuration(d);
   }
 
-  return { scheduleSync, syncVideo };
+  // Another tab saved something: settings, or the loops of the media loaded here.
+  function otherTab(keys) {
+    if (keys.includes('prefs')) {
+      A.reloadPrefs();
+      A.render();
+    }
+    if (!S.videoId || !S.ranged || !keys.includes('m:' + S.videoId)) return;
+    const saved = E.loopsFromSaved(store.get(S.videoId), P) || [];
+    E.clampLoops(saved, S.duration);
+    const same = JSON.stringify(E.serializeLoops(saved)) === JSON.stringify(E.serializeLoops(S.loops));
+    if (same) return; // our own save coming back
+    if (A.editing() || S.sliding) {
+      A.toast('These loops were changed in another tab');
+      return;
+    }
+    keepRun(saved);
+    S.loops = saved;
+    S.sel = clamp(S.sel, 0, Math.max(0, S.loops.length - 1));
+    if (!S.loops.length) S.zoom = false;
+    S.lastT = null;
+    A.hideTip();
+    A.settleRun();
+    A.render();
+    if (S.open) A.toast('Loops updated from another tab');
+  }
+
+  return { scheduleSync, syncVideo, otherTab };
 }

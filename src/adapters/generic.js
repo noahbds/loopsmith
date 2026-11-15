@@ -58,6 +58,12 @@ export default {
 
   controlsTop: () => null,
 
+  // The same page with a duration one second off (see savedEntry in tracking.js).
+  nearKeys(key) {
+    const m = /^(.*#)(\d+)$/.exec(key);
+    return m ? [m[1] + (Number(m[2]) - 1), m[1] + (Number(m[2]) + 1)] : [];
+  },
+
   // The site's own seek bar, found by looking (re-checked every 2 s: players build controls late).
   progressBar(p) {
     const now = Date.now();

@@ -13,6 +13,7 @@
  * @property {string} [name]   optional label
  * @property {boolean} [skip]  skipped by the user in the current run (never saved)
  * @property {boolean} [turn]  started or jumped to on purpose: has the turn while it plays (never saved)
+ * @property {boolean} [partial] entered after its start: this play won't count (never saved)
  */
 
 /**

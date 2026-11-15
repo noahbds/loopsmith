@@ -520,3 +520,10 @@ can't read without losing the loops (new fields are optional; old fields are nev
   and browsers without `captureStream` (Firefox is only enabled when it has the standard method, and
   was **not tested**).
 - [ ] *Not done:* snapping to YouTube chapters; saving the waveform; per-loop gap/count-in.
+
+---
+
+## Bug fix phase (target 1.4.1)
+
+The bugs found in 1.4.0, with how each was tested in Chrome and a suggested order, are in
+[AUDIT.md](AUDIT.md).

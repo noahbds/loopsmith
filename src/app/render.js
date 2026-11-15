@@ -211,8 +211,7 @@ export function createRender(A) {
 
     const which = many ? `loop ${S.sel + 1}` : 'this loop';
     ui.add.hidden = !mediaOk() || loops.length >= MAX_LOOPS;
-    ui.more.hidden = !ok;
-    if (!ok) A.closeMenu();
+    ui.more.hidden = !A.mediaOk(); // the menu also holds settings, so it opens without a loop
     const startTitle = `Play ${which} from its start`;
     setAttr(ui.start, 'title', `${startTitle}  (Shift+S)\nTurns looping on if it is off`);
     setAttr(ui.start, 'aria-label', startTitle);
@@ -227,15 +226,17 @@ export function createRender(A) {
     seg.box.classList.toggle('lsm-dim', dim);
   }
 
-  // What happens once the loop `l` is done, given the settings for all loops.
+  // What happens once the loop `l` is done, given the settings for all loops (same rules as the engine).
   function thenText(l) {
     if (!l.on) return 'Switched off: kept, but not played';
     if (l.infinite) return 'Repeats until you skip it or turn looping off';
-    const order = E.sortedByStart(S.loops.filter((x) => x.on));
+    const order = E.playOrder(S.loops.filter((x) => x.on));
     const next = order[order.indexOf(l) + 1];
     if (next) {
-      if (P.between === 'jump') return `Then jumps to ${(next.name || `loop ${S.loops.indexOf(next) + 1}`)}`;
-      return next.b > l.b ? `Then plays on into ${(next.name || `loop ${S.loops.indexOf(next) + 1}`)}` : 'Then plays on';
+      const name = next.name || `loop ${S.loops.indexOf(next) + 1}`;
+      if (next.a < l.b - 0.15) return `Then ${name}, from its start`;
+      if (P.between === 'jump' && next.a > l.b + 0.15) return `Then jumps to ${name}`;
+      return `Then plays on into ${name}`;
     }
     const last = order.length > 1 ? 'Last loop, then ' : 'Then ';
     return last + (P.end === 'pause' ? 'pauses' : P.end === 'repeat' ? 'all loops start over' : 'plays on');

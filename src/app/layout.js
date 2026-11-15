@@ -283,6 +283,7 @@ export function createLayout(A) {
     if (ui.host.parentNode !== p) p.appendChild(ui.host);
     const host = adapter.buttonHost(p);
     if (host && ui.btn.parentNode !== host) host.insertBefore(ui.btn, host.firstChild);
+    ui.btn.classList.toggle('lsm-corner', host === p); // no control bar: in the player's corner
     const bar = adapter.progressBar(p);
     if (bar && ui.markBox.parentNode !== bar) bar.appendChild(ui.markBox);
   }

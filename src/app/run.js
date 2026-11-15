@@ -136,8 +136,14 @@ export function createRun(A) {
     const t = v.currentTime;
     const prev = S.lastT;
     S.lastT = t;
+    // The playhead just landed here (a seek, or looping was just turned on): a loop it landed in
+    // after its start is only partly played this time.
+    if (prev === null) {
+      E.enter(S.loops, t, S.duration, turnGuard());
+      return;
+    }
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
-    if (prev === null || t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
+    if (t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
       return;
     }
     const step = E.advance(S.loops, prev, t, runOpts(turnGuard()));
@@ -207,11 +213,12 @@ export function createRun(A) {
   function finishRun() {
     const on = S.loops.filter((l) => l.on);
     const single = on.length === 1 ? on[0] : null;
+    const played = single ? single.done : 0; // fewer than its count when it was skipped
     const rounds = S.round;
     endRun(false);
     if (P.end !== 'play' && S.video && !S.video.paused) S.video.pause();
     A.render();
-    A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single ? `Loop finished · played ${single.count}×` : 'Loops finished', { label: 'Run again', run: runAgain });
+    A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single && played ? `Loop finished · played ${played}×` : single ? 'Loop finished' : 'Loops finished', { label: 'Run again', run: runAgain });
   }
 
   // The video reached its very end before the regular check caught it: as if playback had just
@@ -276,7 +283,7 @@ export function createRun(A) {
     }
     A.render();
     wake();
-    if (!S.open) A.toast(`${S.loops.length > 1 ? `Loop ${S.sel + 1}` : 'Loop'} · ${describe(cur())}`);
+    if (!S.open) A.toast(`${A.loopLabel(cur())} · ${describe(cur())}`);
   }
 
   function stopRun() {

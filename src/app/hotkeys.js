@@ -10,6 +10,14 @@ export function createHotkeys(A) {
     return !!t && t.nodeType === 1 && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
   }
 
+  // Whether the action has something to act on: the media for marking, a loop for the rest.
+  function usable(hit) {
+    if (!A.mediaOk()) return false;
+    if (hit.action === 'markA' || hit.action === 'markB' || hit.action === 'tap') return true;
+    if (hit.action === 'goto') return hit.index < S.loops.length;
+    return S.loops.length > 0;
+  }
+
   function onHotkey(e) {
     if (e.repeat || isTyping(e)) return;
     const hit = hotkeyAction(e);
@@ -17,6 +25,8 @@ export function createHotkeys(A) {
     if (!S.player || !S.player.isConnected) return;
     // On an arbitrary page, only once the user has played that media (or opened the panel).
     if (floating ? !(S.open || engaged(S.player)) : !S.player.getClientRects().length) return;
+    // A shortcut with nothing to act on leaves the key to the site.
+    if (!usable(hit)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     switch (hit.action) {

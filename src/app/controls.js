@@ -406,9 +406,12 @@ export function createControls(A) {
     ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miDelete = item('Delete loop', () => A.removeLoop());
+    ui.miSkip = item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\');
+    ui.miRestart = item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z');
+    ui.miClear = item('Remove all loops', () => A.clearAll());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
-      item('Skip this repetition', () => A.navigate('skipRep'), 'Shift+\\'),
-      item('Restart this repetition', () => A.navigate('restart'), 'Shift+Z'),
+      ui.miSkip,
+      ui.miRestart,
       ui.miRename,
       ui.miAfter,
       ui.miTap,
@@ -417,7 +420,7 @@ export function createControls(A) {
       ui.miStrip,
       ui.miAuto,
       ui.miDelete,
-      item('Remove all loops', () => A.clearAll()),
+      ui.miClear,
       item('Keyboard shortcuts', toggleHelp));
     return menu;
   }
@@ -454,7 +457,7 @@ export function createControls(A) {
       ['Shift+\\', 'Skip this repetition'],
       ['Shift+Z', 'Restart this repetition'],
       ['Shift+M', 'Tap to mark: each press ends a section and starts the next'],
-      ['Shift+1 … 9', 'Go to loop 1 … 9'],
+      ['Shift+1 … 9', 'Go to loop 1 … 9 (not on AZERTY keyboards)'],
     ];
     const list = el('div', { class: 'lsm-help-rows' });
     for (const [k, v] of rows) list.append(el('kbd', { text: k }), el('span', { text: v }));
@@ -494,8 +497,10 @@ export function createControls(A) {
     input.addEventListener('blur', () => finish(true));
   }
 
+  // Opens without a loop too: the settings and the shortcut sheet don't need one.
   function openMenu() {
-    if (!ready()) return;
+    const has = ready();
+    for (const mi of [ui.miSkip, ui.miRestart, ui.miRename, ui.miAfter, ui.miDelete, ui.miClear]) mi.hidden = !has;
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
@@ -675,8 +680,8 @@ export function createControls(A) {
       return { box, btns, field: el('div', { class: 'lsm-field' }, el('div', { class: 'lsm-label', text: label }), box) };
     };
     ui.segBetween = seg('Between loops', 'lsm-seg-between', [
-      ['play', 'Play on', 'When a loop is done, keep playing up to the next one'],
-      ['jump', 'Jump', 'When a loop is done, jump straight to the start of the next one'],
+      ['play', 'Play on', 'When a loop is done, keep playing up to the next one (a loop that starts inside it plays next, from its start)'],
+      ['jump', 'Jump', 'When a loop is done, skip the stretch before the next one and jump to its start'],
     ], A.setBetween);
     ui.segEnd = seg('After the last', 'lsm-seg-end', [
       ['play', 'Play on', 'After the last loop, keep playing the video'],

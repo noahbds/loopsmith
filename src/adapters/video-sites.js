@@ -35,7 +35,50 @@ export const bilibili = {
   },
 };
 
-// The player runs in a frame from geo.dailymotion.com; the generic adapter handles it there (the
-// video id is in the frame's ?video= parameter). Its controls are out of reach, so the markers
-// run along the bottom of the video.
-export const dailymotion = { ...generic, id: 'dailymotion' };
+// The player runs in a frame from geo.dailymotion.com; the generic adapter handles it there. Its
+// controls are out of reach, so the markers run along the bottom of the video.
+//
+// Loops are saved per video id. The frame's address doesn't always carry it (`?video=`), so the
+// video page (www.dailymotion.com/video/<id>) hands it down to the player frame.
+const DM_MSG = 'loopsmith:dm-video';
+let dmId = null; // the id the video page sent down
+let dmWait = 0; // when this frame started waiting for it
+
+export const dailymotion = {
+  ...generic,
+  id: 'dailymotion',
+
+  // Runs in every frame, media or not (see boot.js).
+  helper() {
+    if (window.top === window.self) {
+      if (location.hostname !== 'www.dailymotion.com') return;
+      setInterval(() => {
+        const m = /^\/video\/([a-z0-9]+)/i.exec(location.pathname);
+        if (!m) return;
+        for (const f of document.querySelectorAll('iframe[src*="geo.dailymotion.com"]')) {
+          try { f.contentWindow.postMessage({ type: DM_MSG, id: m[1] }, 'https://geo.dailymotion.com'); } catch (_) { /* frame gone */ }
+        }
+      }, 1000);
+    } else {
+      window.addEventListener('message', (e) => {
+        if (e.origin === 'https://www.dailymotion.com' && e.data && e.data.type === DM_MSG && typeof e.data.id === 'string') {
+          dmId = e.data.id.slice(0, 40);
+        }
+      });
+    }
+  },
+
+  identify(p) {
+    const d = p.duration;
+    if (!(d > 0)) return { hold: true };
+    const id = new URLSearchParams(location.search).get('video') || dmId;
+    if (id) return { id: `dailymotion:${id}`, live: d === Infinity };
+    // Inside Dailymotion's own pages but the id hasn't arrived yet: wait a little (it comes every
+    // second from a video page; other pages never send it).
+    if (document.referrer.startsWith('https://www.dailymotion.com/')) {
+      if (!dmWait) dmWait = Date.now();
+      if (Date.now() - dmWait < 3000) return { hold: true };
+    }
+    return generic.identify(p);
+  },
+};

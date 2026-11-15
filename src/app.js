@@ -86,6 +86,14 @@ export function start(adapter, store) {
       scheduleSync();
     });
   }
+  store.subscribe(A.otherTab);
+  let warned = false;
+  store.on('error', () => {
+    if (warned) return;
+    warned = true;
+    A.toast('Loops couldn’t be saved: the browser’s storage is full or unavailable');
+  });
+  store.on('prune', (n) => A.toast(`Saved loops for ${n === 1 ? 'one' : n} rarely used item${n === 1 ? '' : 's'} were removed (1,000 at most)`));
   window.addEventListener('keydown', onHotkey, true);
   window.addEventListener('pagehide', () => { store.flush(); });
 

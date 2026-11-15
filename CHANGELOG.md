@@ -4,6 +4,45 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+Bug fixes from the 1.4.0 audit (see [AUDIT.md](AUDIT.md)).
+
+**Loops play in the right order**
+- Fixed (B1): with *Between loops: Play on*, a loop inside another one never played (including any
+  loop inside a whole-video loop). Once a loop is done, a loop that starts inside it now plays next,
+  from its own start, in both modes. *Play on* and *Jump* only differ for the stretch between loops.
+- Fixed (B2): of two loops with the same start, the second never played. Loops play by start, then
+  by number, and the panel's "Then …" line follows the same order.
+- Fixed (B3): a loop entered after its start (overlapping another, or looping turned on halfway
+  through it) counted that partial pass as a full play. It now goes back to its start first.
+
+**Keyboard and tabs**
+- Fixed (B6): on AZERTY keyboards, Shift+1…9 types a digit, so it is left to the site (YouTube's
+  jump to 10 %…90 %). Shortcuts that have nothing to act on (no loop yet) no longer swallow the key.
+- Fixed (B4): a setting changed in one tab was undone by any other open tab. Tabs now pick up each
+  other's settings.
+- Fixed (B5): with the same video in two tabs, one tab's edits overwrote the other's. A tab now
+  reloads loops changed in another tab, or says so while you're editing.
+
+**Sites**
+- YouTube Shorts: the loop button now shows, in the corner of the Short (B7).
+- YouTube Music: loop markers are back on its redesigned progress bar (B16).
+- Dailymotion: loops are saved per video id, handed down from the video page to the player (B17).
+  Dailymotion loops saved by 1.4.0 and earlier are not carried over.
+- `youtube-nocookie.com` embeds, once turned on, know which video is loaded (B14).
+- Bandcamp: the track title is part of the key, so tracks of the same length no longer share loops.
+  On other sites, loops saved under a duration one second off are found again (B13).
+
+**Panel and messages**
+- The ⋯ menu opens before any loop exists, for the settings and the shortcut sheet (B8).
+- Tap to mark forgets its mark after a seek, instead of making one long section (B10).
+- Messages use loop names, and "played N×" counts the plays that really happened (B11).
+
+**Data**
+- Saved loops are removed least recently *used* first (not least recently edited) past 1,000 items,
+  and a message says when that happens (B9).
+- A failed save (storage full) is reported instead of silently lost (B15).
+- A duration correction during a run no longer brings skipped loops back (B12).
+
 ## 1.4.0
 
 **Loops take turns**

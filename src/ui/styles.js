@@ -3,6 +3,7 @@
 
 export const LIGHT_CSS = `
 .lsm-btn{position:relative;display:inline-flex!important;align-items:center;justify-content:center;vertical-align:top}
+.lsm-btn.lsm-corner{position:absolute!important;top:12px;right:12px;z-index:60;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:0;cursor:pointer}
 .lsm-btn>svg{width:24px!important;height:24px!important;padding:0!important;flex:none;pointer-events:none;transition:color .2s,transform .25s cubic-bezier(.3,1.5,.5,1)}
 .lsm-btn>svg path{fill:currentColor!important}
 .lsm-btn[aria-expanded="true"]>svg{transform:scale(1.12)}
@@ -90,6 +91,7 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-hb:hover{background:rgba(255,255,255,.12);color:#fff}
 .lsm-panel .lsm-hb:active{transform:scale(.9)}
 .lsm-panel .lsm-add{box-shadow:inset 0 0 0 1px var(--line)}
+.lsm-panel:has(.lsm-menu:not([hidden])){min-height:330px}
 .lsm-panel .lsm-menu{position:absolute;top:40px;right:10px;z-index:6;max-height:calc(100% - 52px);overflow-y:auto;min-width:220px;padding:5px;border-radius:10px;background:rgb(40,40,45);box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--line)}
 .lsm-panel .lsm-mi{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;height:32px;padding:0 10px;border-radius:7px;text-align:left;color:#fff;font-size:12.5px}
 .lsm-panel .lsm-mi:hover,.lsm-panel .lsm-mi:focus-visible{background:rgba(255,255,255,.12)}

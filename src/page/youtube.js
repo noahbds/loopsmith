@@ -10,7 +10,7 @@
   document.addEventListener('lsm:yt-ask', () => {
     let out = '';
     try {
-      const p = document.getElementById('movie_player');
+      const p = document.getElementById(location.pathname.startsWith('/shorts/') ? 'shorts-player' : 'movie_player');
       const d = p && typeof p.getVideoData === 'function' ? p.getVideoData() : null;
       if (d) out = JSON.stringify({ id: d.video_id ? String(d.video_id) : null, live: d.isLive === true });
     } catch (_) { /* player not initialised yet */ }

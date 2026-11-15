@@ -31,6 +31,7 @@ export async function boot(backend) {
   // Pages that still hold a copy from before 1.3 (it marked itself `data-ysl`) are left alone.
   if (root.hasAttribute('data-lsm') || root.hasAttribute('data-ysl')) return;
   root.setAttribute('data-lsm', '');
+  if (adapter.helper) adapter.helper(); // site-specific work that runs even in frames without media
 
   // Most pages never have media: on those, wait quietly instead of starting anything.
   // (Music sites start right away: their loop button shows before anything plays.)

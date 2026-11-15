@@ -45,11 +45,14 @@ function apiData(p) {
 function idFromUrl() {
   if (/^\/embed\//.test(location.pathname)) return null; // embedded playlists change video without changing URL
   if (location.pathname === '/watch') return new URLSearchParams(location.search).get('v') || null;
-  const m = /^\/live\/([\w-]{6,})/.exec(location.pathname);
+  const m = /^\/(?:live|shorts)\/([\w-]{6,})/.exec(location.pathname);
   return m ? m[1] : null;
 }
 
 let splitAt = 0; // when the URL and the player started disagreeing about the video
+
+// Shorts play in their own player; the regular one stays in the page, hidden.
+const onShorts = () => location.pathname.startsWith('/shorts/');
 
 export default {
   id: 'youtube',
@@ -59,7 +62,7 @@ export default {
   // Only the main page and embedded players have a player worth attaching to.
   shouldRun: () => window.top === window.self || /^\/embed\//.test(location.pathname),
 
-  findPlayer: () => document.getElementById('movie_player'),
+  findPlayer: () => document.getElementById(onShorts() ? 'shorts-player' : 'movie_player'),
   findMedia: (p) => p.querySelector('video.html5-main-video') || p.querySelector('video'),
   isAd: (p) => !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting')),
 
@@ -80,7 +83,8 @@ export default {
   },
 
   buttonClass: 'ytp-button',
-  buttonHost: (p) => p.querySelector('.ytp-right-controls-left') || p.querySelector('.ytp-right-controls'),
+  // Shorts have no control bar: the button sits in the player's top corner instead (see layout.js).
+  buttonHost: (p) => p.querySelector('.ytp-right-controls-left') || p.querySelector('.ytp-right-controls') || (onShorts() ? p : null),
   progressBar: (p) => p.querySelector('.ytp-progress-bar'),
   controlsTop(p) {
     const chrome = p.querySelector('.ytp-chrome-bottom');

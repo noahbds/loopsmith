@@ -3,7 +3,7 @@
 // Layout in the backend (extension storage), one key per item so that
 // tabs never overwrite each other's entries:
 //   "prefs"            { count, infinite, after }
-//   "m:<media key>"    { loops: [...], t: last change (ms), title?, url? }   e.g. "m:yt:dQw4w9WgXcQ"
+//   "m:<media key>"    { loops: [...], t: last change (ms), u?: last time loaded (ms) }   e.g. "m:yt:dQw4w9WgXcQ"
 //   anything else      small bookkeeping values (e.g. "mig:v1")
 //
 // A backend is { getAll(): Promise<object>, set(obj): Promise, remove(keys): Promise,
@@ -19,7 +19,11 @@ import { MAX_SAVED } from './constants.js';
  * @property {(cb: (changes: Record<string, any>) => void) => void} [onChange]
  */
 
-/** @typedef {{ loops: any[], t?: number, title?: string, url?: string }} Entry */
+/** @typedef {{ loops: any[], t?: number, u?: number }} Entry */
+
+// An entry's last use: loaded or changed, whichever is later.
+/** @param {Entry | undefined} e */
+const lastUse = (e) => Math.max((e && e.t) || 0, (e && e.u) || 0);
 
 
 const PREFS = 'prefs';
@@ -42,6 +46,10 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
   const pending = new Map(); // backend key -> value to write (undefined = remove)
   /** @type {ReturnType<typeof setTimeout> | 0} */
   let timer = 0;
+  /** @type {((keys: string[]) => void)[]} */
+  const listeners = []; // told about changes made in other tabs
+  /** @type {{ prune: ((n: number) => void)[], error: (() => void)[] }} */
+  const events = { prune: [], error: [] };
 
   /** @param {string} key @param {any} value */
   function take(key, value) {
@@ -74,14 +82,16 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     if (delay) schedule();
   }
 
-  // Drops the oldest entries above the limit.
+  // Drops the least recently used entries above the limit, and says how many went.
   function prune() {
     if (media.size <= maxSaved) return;
-    const ids = [...media.keys()].sort((x, y) => ((media.get(x) || {}).t || 0) - ((media.get(y) || {}).t || 0));
-    for (const id of ids.slice(0, media.size - maxSaved)) {
+    const ids = [...media.keys()].sort((x, y) => lastUse(media.get(x)) - lastUse(media.get(y)));
+    const gone = ids.slice(0, media.size - maxSaved);
+    for (const id of gone) {
       media.delete(id);
       pending.set(MEDIA + id, undefined);
     }
+    for (const cb of events.prune) cb(gone.length);
   }
 
   function flush() {
@@ -99,11 +109,15 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     }
     pending.clear();
     const jobs = [];
+    // Storage full or unavailable: keep working from memory, and say so.
+    const failed = () => { for (const cb of events.error) cb(); };
     try {
       if (Object.keys(set).length) jobs.push(backend.set(set));
       if (gone.length) jobs.push(backend.remove(gone));
-    } catch (_) { /* storage unavailable: keep working from memory */ }
-    return Promise.all(jobs).then(() => {}, () => {});
+    } catch (_) {
+      failed();
+    }
+    return Promise.all(jobs).then(() => {}, failed);
   }
 
   return {
@@ -113,7 +127,9 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
       for (const [k, v] of Object.entries(all)) take(k, v);
       if (backend.onChange) {
         backend.onChange((changes) => {
-          for (const [k, v] of Object.entries(changes)) if (!pending.has(k)) take(k, v);
+          const keys = Object.keys(changes).filter((k) => !pending.has(k));
+          for (const k of keys) take(k, changes[k]);
+          if (keys.length) for (const cb of listeners) cb(keys);
         });
       }
     },
@@ -132,6 +148,17 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
       queue(MEDIA + id, entry || undefined);
     },
 
+    // The media's loops were just loaded: remember when (at most once an hour, to keep writes rare).
+    /** @param {string} id */
+    touch(id) {
+      const e = media.get(id);
+      const now = Date.now();
+      if (!e || now - (e.u || 0) < 3600e3) return;
+      const next = { ...e, u: now };
+      media.set(id, next);
+      queue(MEDIA + id, next);
+    },
+
     getPrefs: () => prefs,
     /** @param {Record<string, any>} p */
     setPrefs(p) {
@@ -148,6 +175,18 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     },
 
     flush,
+
+    // Calls `cb(keys)` with the backend keys ("prefs", "m:<id>") that changed elsewhere.
+    /** @param {(keys: string[]) => void} cb */
+    subscribe(cb) {
+      listeners.push(cb);
+    },
+
+    // 'prune': cb(number of entries removed). 'error': cb() when a write failed.
+    /** @param {'prune' | 'error'} type @param {(n?: any) => void} cb */
+    on(type, cb) {
+      events[type].push(cb);
+    },
   };
 }
 

@@ -12,11 +12,9 @@ function legacyEnd(prefs) {
   return prefs.after === 'next' || prefs.after === 'pause' ? 'pause' : 'play';
 }
 
-export function createCore(adapter, store) {
-  const prefs = store.getPrefs();
-
-  // Defaults for new loops + the "when done" choice.
-  const P = {
+// The settings as stored, read back with every value checked.
+function readPrefs(prefs) {
+  return {
     count: clamp(Math.round(Number(prefs.count)) || 5, 1, MAX_COUNT),
     infinite: prefs.infinite === true,
     between: BETWEEN.includes(prefs.between) ? prefs.between : prefs.after === 'next' ? 'jump' : 'play',
@@ -33,6 +31,11 @@ export function createCore(adapter, store) {
     autoOn: prefs.autoOn === true,  // turn looping on by itself when media with saved loops loads
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
   };
+}
+
+export function createCore(adapter, store) {
+  // Defaults for new loops + the settings for all loops. Kept in step with other tabs (see app.js).
+  const P = readPrefs(store.getPrefs());
 
   const S = {
     player: null,
@@ -131,7 +134,9 @@ export function createCore(adapter, store) {
 
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
-    store.put(S.videoId, S.loops.length ? { loops: E.serializeLoops(S.loops), t: Date.now() } : null);
+    // t: last change. No loops left: an empty entry stays, so loops saved under a nearby key
+    // (see savedEntry in tracking.js) are not copied back in.
+    store.put(S.videoId, { loops: E.serializeLoops(S.loops), t: Date.now() });
   }
 
   function rememberPrefs() {
@@ -166,5 +171,10 @@ export function createCore(adapter, store) {
 
   const L = { barPlaced: false }; // layout facts other parts read (the markers are placed on a bar)
 
-  return { adapter, store, S, P, ui, L, floating, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, loopLabel, mediaOk, mediaWord, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, runOpts, skipped, stripWanted, toPct, viewEnd, viewStart };
+  // Another tab changed the settings: take them, so this tab never writes back old values.
+  function reloadPrefs() {
+    Object.assign(P, readPrefs(store.getPrefs()));
+  }
+
+  return { adapter, store, S, P, ui, L, floating, reloadPrefs, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, loopLabel, mediaOk, mediaWord, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, runOpts, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

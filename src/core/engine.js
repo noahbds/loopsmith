@@ -9,6 +9,9 @@
 //   name      optional label, at most NAME_MAX characters
 //   done      plays completed in the current run
 //   skip      skipped by the user in the current run (runtime only, never saved)
+//   turn      started or jumped to on purpose: has the turn while it plays (runtime only)
+//   partial   the playhead came into it after its start, so the current play is not a whole one
+//             and won't count (runtime only)
 
 import { MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, NAME_MAX, PALETTE } from './constants.js';
 import { clamp, roundT, isNum } from './util.js';
@@ -33,6 +36,7 @@ export function resetRun(loops) {
     l.done = 0;
     l.skip = false;
     l.turn = false;
+    l.partial = false;
   }
 }
 
@@ -54,7 +58,7 @@ export function giveTurn(loops, loop) {
  * @returns {Loop}
  */
 export function newLoop(a, b, c, defaults) {
-  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false, turn: false };
+  return { a, b, c, count: defaults.count, infinite: defaults.infinite, on: true, done: 0, skip: false, turn: false, partial: false };
 }
 
 // Where a loop really turns around. A loop that runs to the end of the media turns `guard`
@@ -89,6 +93,56 @@ export function loopAt(loops, t, duration, guard) {
   return best;
 }
 
+// Play order: by start; loops that start together play in list order (lower number first).
+/**
+ * @param {Loop[]} loops
+ * @param {Loop} x
+ * @param {Loop} y
+ */
+function before(loops, x, y) {
+  if (Math.abs(x.a - y.a) > 1e-6) return x.a < y.a;
+  return loops.indexOf(x) < loops.indexOf(y);
+}
+
+/**
+ * The loops in play order. A new array.
+ * @param {Loop[]} loops
+ */
+export const playOrder = (loops) => [...loops].sort((x, y) => (x === y ? 0 : before(loops, x, y) ? -1 : 1));
+
+/**
+ * The loop that comes after `loop` in play order and still has plays left.
+ * @param {Loop[]} loops
+ * @param {Loop} loop
+ * @returns {Loop | null}
+ */
+export function nextAfter(loops, loop) {
+  /** @type {Loop | null} */
+  let next = null;
+  for (const l of loops) {
+    if (l === loop || skipped(l) || !before(loops, loop, l)) continue;
+    if (!next || before(loops, l, next)) next = l;
+  }
+  return next;
+}
+
+/**
+ * The playhead just landed at `t` (a seek, or looping was turned on): a loop it lands in after
+ * its start is only partly played this time round, so reaching its end won't count as a play.
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ */
+export function enter(loops, t, duration, guard) {
+  for (const l of loops) {
+    if (t >= l.a - 0.3 && t < loopEnd(l, duration, guard)) l.partial = t > l.a + LATE;
+  }
+}
+
+// How far past its start the playhead can come into a loop and still play it whole.
+const LATE = 0.75;
+
 // The closest loop that starts after `t` and still has plays left.
 /**
  * @param {Loop[]} loops
@@ -117,36 +171,57 @@ export function anyAhead(loops, t, duration, guard) {
 const ADJACENT = 0.15;
 
 /**
- * What happens once a loop's turn is over: nothing left (finish), jump to the next loop
- * ("Next loop"), or carry on.
+ * What happens once a loop's turn is over:
+ *   - the next loop in play order starts inside it (nested, or overlapping its end): play that one
+ *     from its start, whatever the "between loops" setting;
+ *   - otherwise "Next loop" jumps to the next one, and "Play on" keeps playing;
+ *   - nothing left: finish.
  * @param {Loop[]} loops
- * @param {number} finishedA start of the loop that just finished
- * @param {number} finishedEnd where it turned around
+ * @param {Loop} done the loop that just finished
+ * @param {number} doneEnd where it turned around
  * @param {number} t playhead
  * @param {{ duration: number, guard: number, after?: string }} opts
  * @returns {Step}
  */
-function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'continue' }) {
-  // "Next loop" goes to the loop that starts after this one, even one that lies behind the playhead
-  // (inside the loop that just finished).
-  const next = after === 'next' ? nextLoop(loops, finishedA) : null;
+function settle(loops, done, doneEnd, t, { duration, guard, after = 'continue' }) {
+  const next = nextAfter(loops, done);
   if (next) {
     // A loop that starts right where the finished one ends is already playing: seeking to its
     // start would only cut the sound for a moment.
-    return Math.abs(next.a - finishedEnd) <= ADJACENT ? { carryOn: true } : { seek: next.a, next };
+    if (Math.abs(next.a - doneEnd) <= ADJACENT) return carryOn(loops, t, duration, guard);
+    if (next.a < doneEnd || after === 'next') {
+      giveTurn(loops, next);
+      next.partial = false;
+      return { seek: next.a, next };
+    }
   }
-  return anyAhead(loops, t, duration, guard) ? { carryOn: true } : { finish: true };
+  return anyAhead(loops, t, duration, guard) ? carryOn(loops, t, duration, guard) : { finish: true };
+}
+
+// Playback carries on from `t`: a loop it is already inside was entered after its start.
+/**
+ * @param {Loop[]} loops
+ * @param {number} t
+ * @param {number} duration
+ * @param {number} guard
+ * @returns {Step}
+ */
+function carryOn(loops, t, duration, guard) {
+  enter(loops, t, duration, guard);
+  return { carryOn: true };
 }
 
 // One step of the loop engine, for forward playback from `prev` to `t`. When playback just ran
 // into the end of the loop whose turn it is (see loopAt), counts a play and says what to do:
 //   null                      nothing happened (the end of any other loop is passed over)
 //   { seek, repeat: loop }    go back to the start of `loop` (it has plays left)
-//   { seek, next: loop }      "Next loop": its turn is over; jump to the next one's start
+//   { seek, restart: loop }   it was only partly played (entered after its start): back to its
+//                             start, no play counted
+//   { seek, next: loop }      its turn is over: the next loop plays from its start
 //   { carryOn: true }         its turn is over, others remain: keep playing
 //   { finish: true }          nothing left to play
-// "Next loop" means the loop that starts after the one just finished, even when it lies inside it
-// or overlaps it and playback is already past its start: it is played from its own start.
+// The next loop is the one after it in play order (see settle), even when it lies inside it or
+// overlaps it and playback is already past its start: it is played from its own start.
 /**
  * @param {Loop[]} loops
  * @param {number} prev
@@ -155,13 +230,19 @@ function settle(loops, finishedA, finishedEnd, t, { duration, guard, after = 'co
  * @returns {Step}
  */
 export function advance(loops, prev, t, opts) {
+  // Playing into a loop through its start: this play is a whole one.
+  for (const x of loops) if (x.partial && prev < x.a && t >= x.a) x.partial = false;
   const l = loopAt(loops, prev, opts.duration, opts.guard);
   if (!l) return null;
   const end = loopEnd(l, opts.duration, opts.guard);
   if (t < end) return null;
+  if (l.partial) {
+    l.partial = false;
+    return { seek: l.a, restart: l };
+  }
   l.done += 1;
   if (!exhausted(l)) return { seek: l.a, repeat: l };
-  return settle(loops, l.a, end, t, opts);
+  return settle(loops, l, end, t, opts);
 }
 
 /**
@@ -170,7 +251,9 @@ export function advance(loops, prev, t, opts) {
  * @returns {Step}
  */
 export function restartRep(target) {
-  return target ? { seek: target.a, restart: target } : null;
+  if (!target) return null;
+  target.partial = false;
+  return { seek: target.a, restart: target };
 }
 
 /**
@@ -185,9 +268,12 @@ export function restartRep(target) {
 export function skipRep(loops, target, opts) {
   if (!target) return null;
   target.done += 1;
-  if (!exhausted(target)) return { seek: target.a, repeat: target };
+  if (!exhausted(target)) {
+    target.partial = false;
+    return { seek: target.a, repeat: target };
+  }
   const end = loopEnd(target, opts.duration, opts.guard);
-  const step = settle(loops, target.a, end, end, opts);
+  const step = settle(loops, target, end, end, opts);
   // Carrying on from the middle of a repetition that was skipped: carry on from its end.
   return step && 'carryOn' in step && !('seek' in step) ? { seek: end, carryOn: true } : step;
 }
@@ -203,10 +289,13 @@ export function skipRep(loops, target, opts) {
  * @returns {Step}
  */
 export function skipLoop(loops, target, t, opts) {
-  const from = target ? target.a : t;
   if (target) target.skip = true;
-  const next = nextLoop(loops, from);
-  if (next) return { seek: next.a, next };
+  const next = target ? nextAfter(loops, target) : nextLoop(loops, t);
+  if (next) {
+    giveTurn(loops, next);
+    next.partial = false;
+    return { seek: next.a, next };
+  }
   const end = target ? loopEnd(target, opts.duration, opts.guard) : t;
   if (anyAhead(loops, end, opts.duration, opts.guard)) return { seek: end, carryOn: true };
   return { finish: true };
@@ -224,13 +313,17 @@ export function skipLoop(loops, target, t, opts) {
  */
 export function prevLoop(loops, target, t, restartAfter = 2) {
   if (target && t - target.a > restartAfter) return { seek: target.a, restart: target };
-  const from = target ? target.a : t;
   /** @type {Loop | null} */
   let prev = null;
-  for (const l of loops) if (l.on && l !== target && l.a < from - 1e-6 && (!prev || l.a > prev.a)) prev = l;
+  for (const l of loops) {
+    if (!l.on || l === target) continue;
+    const earlier = target ? before(loops, l, target) : l.a < t - 1e-6;
+    if (earlier && (!prev || before(loops, prev, l))) prev = l;
+  }
   if (!prev) return target ? { seek: target.a, restart: target } : null;
   prev.skip = false;
   prev.done = 0;
+  prev.partial = false;
   giveTurn(loops, prev);
   return { seek: prev.a, prev };
 }
@@ -260,6 +353,7 @@ export function gotoLoop(loop, loops = []) {
   loop.on = true;
   loop.skip = false;
   loop.done = 0;
+  loop.partial = false;
   giveTurn(loops, loop);
   loop.turn = true;
   return { seek: loop.a, goto: loop };

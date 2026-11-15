@@ -30,7 +30,10 @@ export default {
   endGuard: 1.5,
   engaged: () => true,
   buttonHost: undefined,
-  progressBar: () => document.querySelector('ytmusic-player-bar #progress-bar #progressContainer') || document.querySelector('ytmusic-player-bar #progress-bar'),
+  // The bottom bar was redesigned in 2026 (ytmusic-miniplayer); the old one is kept as a fallback.
+  progressBar: () => document.querySelector('ytmusic-miniplayer .ytMusicMiniPlayerProgressBar')
+    || document.querySelector('ytmusic-player-bar #progress-bar #progressContainer')
+    || document.querySelector('ytmusic-player-bar #progress-bar'),
   controlsTop: () => null,
 
   seek(v, t) {
