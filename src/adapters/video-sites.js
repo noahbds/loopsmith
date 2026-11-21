@@ -1,21 +1,29 @@
 // Video sites that play a plain <video> and only need to say where their progress bar is (for the
-// loop markers), plus the odd site-specific detail. Everything else is the generic adapter:
-// floating loop button over the video, loops saved per page and duration.
+// loop markers) and where the loop button goes in their control bar, plus the odd site-specific
+// detail. Everything else is the generic adapter (loops saved per page and duration).
 
 import generic from './generic.js';
 
 const q = (sel) => () => document.querySelector(sel);
+// The loop button goes first in this group of the site's control bar.
+const firstIn = (sel) => () => {
+  const g = document.querySelector(sel);
+  return g ? { host: g, before: g.firstChild } : null;
+};
 
 export const vimeo = {
   ...generic,
   id: 'vimeo',
   progressBar: q('.vp-progress'),
+  // First of the buttons right of the progress bar (volume, captions, settings…).
+  barSlot: firstIn('[class*="ControlBarButtonsAndMenus_module_collapsibleContent"]'),
 };
 
 export const twitch = {
   ...generic,
   id: 'twitch',
   progressBar: q('.seekbar-bar'),
+  barSlot: firstIn('.player-controls__right-control-group'),
   // Pre-rolls and mid-rolls play in the same player; Twitch labels them.
   isAd: () => !!document.querySelector('[data-a-target="video-ad-label"], [data-a-target="video-ad-countdown"]'),
 };
@@ -24,6 +32,7 @@ export const bilibili = {
   ...generic,
   id: 'bilibili',
   progressBar: q('.bpx-player-progress'),
+  barSlot: firstIn('.bpx-player-control-bottom-right'),
   // Saved per video (BV id) and part (?p=), whatever language prefix the URL has.
   identify(p) {
     const d = p.duration;
@@ -36,7 +45,8 @@ export const bilibili = {
 };
 
 // The player runs in a frame from geo.dailymotion.com; the generic adapter handles it there. Its
-// controls are out of reach, so the markers run along the bottom of the video.
+// controls are out of reach, so the markers run along the bottom of the video and the loop button
+// floats over it.
 //
 // Loops are saved per video id. The frame's address doesn't always carry it (`?video=`), so the
 // video page (www.dailymotion.com/video/<id>) hands it down to the player frame.

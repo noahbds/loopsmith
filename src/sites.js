@@ -36,30 +36,35 @@ export const BUILT_IN = [
     matches: ['*://*.bandcamp.com/*'],
     host: (h) => h === 'bandcamp.com' || h.endsWith('.bandcamp.com'),
     adapter: 'bandcamp',
+    pageWorld: ['src/page/media-session.js'],
   },
   {
     name: 'Vimeo',
     matches: ['*://vimeo.com/*', '*://player.vimeo.com/*'],
     host: (h) => h === 'vimeo.com' || h === 'player.vimeo.com',
     adapter: 'vimeo',
+    pageWorld: ['src/page/media-session.js'],
   },
   {
     name: 'Twitch',
     matches: ['*://www.twitch.tv/*', '*://clips.twitch.tv/*'],
     host: (h) => h === 'www.twitch.tv' || h === 'clips.twitch.tv',
     adapter: 'twitch',
+    pageWorld: ['src/page/media-session.js'],
   },
   {
     name: 'Bilibili',
     matches: ['*://www.bilibili.com/*'],
     host: (h) => h === 'www.bilibili.com',
     adapter: 'bilibili',
+    pageWorld: ['src/page/media-session.js'],
   },
   {
     name: 'Dailymotion',
     matches: ['*://www.dailymotion.com/*', '*://geo.dailymotion.com/*'],
     host: (h) => h === 'www.dailymotion.com' || h === 'geo.dailymotion.com',
     adapter: 'dailymotion',
+    pageWorld: ['src/page/media-session.js'],
   },
 ];
 

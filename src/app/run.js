@@ -1,6 +1,7 @@
 // Running the loops: turning playback around, arming and stopping, and the frame scheduling.
 
 import * as E from '../core/engine.js';
+import { pressNextKey } from '../core/nextkey.js';
 
 export function createRun(A) {
   const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, runOpts, skipped } = A;
@@ -23,6 +24,7 @@ export function createRun(A) {
     const v = S.video;
     if (!v) return;
     S.lastT = null;
+    S.heldT = null;
     ownSeekAt = Date.now();
     try {
       // Some players (Spotify) must seek through their own controls to stay in step.
@@ -44,15 +46,19 @@ export function createRun(A) {
   const loopAt = (t, guard = turnGuard()) => E.loopAt(S.loops, t, S.duration, guard);
   const nextLoop = (t) => E.nextLoop(S.loops, t);
 
+  // How far forward (seconds of media) the playhead may hop and still be the same pass.
+  const HOP = 1.5;
+
   // Loops are markers on the timeline: when playback runs into the end of the loop whose turn it is
   // (the one it is in that started first), it goes back to that loop's start while plays are left.
-  // Seeking by hand never counts.
+  // Seeking by hand never counts as reaching the end; seeking within the loop that is playing
+  // doesn't stop that pass from counting (see E.enter).
   function check() {
     if (S.dirty || location.href !== S.href) A.syncVideo();
     const v = S.video;
     if (!S.active || !v) return;
     if (!S.trusted || !S.ranged || isAd() || v.readyState < 1 || v.seeking || !(v.duration > 0)) {
-      S.lastT = null;
+      hold();
       return;
     }
     if (Math.abs(v.duration - S.duration) > 0.5) { // different media than expected: re-identify first
@@ -61,13 +67,21 @@ export function createRun(A) {
       return;
     }
     const t = v.currentTime;
-    const prev = S.lastT;
+    let prev = S.lastT;
     S.lastT = t;
-    // The playhead just landed here (a seek, or looping was just turned on): a loop it landed in
-    // after its start is only partly played this time.
     if (prev === null) {
-      if (Date.now() - ownSeekAt > 1500) E.enter(S.loops, t, S.duration, turnGuard());
-      return;
+      const held = S.heldT;
+      S.heldT = null;
+      if (held !== null && t >= held - 0.3 && t - held < HOP * (v.playbackRate || 1)) {
+        // Only a small hop forward from where it was (the player skipping a gap in its buffer, a
+        // moment the media wasn't ready or couldn't be identified): still the same pass.
+        prev = held;
+      } else {
+        // The playhead just landed here (a seek, or looping was just turned on): a loop it landed
+        // in after its start, from outside it, is only partly played this time.
+        if (Date.now() - ownSeekAt > 1500) E.enter(S.loops, t, S.duration, turnGuard(), held);
+        return;
+      }
     }
     // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
     if (t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
@@ -85,6 +99,15 @@ export function createRun(A) {
     followTurn();
     A.render();
     if (step.repeat) A.replay(ui.badge, 'lsm-pop');
+  }
+
+  // The check loses sight of the playhead (a seek it didn't make, the media not ready, an ad, the
+  // media not identified yet): where it last was is kept, so a small hop forward from there still
+  // counts as playback (see check). Spotify in Firefox hops like this during playback; treating
+  // each hop as a jump into the loop made every pass "partly played", so none ever counted.
+  function hold() {
+    if (S.lastT !== null) S.heldT = S.lastT;
+    S.lastT = null;
   }
 
   // The editor follows the run: when another loop gets the turn, it becomes the selected loop
@@ -137,10 +160,27 @@ export function createRun(A) {
     const single = on.length === 1 ? on[0] : null;
     const played = single ? single.done : 0; // fewer than its count when it was skipped
     const rounds = S.round;
+    const word = A.mediaWord();
     endRun();
+    if (P.end === 'next') {
+      A.render();
+      nextMedia();
+      A.toast(`Loops finished · next ${word}`);
+      return;
+    }
     if (P.end !== 'play' && S.video && !S.video.paused) S.video.pause();
     A.render();
     A.toast(rounds > 1 ? `Loops finished · ${rounds} rounds` : single && played ? `Loop finished · played ${played}×` : single ? 'Loop finished' : 'Loops finished', { label: 'Run again', run: runAgain });
+  }
+
+  // "After the last: Next", best first: what the site does for the ⏭ media key, its own next
+  // button, or else the end of the media, where the site's autoplay (if any) takes over.
+  function nextMedia() {
+    let pressed = false;
+    try { pressed = pressNextKey() || !!(adapter.nextTrack && adapter.nextTrack(S.player)); } catch (_) { /* the site changed */ }
+    if (pressed || !S.video || !(S.duration > 0)) return;
+    seekTo(Math.max(0, S.duration - 0.05));
+    play();
   }
 
   // The video reached its very end before the regular check caught it: as if playback had just
@@ -176,6 +216,7 @@ export function createRun(A) {
     S.round = 1;
     S.active = true;
     S.lastT = null;
+    S.heldT = null;
     turnSeen = null;
     return true;
   }
@@ -355,5 +396,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { armRun, navigate, check, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
+  return { armRun, navigate, check, hold, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
 }

@@ -11,5 +11,5 @@ export const PALETTE = ['62,166,255', '255,183,77', '110,231,163', '255,126,182'
 // Between loops: play the stretch up to the next loop, or jump straight to its start.
 export const BETWEEN = ['play', 'jump'];
 // After the last loop: keep playing the media, pause, or play the whole set again (a number of rounds).
-export const ENDS = ['play', 'pause', 'repeat'];
+export const ENDS = ['play', 'pause', 'repeat', 'next'];
 

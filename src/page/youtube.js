@@ -1,6 +1,11 @@
 // Runs in the page's own JS world (Chrome: content script with "world": "MAIN").
 // Answers "which video does the player say is loaded?" and "seek to t" for the content script,
 // which can't call the player's methods from its isolated world. Kept tiny on purpose.
+// Also records the site's "next track" media-key handler (see media-session-core.js).
+
+import { installNextHook } from './media-session-core.js';
+
+installNextHook();
 
 (() => {
   const root = document.documentElement;
@@ -15,6 +20,18 @@
       if (d) out = JSON.stringify({ id: d.video_id ? String(d.video_id) : null, live: d.isLive === true });
     } catch (_) { /* player not initialised yet */ }
     root.setAttribute('data-lsm-yt', out);
+  });
+
+  // "After the last: Next": the player's own next (playlist, queue, or the video autoplay picked),
+  // what its next button does, even while that button is hidden.
+  document.addEventListener('lsm:yt-next', () => {
+    try {
+      const p = document.getElementById('movie_player');
+      if (p && typeof p.nextVideo === 'function') {
+        p.nextVideo();
+        root.setAttribute('data-lsm-yt-next-done', '');
+      }
+    } catch (_) { /* fall back to the button */ }
   });
 
   // Seeks through the player's own API, so its state (queue, progress bar) stays in step.

@@ -3,6 +3,7 @@
 // since the page you're on often isn't the track that plays.
 
 import generic from './generic.js';
+import { press } from './press.js';
 
 function trackPath() {
   const a = document.querySelector('.playbackSoundBadge__titleLink');
@@ -17,6 +18,14 @@ export default {
   dockOnly: true,
   dockInset: 56, // the player bar
   progressBar: () => document.querySelector('.playbackTimeline__progressBackground'),
+  nextTrack: () => press('.playControls__elements .playControls__next'),
+  // After shuffle and repeat, before the timeline.
+  barSlot() {
+    const t = document.querySelector('.playControls__elements > .playControls__timeline');
+    return t ? { host: t.parentElement, before: t } : null;
+  },
+  // Its icons are images: the button takes the colour of its clock (light or dark theme).
+  barTint: () => document.querySelector('.playbackTimeline__duration'),
   engaged: () => true,
   waitingText: 'Press play to load the track, then set your loops.',
 

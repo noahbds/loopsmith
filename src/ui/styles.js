@@ -11,6 +11,32 @@ export const LIGHT_CSS = `
 .lsm-badge{position:absolute;top:3px;right:5px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:7px;background:#3ea6ff;color:#06121f;font:700 9px/14px Roboto,Arial,sans-serif;text-align:center;transform:scale(0);transition:transform .2s cubic-bezier(.3,1.5,.5,1);pointer-events:none}
 .lsm-btn.lsm-active .lsm-badge{transform:scale(1)}
 .lsm-btn.lsm-active .lsm-badge.lsm-pop{animation:lsm-pop .4s}
+.lsm-btn.lsm-bar{box-sizing:border-box;flex:none;width:32px;height:32px;margin:0;padding:0;border:0;border-radius:50%;background:none;color:#fff;cursor:pointer;opacity:.9;-webkit-appearance:none;appearance:none;transition:opacity .15s,background .15s}
+.lsm-btn.lsm-bar:hover{opacity:1}
+.lsm-btn.lsm-bar:focus-visible{outline:2px solid #3ea6ff;outline-offset:1px}
+.lsm-btn.lsm-bar>svg{width:22px!important;height:22px!important}
+.lsm-btn.lsm-bar .lsm-badge{top:-2px;right:-4px}
+.lsm-bar-soundcloud{width:24px!important;height:32px!important;margin-right:24px!important;border-radius:0!important}
+.lsm-bar-soundcloud.lsm-active>svg{color:#f50!important}
+.lsm-bar-soundcloud .lsm-badge{background:#f50!important;color:#fff!important}
+.lsm-bar-spotify{color:#b3b3b3!important;margin-left:8px!important}
+.lsm-bar-spotify:hover{color:#fff!important}
+.lsm-bar-spotify>svg{width:20px!important;height:20px!important}
+.lsm-bar-spotify.lsm-active>svg{color:#1ed760!important}
+.lsm-bar-spotify .lsm-badge{background:#1ed760!important}
+.lsm-bar-ytmusic{width:36px!important;height:36px!important;margin-right:8px!important}
+.lsm-bar-ytmusic>svg{width:24px!important;height:24px!important}
+.lsm-bar-ytmusic:hover{background:rgba(255,255,255,.1)!important}
+.lsm-bar-vimeo{width:24px!important;height:24px!important;margin-right:4px!important;border-radius:4px!important}
+.lsm-bar-vimeo>svg{width:20px!important;height:20px!important}
+.lsm-bar-twitch{border-radius:4px!important}
+.lsm-bar-twitch:hover{background:rgba(255,255,255,.15)!important}
+.lsm-bar-twitch>svg{width:20px!important;height:20px!important}
+.lsm-bar-bilibili{width:36px!important;height:22px!important;border-radius:0!important;opacity:.9}
+.lsm-bar-bilibili>svg{width:22px!important;height:22px!important}
+.lsm-bar-bandcamp{display:table-cell!important;width:22px!important;height:12px!important;padding-left:4px!important;color:inherit!important;border-radius:0!important;vertical-align:top!important}
+.lsm-bar-bandcamp>svg{width:16px!important;height:16px!important}
+.lsm-bar-bandcamp .lsm-badge{top:-6px;right:-8px}
 .lsm-marks{position:absolute;left:0;right:0;top:0;height:100%;z-index:44;pointer-events:none}
 .lsm-marks[hidden]{display:none}
 .lsm-mark{position:absolute;top:calc(-7px - var(--lane,0) * 5px);height:3px;min-width:2px;border-radius:2px;background:rgb(var(--cv));opacity:.6;transition:opacity .2s,box-shadow .2s}
@@ -22,7 +48,7 @@ export const LIGHT_CSS = `
 .lsm-marks.lsm-live .lsm-mark.lsm-spent{opacity:.35;box-shadow:none}
 .lsm-mark.lsm-muted,.lsm-marks.lsm-live .lsm-mark.lsm-muted{opacity:.25;box-shadow:none}
 @keyframes lsm-pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){.lsm-btn *,.lsm-mark{animation:none!important;transition-duration:.01s!important}}
+@media (prefers-reduced-motion:reduce){.lsm-btn,.lsm-btn *,.lsm-mark{animation:none!important;transition-duration:.01s!important}}
 `;
 
 // The marker rules apply in both places: on the site's bar (light DOM) and in the overlay.

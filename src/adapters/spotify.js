@@ -7,6 +7,7 @@
 // was given, so the element is used). Needs a browser with Widevine (DRM) to play at all.
 
 import generic from './generic.js';
+import { press } from './press.js';
 
 const WIDGET = '[data-testid="now-playing-widget"]';
 
@@ -64,6 +65,12 @@ export default {
   },
 
   progressBar: () => document.querySelector('[data-testid="playback-progressbar"]'),
+  nextTrack: () => press('[data-testid="player-controls"] [data-testid="control-button-skip-forward"]'),
+  // Right after the repeat button.
+  barSlot() {
+    const r = document.querySelector('[data-testid="player-controls"] [data-testid="control-button-repeat"]');
+    return r ? { host: r.parentElement, before: r.nextSibling } : null;
+  },
   endGuard: 1.5,
 
   // The audio is the media the hook moved into its box. Track "Canvas" backgrounds are short

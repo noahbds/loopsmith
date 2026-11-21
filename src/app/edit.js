@@ -112,7 +112,7 @@ export function createEdit(A) {
     prefChanged();
   }
 
-  // After the last loop: play on, pause, or play the whole set again.
+  // After the last loop: play on, pause, play the whole set again, or go to the next track.
   function setEnd(v) {
     P.end = ENDS.includes(v) ? v : 'play';
     prefChanged();

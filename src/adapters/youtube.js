@@ -9,9 +9,15 @@
 //   isAd(player)         an ad is playing in place of the real media
 //   identify(player, ad) { hold } while unsure which media is loaded, otherwise { id, live }
 //   buttonHost(player)   where the toolbar button goes; buttonClass: extra class for it
+//   barSlot(player)      floating adapters: { host, before } in the site's control bar where the
+//                        loop button goes (styled by .lsm-bar-<id>), or null to float it
+//   barTint()            optional: element whose text colour the in-bar button takes
+//   nextTrack(player)    optional: press the site's next button; false if there is none to press
 //   progressBar(player)  where loop markers are drawn, or null
 //   controlsTop(player)  top edge (px, viewport) of the player's bottom controls, or null
 //   navEvents            extra document events after which the player must be re-checked
+
+import { press } from './press.js';
 
 const ANSWER = 'data-lsm-yt';
 
@@ -47,6 +53,16 @@ function idFromUrl() {
   if (location.pathname === '/watch') return new URLSearchParams(location.search).get('v') || null;
   const m = /^\/(?:live|shorts)\/([\w-]{6,})/.exec(location.pathname);
   return m ? m[1] : null;
+}
+
+// Asks the page-world helper to call the player's own nextVideo() (see src/page/youtube.js).
+function nextViaPlayer() {
+  const root = document.documentElement;
+  root.removeAttribute('data-lsm-yt-next-done');
+  document.dispatchEvent(new CustomEvent('lsm:yt-next'));
+  const done = root.hasAttribute('data-lsm-yt-next-done');
+  root.removeAttribute('data-lsm-yt-next-done');
+  return done;
 }
 
 let splitAt = 0; // when the URL and the player started disagreeing about the video
@@ -86,6 +102,9 @@ export default {
   // Shorts have no control bar: the button sits in the player's top corner instead (see layout.js).
   buttonHost: (p) => p.querySelector('.ytp-right-controls-left') || p.querySelector('.ytp-right-controls') || (onShorts() ? p : null),
   progressBar: (p) => p.querySelector('.ytp-progress-bar'),
+  // The next video of the playlist, or the one autoplay would pick (Shorts: none, see nextMedia).
+  // YouTube doesn't always handle the ⏭ media key, and hides its next button on some pages.
+  nextTrack: () => !onShorts() && (nextViaPlayer() || press('#movie_player .ytp-next-button')),
   controlsTop(p) {
     const chrome = p.querySelector('.ytp-chrome-bottom');
     if (!chrome) return null;

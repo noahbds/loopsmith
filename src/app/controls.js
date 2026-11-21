@@ -679,6 +679,7 @@ export function createControls(A) {
       ['play', 'Play on', 'After the last loop, keep playing the video'],
       ['pause', 'Pause', 'Pause after the last loop'],
       ['repeat', 'Repeat', 'Play all the loops again, a number of times or again and again'],
+      ['next', 'Next', 'After the last loop, go to the next track or video (the site’s own next button; without one, skip to the end)'],
     ], A.setEnd);
 
     // Rounds, when the set plays again.
@@ -705,7 +706,9 @@ export function createControls(A) {
 
     const run = el('div', { class: 'lsm-run' },
       el('div', { class: 'lsm-sect', text: 'for all loops' }),
-      el('div', { class: 'lsm-row' }, ui.segBetween.field, ui.segEnd.field),
+      // One under the other: four choices after the last don't fit in half the width.
+      ui.segBetween.field,
+      ui.segEnd.field,
       ui.rounds,
       ui.segAuto.field);
 

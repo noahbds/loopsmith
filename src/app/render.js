@@ -243,7 +243,7 @@ export function createRender(A) {
       return `Then plays on into ${name}`;
     }
     const last = order.length > 1 ? 'Last loop, then ' : 'Then ';
-    return last + (P.end === 'pause' ? 'pauses' : P.end === 'repeat' ? 'all loops start over' : 'plays on');
+    return last + (P.end === 'pause' ? 'pauses' : P.end === 'repeat' ? 'all loops start over' : P.end === 'next' ? `the next ${mediaWord()}` : 'plays on');
   }
 
   // The two buttons that join the loop to its neighbours (shown when there is something to join to).

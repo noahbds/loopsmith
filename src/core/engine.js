@@ -129,14 +129,20 @@ export function nextAfter(loops, loop) {
 /**
  * The playhead just landed at `t` (a seek, or looping was turned on): a loop it lands in after
  * its start is only partly played this time round, so reaching its end won't count as a play.
+ * A seek that stays inside the loop whose turn it was at `from` (where the playhead was before
+ * it) is the user moving around in the section that is playing: that pass still counts (or still
+ * doesn't, if it already didn't).
  * @param {Loop[]} loops
  * @param {number} t
  * @param {number} duration
  * @param {number} guard
+ * @param {number | null} [from]
  */
-export function enter(loops, t, duration, guard) {
+export function enter(loops, t, duration, guard, from = null) {
+  const playing = from === null ? null : loopAt(loops, from, duration, guard);
   for (const l of loops) {
-    if (t >= l.a - 0.3 && t < loopEnd(l, duration, guard)) l.partial = t > l.a + LATE;
+    if (l === playing || t < l.a - 0.3 || t >= loopEnd(l, duration, guard)) continue;
+    l.partial = t > l.a + LATE;
   }
 }
 

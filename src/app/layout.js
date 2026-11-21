@@ -13,11 +13,11 @@ export function createLayout(A) {
     const pr = (floating ? ui.host : p).getBoundingClientRect();
     const top = adapter.controlsTop(p);
     let bottom = top == null ? 62 : Math.max(12, Math.round(pr.bottom - top + 8));
-    if (floating && dock) bottom = 68; // above the docked loop button
+    if (floating && dock) bottom = inBar ? 12 : 68; // above the site's player bar, or the docked loop button
     ui.panel.style.bottom = bottom + 'px';
     ui.strip.style.bottom = bottom + 'px';
     // Over a video the loop button sits at the top right: keep the panel clear of it (it scrolls instead).
-    const topRoom = floating && !dock ? 58 : 10;
+    const topRoom = floating && !dock && !inBar ? 58 : 10;
     ui.panel.style.maxHeight = Math.max(120, Math.round(pr.height - bottom - topRoom)) + 'px';
     S.laneW = ui.lane.clientWidth;
     S.dpr = window.devicePixelRatio || 1;
@@ -142,6 +142,7 @@ export function createLayout(A) {
   // Floating mode: the overlay follows the media. Big enough and mostly on screen: laid over the
   // video. Otherwise (audio, small or scrolled-away video): docked to the bottom-right corner.
   let dock = false;
+  let inBar = false; // the loop button sits in the site's own control bar
   let hoverUntil = 0;
   let hoverTimer = 0;
   const box = { l: '', t: '', w: '', h: '', pill: '' };
@@ -152,11 +153,13 @@ export function createLayout(A) {
     // Music sites keep their button even before anything has played: the audio only appears then.
     if (!p && !adapter.dockOnly) {
       if (ui.host.isConnected) ui.host.remove();
+      if (inBar) mountButton(false);
       return;
     }
     const fs = document.fullscreenElement;
     const parent = fs && !(fs instanceof HTMLMediaElement) ? fs : document.body || document.documentElement;
     if (ui.host.parentNode !== parent) parent.appendChild(ui.host);
+    mountButton(true);
     const r = p ? p.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -183,6 +186,37 @@ export function createLayout(A) {
       if (S.open) place();
     }
     updatePill();
+  }
+
+  // Floating mode, on sites whose adapter knows a spot in the site's own control bar (barSlot): the
+  // loop button sits there, next to the site's own buttons, like on YouTube. While that bar is
+  // missing or off screen (SoundCloud's slides in once something plays) the button floats instead.
+  function mountButton(wanted) {
+    let slot = null;
+    if (wanted && adapter.barSlot) {
+      try { slot = adapter.barSlot(S.player); } catch (_) { /* the site changed its markup */ }
+      if (slot && !(slot.host && slot.host.isConnected && slot.host.getBoundingClientRect().top < window.innerHeight)) slot = null;
+    }
+    if (slot) {
+      const before = slot.before || null;
+      if (before !== ui.btn && !(ui.btn.parentNode === slot.host && ui.btn.nextSibling === before)) {
+        const hadFocus = focused() === ui.btn;
+        slot.host.insertBefore(ui.btn, before);
+        if (hadFocus) ui.btn.focus({ preventScroll: true });
+      }
+    } else if (ui.btn.parentNode !== ui.shadow) {
+      ui.shadow.insertBefore(ui.btn, ui.markBox);
+    }
+    if (slot && adapter.barTint) {
+      let tint = null;
+      try { tint = adapter.barTint(); } catch (_) { /* ignore */ }
+      const c = tint ? getComputedStyle(tint).color : '';
+      if (ui.btn.style.color !== c) ui.btn.style.color = c;
+    }
+    if (inBar === !!slot) return;
+    inBar = !!slot;
+    for (const [cls, on] of [['lsm-pill', !inBar], ['lsm-btn', inBar], ['lsm-bar', inBar], [`lsm-bar-${adapter.id}`, inBar]]) ui.btn.classList.toggle(cls, on);
+    if (S.open) place();
   }
 
   // Floating mode: the markers are drawn over the site's own progress bar when the adapter knows

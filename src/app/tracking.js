@@ -25,9 +25,10 @@ export function createTracking(A) {
     scheduleSync();
   }
 
-  // A seek (by the user or by us) is never "playback running into the end of a loop".
+  // A seek (by the user or by us) is never "playback running into the end of a loop". A hop of a
+  // moment forward (players skipping a gap in their buffer) still is: see check in run.js.
   function onSeeking() {
-    S.lastT = null;
+    A.hold();
     S.tap = null; // tap to mark: a section never spans a seek
     A.wake();
   }
@@ -55,6 +56,7 @@ export function createTracking(A) {
     S.videoId = id;
     S.active = false;
     S.lastT = null;
+    S.heldT = null;
     S.duration = 0;
     S.ranged = false;
     S.live = false;

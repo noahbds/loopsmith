@@ -8,6 +8,7 @@
 // before the end of the track, and seeks go through the player's own seekTo().
 
 import youtube from './youtube.js';
+import { press } from './press.js';
 
 function seekViaPlayer(t) {
   const root = document.documentElement;
@@ -35,6 +36,12 @@ export default {
     || document.querySelector('ytmusic-player-bar #progress-bar #progressContainer')
     || document.querySelector('ytmusic-player-bar #progress-bar'),
   controlsTop: () => null,
+  nextTrack: () => youtube.nextTrack() || press('ytmusic-player-bar .next-button button') || press('ytmusic-player-bar .next-button'),
+  // Before the like / dislike buttons: the one group of the bottom bar that never collapses.
+  barSlot() {
+    const g = document.querySelector('ytmusic-player-bar .middle-controls-buttons');
+    return g ? { host: g, before: g.firstChild } : null;
+  },
 
   seek(v, t) {
     if (!seekViaPlayer(t)) v.currentTime = t; // no page-world helper answered: seek the element

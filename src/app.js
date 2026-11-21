@@ -33,7 +33,7 @@ export function start(adapter, store) {
   /* Boot                                                               */
   /* ------------------------------------------------------------------ */
 
-  if (!floating) { // the button and the markers live in the site's own DOM
+  if (!floating || adapter.barSlot) { // the button (and, in-player, the markers) live in the site's own DOM
     const style = document.createElement('style');
     style.id = 'lsm-style';
     style.textContent = LIGHT_CSS;

@@ -51,6 +51,7 @@ export function createCore(adapter, store) {
     undo: [],        // snapshots of the loops before a delete or clear, newest last
     active: false,   // looping is on: the loops that are switched on turn playback around
     lastT: null,     // previous playback position seen by the loop check
+    heldT: null,     // where it was when the check lost sight of it for a moment (see check in run.js)
     open: false,
     sliding: false,  // a slider handle is held down
     zoom: false,     // the slider shows only part of the media (v0..v1)

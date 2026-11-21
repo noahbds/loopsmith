@@ -4,6 +4,35 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+## 1.6.0
+
+The loop button joins each site's own controls, a new *After the last: Next*, and loops count a
+pass you skip ahead in.
+
+**After the last: Next**
+- A fourth choice under *After the last*: once the loops are done, go to the next track or video.
+  Loopsmith does what the site does for the ⏭ media key (the one keyboards, system media controls
+  and headphones use), so the site moves on through its own queue, playlist or autoplay. On
+  YouTube and YouTube Music it uses the player's own *next*; sites that don't handle that key get
+  their next button pressed (Spotify, SoundCloud, Bandcamp albums). With neither, playback skips to
+  the end of the media and the site's own autoplay, if it has one, takes it from there.
+- *Between loops* and *After the last* are now one under the other, each across the panel.
+
+**The loop button joins the site's own controls**
+- On Spotify, SoundCloud, YouTube Music, Bandcamp, Vimeo, Twitch and Bilibili the loop button now
+  sits in the site's control bar, next to its own buttons (like on YouTube), instead of floating
+  over the page. If that bar isn't on screen the button floats as before, so it never goes missing.
+  Dailymotion and other sites keep the floating button.
+
+**Fixes**
+- Skipping ahead (or back) with the site's progress bar inside the loop that is playing no longer
+  stops that pass from counting. Before, the loop went back to its start without counting it, so
+  testing a loop by skipping to its end made it look stuck on *1 / 3*. Arriving in a loop from
+  outside it, or turning looping on halfway through it, still doesn't count that first pass.
+- Fixed: when a player moved its media forward by a fraction of a second during playback, or the
+  media briefly couldn't be read, that pass was taken for a jump into the middle of the loop and
+  didn't count, so the loop could repeat forever. A small hop forward is now still the same pass.
+
 ## 1.5.0
 
 Bug fixes from the 1.4.0 audit (see [AUDIT.md](AUDIT.md)), and a simpler panel.
