@@ -17,8 +17,8 @@ WHAT YOU CAN DO
 • Set the start and end by dragging the A and B handles, typing a time (1:23, 90s, 1m30s), or grabbing the current position.
 • Choose how many times a section plays, from 1 to 999, or forever.
 • Add several loops on the same video or track, even overlapping or nested ones. Switch a loop off without deleting it.
-• Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, or play them all again).
-• See your loops on the site's own progress bar.
+• Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, play them all again, or go on to the next track or video).
+• The loop button sits in the site's own player controls, next to its other buttons, and your loops show on the site's own progress bar.
 • Start in one click: loop the whole video or track, or 30 seconds from where you are.
 • Your loops are saved and come back when you return. If you like, looping turns on by itself when you do.
 • Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
@@ -82,7 +82,7 @@ Loopsmith repeats a chosen section of the music or video playing on a web page (
   ```
 - Host permissions (built-in sites: YouTube, YouTube Music, Spotify, SoundCloud, Bandcamp, Vimeo, Twitch, Bilibili, Dailymotion)
   ```
-  The content script adds the loop controls to the media player on these sites and controls playback (seeking back to the loop start). On YouTube, YouTube Music, Spotify and SoundCloud a small script also runs in the page itself to read which track is loaded and reach the player's audio. No page content is read or sent anywhere.
+  The content script adds the loop controls to the media player on these sites and controls playback (seeking back to the loop start). A small script also runs in the page itself: on every one of these sites it lets "After the last: Next" use the site's own next-track action (the one its media keys use); on YouTube, YouTube Music, Spotify and SoundCloud it also reads which track is loaded and reaches the player's audio. No page content is read or sent anywhere.
   ```
 - Optional host permissions (`*://*/*`)
   ```

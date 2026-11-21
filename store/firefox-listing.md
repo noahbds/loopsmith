@@ -20,8 +20,8 @@ It is made for two things: practising (a guitar riff, the hard part of a song, a
 - Set the start and end by dragging the A and B handles, typing a time (1:23, 90s, 1m30s), or grabbing the current position.
 - Choose how many times a section plays, from 1 to 999, or forever.
 - Add several loops on the same video or track, even overlapping or nested ones. Switch a loop off without deleting it.
-- Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, or play them all again).
-- See your loops on the site's own progress bar.
+- Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, play them all again, or go on to the next track or video).
+- The loop button sits in the site's own player controls, next to its other buttons, and your loops show on the site's own progress bar.
 - Start in one click: loop the whole video or track, or 30 seconds from where you are.
 - Your loops are saved and come back when you return. If you like, looping turns on by itself when you do.
 - Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
@@ -65,14 +65,15 @@ BUILD (the uploaded code is bundled with esbuild, not minified; the source archi
 HOW TO TEST
 1. Open https://www.youtube.com/watch?v=eRsGyueVLvQ (Sintel, Blender Foundation). A loop button appears in the player's control bar.
 2. Click it, set Start 1:48 and End 1:55, Times to play 2, and press the play button in the panel. Playback jumps back to 1:48 once, then plays on. Coloured markers show the loop on YouTube's progress bar.
-3. On any other site with a video, click the Loopsmith toolbar button and choose "Turn on for this site" (this requests the optional permission for that site only). A loop button appears when hovering the video.
+3. To see "Next": under "After the last" in the panel, choose Next and run the loop again. When it finishes, YouTube goes on to the next video.
+4. On any other site with a video, click the Loopsmith toolbar button and choose "Turn on for this site" (this requests the optional permission for that site only). A loop button appears when hovering the video.
 
 PERMISSIONS
 - storage: loops and preferences, stored locally only.
 - scripting: registers the content script for sites the user turns on, and starts it in tabs already open there.
 - activeTab: the popup reads the current tab's address to offer turning Loopsmith on.
 - Host permissions: a fixed list of media sites; any other site only through the optional permission above.
-- Content scripts with world "MAIN" (src/page/): youtube.js reads the YouTube player's video id and seeks through its own API; media-hook.js moves audio elements that sites never insert into the page (Spotify, SoundCloud) into a hidden element so the content script can control them. Neither sends data anywhere.
+- Content scripts with world "MAIN" (src/page/): youtube.js reads the YouTube player's video id, and seeks and goes to the next video through its own API; media-hook.js moves audio elements that sites never insert into the page (Spotify, SoundCloud) into a hidden element so the content script can control them; media-session-core.js (in both of those, and alone as media-session.js on the other built-in sites) records the handler the site gives navigator.mediaSession for "nexttrack" (its media-key action), so the "After the last: Next" option can call it. None of them sends data anywhere.
 
 The extension makes no network requests and collects no data.
 ```
