@@ -4,6 +4,14 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+## 1.6.1
+
+**Fixes**
+- Firefox: on YouTube, Spotify and the other built-in sites, the loop button didn't appear until
+  you clicked the Loopsmith toolbar button. Firefox now gives Loopsmith access to those sites when
+  it's installed. If it doesn't have access (for example, you turned it off in Firefox's add-on
+  settings), the toolbar popup says so and has an *Allow* button.
+
 ## 1.6.0
 
 The loop button joins each site's own controls, a new *After the last: Next*, and loops count a
