@@ -80,6 +80,10 @@ async function firefox() {
   const manifest = await extension(out, 'firefox128');
   json(join(out, 'manifest.json'), {
     ...manifest,
+    // Firefox MV3 treats content-script matches as optional host access: without this list the
+    // built-in sites only run once the user clicks the toolbar button (activeTab). Listed here,
+    // Firefox 127+ grants them at install, like Chrome does for content-script matches.
+    host_permissions: MATCHES,
     icons: { 48: 'icon.svg', 96: 'icon.svg' },
     action: { ...manifest.action, default_icon: 'icon.svg' },
     background: { scripts: ['background.js'] },

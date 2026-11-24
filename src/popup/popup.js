@@ -48,6 +48,12 @@ async function render(opts = {}) {
 
   const builtIn = builtInFor(host);
   if (builtIn) {
+    // Firefox lets the user take site access away (or never granted it to an older install).
+    if (!(await api.permissions.contains({ origins: builtIn.matches }))) {
+      status.textContent = `Loopsmith doesn’t have access to ${builtIn.name}.`;
+      show(primary, `Allow on ${builtIn.name}`, () => allow(builtIn.matches));
+      return;
+    }
     status.textContent = `Works on ${builtIn.name} out of the box.`;
     status.classList.add('on');
     show(primary, '');
