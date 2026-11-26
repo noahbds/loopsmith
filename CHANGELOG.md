@@ -2,21 +2,6 @@
 
 All notable changes are listed here. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
-
-**Smoother repetitions**
-- Loops now turn around on time, to within a few milliseconds: a timer is aimed at each loop's end
-  instead of waiting for the next screen refresh (or, with the editor and strip closed or in a
-  background tab, for a check that ran four times a second and could let up to a quarter of a
-  second of the next section through).
-- Less work while playing: no animation frames run just to watch for a loop's end, Spotify's ad
-  check no longer lays out the page on every frame, and finding the player bar on Apple Music,
-  Deezer, Tidal and Amazon Music no longer re-checks the same elements over and over.
-
-**Fixes**
-- Moving the start or end of the loop that is playing (or undoing, or a change from another tab)
-  no longer makes the current pass "partly played", which made that loop play one extra time.
-
 ## 1.7.0
 
 Saved-loops library and JSON backup in the popup, four more built-in music sites, local media
@@ -62,6 +47,21 @@ controls.
   quick controls for the current player or a tab looping in the background.
 - Fixed: in heavily throttled background tabs, playback advances of more than two seconds between
   timer ticks no longer miss loop turn-arounds.
+
+**Smoother repetitions**
+- Loops now turn around on time, to within a few milliseconds: a timer is aimed at each loop's end
+  instead of waiting for the next screen refresh (or, with the editor and strip closed or in a
+  background tab, for a check that ran four times a second and could let up to a quarter of a
+  second of the next section through).
+- Less work while playing: no animation frames run just to watch for a loop's end, Spotify's ad
+  check no longer lays out the page on every frame, and finding the player bar on Apple Music,
+  Deezer, Tidal and Amazon Music no longer re-checks the same elements over and over.
+
+**Fixes**
+- The status no longer flashes "Past the loops" for a moment at each turn-around on players that
+  take a moment to report a seek (YouTube Music and others).
+- Moving the start or end of the loop that is playing (or undoing, or a change from another tab)
+  no longer makes the current pass "partly played", which made that loop play one extra time.
 
 ## 1.6.1
 

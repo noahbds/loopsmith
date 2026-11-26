@@ -28,7 +28,7 @@ export function createRender(A) {
       return;
     }
 
-    const t = v.currentTime;
+    const t = A.playhead();
     if (S.active) {
       const guard = A.turnGuard();
       const l = A.loopAt(t, guard);

@@ -21,10 +21,25 @@ export function createRun(A) {
   // position for a moment, which would stop that loop's plays from counting).
   let ownSeekAt = 0;
   let lastCheckAt = 0;
+  let seekGoal = null;
+
+  // Where the playhead is for what is shown. Right after Loopsmith seeks, some players (YouTube
+  // Music's own seekTo, a media element still fetching) report the old position for a moment: past
+  // the loop's end, which would flash "Past the loops" at every turn-around. Until the player gets
+  // there (1 s at most), the position it was sent to stands in.
+  function playhead() {
+    const t = S.video ? S.video.currentTime : 0;
+    if (seekGoal) {
+      if (Math.abs(t - seekGoal.t) > 0.3 && Date.now() - seekGoal.at < 1000) return seekGoal.t;
+      seekGoal = null;
+    }
+    return t;
+  }
 
   function seekTo(t) {
     const v = S.video;
     if (!v) return;
+    seekGoal = { t, at: Date.now() };
     S.lastT = null;
     S.heldT = null;
     lastCheckAt = 0;
@@ -127,7 +142,7 @@ export function createRun(A) {
   function followTurn() {
     const v = S.video;
     if (!S.active || !v || !S.trusted || S.sliding || A.editing()) return;
-    const l = loopAt(v.currentTime);
+    const l = loopAt(playhead());
     if (!l || l === turnSeen) return;
     turnSeen = l;
     const i = S.loops.indexOf(l);
@@ -266,7 +281,7 @@ export function createRun(A) {
   }
 
   // The loop the skip / previous / restart actions work on: the one in charge at the playhead.
-  const inCharge = () => (S.trusted && S.video ? loopAt(S.video.currentTime) : null);
+  const inCharge = () => (S.trusted && S.video ? loopAt(playhead()) : null);
 
   // Carries out what an engine action decided: seek, show which loop is now in play, say what happened.
   function follow(step, { play: andPlay = false, say = '' } = {}) {
@@ -301,7 +316,7 @@ export function createRun(A) {
       return;
     }
     if (!S.active && !arm(false)) return;
-    const t = S.video.currentTime;
+    const t = playhead();
     const opts = runOpts(turnGuard());
     const target = inCharge();
     let step = null;
@@ -433,5 +448,5 @@ export function createRun(A) {
     frame();
   }
 
-  return { armRun, navigate, hold, kick, loopAt, loopEnd, nextLoop, onEnded, onTimeUpdate, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
+  return { armRun, navigate, hold, kick, loopAt, loopEnd, nextLoop, onEnded, onTimeUpdate, playhead, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
 }
