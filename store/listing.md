@@ -26,7 +26,7 @@ WHAT YOU CAN DO
 • Keyboard shortcuts (all remappable in the popup, plus optional browser-wide shortcuts): Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
 
 WHERE IT WORKS
-Loopsmith works out of the box on YouTube, Spotify, Apple Music, SoundCloud, Deezer, Tidal, Amazon Music, Bandcamp and other popular video and music sites. On any other website with a video or audio player—or on local MP3/MP4 files—click the Loopsmith icon and choose "Turn on for this site": it only runs where you allow it.
+Loopsmith works out of the box on YouTube and on the major music and video streaming sites. On any other website with a video or audio player—or on local MP3/MP4 files—click the Loopsmith icon and choose "Turn on for this site": it only runs where you allow it.
 
 PRIVATE BY DESIGN
 • No account, no tracking, no analytics, no ads.
