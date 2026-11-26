@@ -1,23 +1,41 @@
 // Editing the loops: points, counts, adding, removing, selecting.
 
 import { NEW_LOOP_LEN, MIN_LEN, FINE_MIN_LEN, MAX_LOOPS, MAX_COUNT, MAX_SETS, NAME_MAX, BETWEEN, ENDS } from '../core/constants.js';
-import { clamp, roundT } from '../core/util.js';
+import { clamp, fmt, roundT } from '../core/util.js';
+import { buildShareUrl } from '../core/share.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
 
 export function createEdit(A) {
   const { S, P, ui, cur, fitView, fmtT, freeColor, isAd, mediaOk, newLoop, ready, rememberLoops, rememberPrefs } = A;
 
-  // Gives the selected loop a new start and end (saved only when they changed).
+  // Gives the selected loop a new start and end (saved only when they changed). Playback goes on
+  // as the same pass: moving a point of the loop that is playing must not make it "partly played"
+  // (it would then play one time too many), and the turn-around timer is aimed at the new end.
   function applyRange({ a, b }) {
     const l = cur();
     if (a !== l.a || b !== l.b) {
       l.a = a;
       l.b = b;
-      S.lastT = null;
+      A.hold();
       rememberLoops();
+      A.kick();
     }
     A.render();
+  }
+
+  // The same, but it can be undone.
+  function applyUndoable(next) {
+    if (next.a !== cur().a || next.b !== cur().b) snapshot();
+    applyRange(next);
+  }
+
+  // The playhead can be read: the media is known, it is the media described, and no ad is on.
+  function canReadTime() {
+    A.syncVideo();
+    if (mediaOk() && S.trusted && !isAd()) return true;
+    A.toast('Not available right now');
+    return false;
   }
 
   function setPoint(which, value, push) {
@@ -31,13 +49,70 @@ export function createEdit(A) {
     applyRange(E.moveLoop(cur(), start, S.duration, A.digits()));
   }
 
-  // With no loop yet, the first mark creates one: from here to the end (A), or from the start to here (B).
-  function markNow(which) {
-    A.syncVideo();
-    if (!mediaOk() || !S.trusted || isAd()) {
-      A.toast('Not available right now');
+  // Phrase stepping: the selected loop moved or resized as a whole. Can be undone.
+  function reshape(next, say) {
+    applyUndoable(next);
+    if (S.zoom) {
+      fitView();
+      A.render();
+    }
+    if (!S.open) A.toast(say());
+  }
+
+  // Shifts the selected loop backward (-1) or forward (+1) by its own length.
+  function shiftSelected(dir) {
+    if (!ready()) return;
+    reshape(E.shiftLoop(cur(), dir, S.duration, A.digits()), () => `${fmtT(cur().a)} → ${fmtT(cur().b)}`);
+  }
+
+  // Scales the selected loop's length (0.5 = halve, 2 = double).
+  function scaleSelected(factor) {
+    if (!ready()) return;
+    reshape(E.scaleLoop(cur(), factor, S.duration, A.digits()), () => `Length ${fmt(cur().b - cur().a, false, A.digits())}`);
+  }
+
+  // Creates a loop spanning the chapter at the current playback position.
+  function loopChapter() {
+    if (!canReadTime()) return;
+    const ch = A.currentChapter();
+    if (!ch) {
+      A.toast('No chapter here');
       return;
     }
+    if (atMax()) return;
+    const l = newLoop(roundT(ch.a, A.digits()), roundT(ch.b, A.digits()), freeColor());
+    if (ch.title) l.name = ch.title.slice(0, NAME_MAX);
+    pushLoop(l);
+    showNew();
+    A.toast(l.name ? `Chapter: ${l.name}` : `Chapter ${fmtT(l.a)} → ${fmtT(l.b)}`);
+  }
+
+  // Copies a URL carrying a start timestamp and `#loopsmith=...` loop definitions.
+  async function copyShareLink() {
+    if (!ready()) return;
+    const url = buildShareUrl(location.href, S.loops, A.adapter.id);
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+    } catch (_) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      } catch (_) { /* ignore */ }
+    }
+    A.toast(copied ? 'Link with loops copied' : 'Couldn’t copy link');
+  }
+
+  // With no loop yet, the first mark creates one: from here to the end (A), or from the start to here (B).
+  function markNow(which) {
+    if (!canReadTime()) return;
     if (!S.loops.length) {
       pushLoop(newLoop(0, S.duration, freeColor()));
       showNew();
@@ -232,17 +307,18 @@ export function createEdit(A) {
   function chainStart() {
     if (!ready()) return;
     const { prev } = V.neighbours(S.loops, S.sel);
-    if (prev) setPoint('a', prev.b, false);
+    if (!prev) return;
+    applyUndoable(E.movePoint(cur(), 'a', prev.b, false, S.duration, A.digits()));
   }
 
   // End right where the next loop starts.
   function chainEnd() {
     if (!ready()) return;
     const { next } = V.neighbours(S.loops, S.sel);
-    if (next) setPoint('b', next.a, false);
+    if (!next) return;
+    applyUndoable(E.movePoint(cur(), 'b', next.a, false, S.duration, A.digits()));
   }
 
-  // A new loop of the same length, starting where the selected one ends.
   // A loop over the whole media.
   function addWhole() {
     A.syncVideo();
@@ -251,6 +327,7 @@ export function createEdit(A) {
     showNew();
   }
 
+  // A new loop of the same length, starting where the selected one ends.
   function addLoopAfter() {
     A.syncVideo();
     if (!ready() || atMax()) return;
@@ -268,11 +345,7 @@ export function createEdit(A) {
   // Tap to mark: each press while playing ends the section that began at the previous press and
   // starts the next one. The first press only marks a start.
   function tapMark() {
-    A.syncVideo();
-    if (!mediaOk() || !S.trusted || isAd()) {
-      A.toast('Not available right now');
-      return;
-    }
+    if (!canReadTime()) return;
     const t = roundT(S.video.currentTime, A.digits());
     const from = S.tap;
     if (from == null || t < from + minLen()) {
@@ -332,7 +405,7 @@ export function createEdit(A) {
     E.clampLoops(loops, S.duration);
     S.loops = loops;
     S.sel = clamp(snap.sel, 0, loops.length - 1);
-    S.lastT = null;
+    A.hold();
     A.hideTip();
     if (S.zoom) fitView();
     A.settleRun();
@@ -374,5 +447,5 @@ export function createEdit(A) {
     A.toast(had > 1 ? 'All loops removed' : 'Loop removed', UNDO);
   }
 
-  return { addLoop, addLoopAfter, addWhole, centerView, chainEnd, chainStart, clearAll, markNow, panView, tapMark, zoomView, moveWhole, removeLoop, undo, selectLoop, setAuto, setBetween, setEnd, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setSets, setSetsForever, setZoom, toggleLoopAt };
+  return { addLoop, addLoopAfter, addWhole, centerView, chainEnd, chainStart, clearAll, copyShareLink, loopChapter, markNow, panView, tapMark, zoomView, moveWhole, shiftSelected, scaleSelected, removeLoop, snapshot, undo, selectLoop, setAuto, setBetween, setEnd, setCount, setFine, setInfinite, setName, setPoint, sortLoops, setStrip, hideStrip, setSets, setSetsForever, setZoom, toggleLoopAt };
 }

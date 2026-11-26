@@ -4,6 +4,65 @@ All notable changes are listed here. Versions follow [semantic versioning](https
 
 ## Unreleased
 
+**Smoother repetitions**
+- Loops now turn around on time, to within a few milliseconds: a timer is aimed at each loop's end
+  instead of waiting for the next screen refresh (or, with the editor and strip closed or in a
+  background tab, for a check that ran four times a second and could let up to a quarter of a
+  second of the next section through).
+- Less work while playing: no animation frames run just to watch for a loop's end, Spotify's ad
+  check no longer lays out the page on every frame, and finding the player bar on Apple Music,
+  Deezer, Tidal and Amazon Music no longer re-checks the same elements over and over.
+
+**Fixes**
+- Moving the start or end of the loop that is playing (or undoing, or a change from another tab)
+  no longer makes the current pass "partly played", which made that loop play one extra time.
+
+## 1.7.0
+
+Saved-loops library and JSON backup in the popup, four more built-in music sites, local media
+files, shareable loop links, chapter support, phrase stepping, custom shortcuts and active-tab
+controls.
+
+**Saved loops & backup (toolbar popup)**
+- A new *Saved* tab in the toolbar popup lists your saved videos and tracks across every site,
+  with search, loop counts, one-click open, and delete with undo.
+- *Export JSON* and *Import JSON* back up and restore all saved loops and preferences locally
+  (newer local edits are kept when merging).
+- Content scripts now load only preferences and the current media item's key from storage instead
+  of reading the entire store in every frame.
+
+**More music sites, control-bar button everywhere & local files**
+- Built-in support for **Apple Music**, **Deezer**, **Tidal** (`tidal.com` and `listen.tidal.com`)
+  and **Amazon Music**: track identification, progress-bar markers, loop button right inside each
+  site's player bar, and *After the last: Next*.
+- On any other website with a custom HTML player bar (including web-component players with open
+  shadow roots), Loopsmith now places its loop button inside the player's own control bar instead
+  of floating over the corner, falling back to the floating button only when there is no bar.
+- Existing installs updating from an earlier version are prompted to allow the new built-in sites
+  (with a toolbar `!` badge and one-click *Allow* banner in the popup), and Loopsmith starts
+  immediately in tabs already open on them.
+- Local audio and video files (`file://`): turn Loopsmith on for local files from the popup (with
+  a shortcut to Chrome's *Allow access to file URLs* toggle when needed). Local files are keyed by
+  filename and duration, so moving a file between folders keeps its loops.
+
+**Sharing, chapters & phrase stepping**
+- ⋯ → *Copy link with loops*: copies the page address with a start timestamp (such as YouTube's
+  `?t=`) plus a `#loopsmith=…` hash. Opening that link loads the loops automatically, with no
+  servers or network requests.
+- Video chapters (YouTube chapters and HTML5 `<track kind="chapters">`): dragged loop handles snap
+  to chapter boundaries, and ⋯ → *Loop chapter* turns the current chapter into a named loop.
+- Step a loop backward or forward by its own length (`Shift+J` / `Shift+L`) or halve / double its
+  length (`Shift+H` / `Shift+D`), also available as a compact row in ⋯.
+
+**Shortcuts, toolbar badge & background tabs**
+- A *Keys* tab in the toolbar popup lets you remap or turn off any shortcut (helpful on AZERTY and
+  other layouts), and links to browser-wide shortcuts (`commands`) so you can control loops from
+  another window or tab.
+- The toolbar icon shows a live badge while a tab is looping, and the popup's *Page* tab offers
+  quick controls for the current player or a tab looping in the background.
+- Fixed: in heavily throttled background tabs, playback advances of more than two seconds between
+  timer ticks no longer miss loop turn-arounds.
+
 ## 1.6.1
 
 **Fixes**

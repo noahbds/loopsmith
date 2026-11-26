@@ -17,7 +17,14 @@ installNextHook();
     try {
       const p = document.getElementById(location.pathname.startsWith('/shorts/') ? 'shorts-player' : 'movie_player');
       const d = p && typeof p.getVideoData === 'function' ? p.getVideoData() : null;
-      if (d) out = JSON.stringify({ id: d.video_id ? String(d.video_id) : null, live: d.isLive === true });
+      if (d) {
+        out = JSON.stringify({
+          id: d.video_id ? String(d.video_id) : null,
+          live: d.isLive === true,
+          title: d.title ? String(d.title) : '',
+          author: d.author ? String(d.author) : '',
+        });
+      }
     } catch (_) { /* player not initialised yet */ }
     root.setAttribute('data-lsm-yt', out);
   });

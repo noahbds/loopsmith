@@ -32,30 +32,37 @@ for keeping your favourite part of a song on repeat.
 - Set the start and end by dragging the A and B handles, typing a time (`1:23`, `90s`, `1m30s`), or
   grabbing the current position.
 - Choose how many times a section plays (1 to 999) or forever.
-- Zoom with the mouse wheel, snap loop edges to each other, place a loop right after the previous
-  one, or tap a key while playing to mark sections.
+- Zoom with the mouse wheel, snap loop edges to each other or to video chapters, place a loop
+  right after the previous one, step a loop forward/back by its own length, halve/double it, or
+  tap a key while playing to mark sections.
+- Copy a link carrying your loops (`#loopsmith=…` plus `?t=`) to share sections with a student or
+  bandmate without accounts or servers.
 - Several loops per video or track, overlapping or nested; switch one off without deleting it.
 - Loops take turns: a loop inside another one waits until the outer one is done. Between loops:
-  play on or jump straight to the next one. After the last: play on, pause, or play them all again
-  (a number of rounds, or again and again).
+  play on or jump straight to the next one. After the last: play on, pause, play them all again
+  (a number of rounds, or again and again), or go on to the next track or video.
 - No loop until you make one: one click loops the whole video or track. Optionally, looping turns
   on by itself on media you already have loops for.
-- Loops show on the site's own progress bar, and are saved per video or track.
+- Loops show on the site's own progress bar, are saved per video or track, and can be browsed,
+  searched, exported and imported as JSON from the toolbar popup.
 - Skip ahead without waiting: next / previous loop, skip a repetition, restart it, or jump to loop 1–9.
   Deleting loops can be undone.
-- Shortcuts: <kbd>Shift</kbd>+<kbd>A</kbd> / <kbd>Shift</kbd>+<kbd>B</kbd> set start / end to now,
+- Shortcuts (all remappable in the popup, plus optional browser-wide shortcuts):
+  <kbd>Shift</kbd>+<kbd>A</kbd> / <kbd>Shift</kbd>+<kbd>B</kbd> set start / end to now,
   <kbd>Shift</kbd>+<kbd>S</kbd> plays the selected loop, <kbd>Shift</kbd>+<kbd>R</kbd> turns looping
   on or off, <kbd>Shift</kbd>+<kbd>]</kbd> / <kbd>[</kbd> next / previous loop,
   <kbd>Shift</kbd>+<kbd>\</kbd> skips a repetition, <kbd>Shift</kbd>+<kbd>Z</kbd> restarts it,
+  <kbd>Shift</kbd>+<kbd>J</kbd> / <kbd>L</kbd> steps the loop back / ahead by its length,
+  <kbd>Shift</kbd>+<kbd>H</kbd> / <kbd>D</kbd> halves / doubles its length,
   <kbd>Shift</kbd>+<kbd>1</kbd>…<kbd>9</kbd> goes to that loop.
 
 ## Where it works
 
 | | |
 |---|---|
-| **Built in** | YouTube, YouTube Music, Spotify, SoundCloud, Bandcamp, Vimeo, Twitch (videos and clips), Bilibili, Dailymotion |
+| **Built in** | YouTube, YouTube Music, Spotify, Apple Music, SoundCloud, Deezer, Tidal, Amazon Music, Bandcamp, Vimeo, Twitch (videos and clips), Bilibili, Dailymotion |
 | **Any other site** | Click the toolbar button, then *Turn on for this site* (or *for every website*). Works with any HTML5 `<video>` / `<audio>`, including players built as web components. |
-| **Not yet** | Deezer, Tidal, Apple Music, Amazon Music. Help welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). |
+| **Local files** | Open an MP3/MP4 in the browser, click the toolbar button, and turn Loopsmith on for local `file://` media. |
 
 Live streams can't be looped. Spotify needs a browser with DRM support (regular Chrome, Edge, Firefox).
 

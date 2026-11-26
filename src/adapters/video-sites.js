@@ -17,6 +17,20 @@ export const vimeo = {
   progressBar: q('.vp-progress'),
   // First of the buttons right of the progress bar (volume, captions, settings…).
   barSlot: firstIn('[class*="ControlBarButtonsAndMenus_module_collapsibleContent"]'),
+  // Shared across vimeo.com/<id> and player.vimeo.com/video/<id>.
+  identify(p) {
+    const d = p.duration;
+    if (!(d > 0)) return { hold: true };
+    const m = /^(?:\/video)?\/(\d+)/.exec(location.pathname);
+    if (m) return { id: `vimeo:${m[1]}`, live: d === Infinity };
+    return generic.identify(p);
+  },
+  nearKeys(key) {
+    if (!key.startsWith('web:vimeo:')) return generic.nearKeys(key);
+    const v = document.querySelector('video');
+    const old = v && v.duration > 0 ? generic.identify(v).id : null;
+    return old ? [`web:${old}`, ...generic.nearKeys(`web:${old}`)] : [];
+  },
 };
 
 export const twitch = {

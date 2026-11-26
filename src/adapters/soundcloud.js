@@ -15,6 +15,7 @@ export default {
   ...generic,
   id: 'soundcloud',
   keyPrefix: 'sc',
+  shouldRun: () => window.top === window.self,
   dockOnly: true,
   dockInset: 56, // the player bar
   progressBar: () => document.querySelector('.playbackTimeline__progressBackground'),

@@ -2,6 +2,7 @@
 
 import { MIN_LEN } from '../core/constants.js';
 import { clamp } from '../core/util.js';
+import { parseShareHash } from '../core/share.js';
 import * as E from '../core/engine.js';
 
 export function createTracking(A) {
@@ -11,6 +12,7 @@ export function createTracking(A) {
   const WAKE_EVENTS = ['play', 'playing', 'pause', 'seeked', 'ratechange'];
   let syncTimer = 0;
   let autoDone = false; // looping was already turned on by itself for the media now loaded
+  let appliedHash = ''; // last #loopsmith=... hash loaded for this media
 
   function scheduleSync() {
     if (syncTimer) return;
@@ -36,7 +38,7 @@ export function createTracking(A) {
   function bindVideo(v) {
     const old = S.video;
     if (old) {
-      old.removeEventListener('timeupdate', A.check);
+      old.removeEventListener('timeupdate', A.onTimeUpdate);
       old.removeEventListener('ended', A.onEnded);
       old.removeEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) old.removeEventListener(t, onMediaEvent);
@@ -44,7 +46,7 @@ export function createTracking(A) {
     }
     S.video = v || null;
     if (v) {
-      v.addEventListener('timeupdate', A.check);
+      v.addEventListener('timeupdate', A.onTimeUpdate);
       v.addEventListener('ended', A.onEnded);
       v.addEventListener('seeking', onSeeking);
       for (const t of MEDIA_EVENTS) v.addEventListener(t, onMediaEvent);
@@ -66,6 +68,7 @@ export function createTracking(A) {
     S.undo = [];
     S.tap = null;
     autoDone = false;
+    appliedHash = '';
     A.cancelEdits();
     A.hideTip();
     A.render();
@@ -104,7 +107,7 @@ export function createTracking(A) {
   function applyDuration(d) {
     const oldD = S.ranged ? S.duration : 0;
     const saved = E.loopsFromSaved(savedEntry(), P);
-    if (saved) store.touch(S.videoId);
+    if (saved) store.touch(S.videoId, { title: A.currentTitle(), url: A.currentUrl() });
     S.duration = d;
     S.ranged = d >= MIN_LEN * 2;
     if (!S.ranged) {
@@ -120,9 +123,34 @@ export function createTracking(A) {
       if (oldD) for (const l of S.loops) if (Math.abs(l.b - oldD) < 0.05) l.b = d;
       E.clampLoops(S.loops, d);
       S.sel = clamp(S.sel, 0, Math.max(0, S.loops.length - 1));
-      if (saved && P.autoOn && !autoDone) autoOn();
+      const fromShare = applySharedHash();
+      if (fromShare) autoDone = true;
+      else if (saved && P.autoOn && !autoDone) autoOn();
     }
     A.render();
+  }
+
+  // Loads loops encoded in `#loopsmith=...` when present in the page URL.
+  function applySharedHash() {
+    const hash = location.hash || '';
+    if (!S.ranged || !hash || hash === appliedHash || !hash.includes('loopsmith=')) return false;
+    appliedHash = hash;
+    const shared = parseShareHash(hash, P);
+    if (!shared) return false;
+    E.clampLoops(shared, S.duration);
+    if (JSON.stringify(E.serializeLoops(shared)) === JSON.stringify(E.serializeLoops(S.loops))) return false;
+    const had = S.loops.length > 0;
+    if (had) A.snapshot();
+    S.loops = shared;
+    S.sel = 0;
+    S.lastT = null;
+    A.rememberLoops();
+    A.render();
+    A.toast(
+      shared.length === 1 ? 'Shared loop loaded' : `${shared.length} shared loops loaded`,
+      had ? { label: 'Keep mine', run: A.undo } : { label: 'Play', run: A.startLoop },
+    );
+    return true;
   }
 
   // The media came with saved loops and the user wants looping on right away. Once per media
@@ -153,6 +181,17 @@ export function createTracking(A) {
     }
     const key = who.id ? `${adapter.keyPrefix}:${who.id}` : null;
     if (key && key !== S.videoId) switchVideo(key);
+    if (key) {
+      const keysToCheck = [key, ...(adapter.nearKeys ? adapter.nearKeys(key) : [])];
+      if (keysToCheck.some((k) => !store.isLoaded(k))) {
+        S.trusted = false;
+        store.ensure(keysToCheck).then(() => {
+          S.dirty = true;
+          scheduleSync();
+        });
+        return;
+      }
+    }
     S.trusted = !ad;
     if (ad) return;
 
@@ -191,12 +230,12 @@ export function createTracking(A) {
     S.loops = saved;
     S.sel = clamp(S.sel, 0, Math.max(0, S.loops.length - 1));
     if (!S.loops.length) S.zoom = false;
-    S.lastT = null;
+    A.hold();
     A.hideTip();
     A.settleRun();
     A.render();
     if (S.open) A.toast('Loops updated from another tab');
   }
 
-  return { scheduleSync, syncVideo, otherTab };
+  return { applySharedHash, scheduleSync, syncVideo, otherTab };
 }

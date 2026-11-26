@@ -18,6 +18,7 @@
 //   navEvents            extra document events after which the player must be re-checked
 
 import { press } from './press.js';
+import { parseTime } from '../core/util.js';
 
 const ANSWER = 'data-lsm-yt';
 
@@ -42,7 +43,14 @@ function apiData(p) {
     const raw = (p && p.wrappedJSObject) || p;
     if (raw && typeof raw.getVideoData === 'function') {
       const d = raw.getVideoData();
-      if (d) return { id: d.video_id ? String(d.video_id) : null, live: d.isLive === true };
+      if (d) {
+        return {
+          id: d.video_id ? String(d.video_id) : null,
+          live: d.isLive === true,
+          title: d.title ? String(d.title) : '',
+          author: d.author ? String(d.author) : '',
+        };
+      }
     }
   } catch (_) { /* player not initialised yet */ }
   return null;
@@ -110,6 +118,55 @@ export default {
     if (!chrome) return null;
     const r = chrome.getBoundingClientRect();
     return r.height > 0 ? r.top : null;
+  },
+
+  // Video chapters, either from YouTube's chapter list or from the segmented progress bar.
+  chapters(p, duration) {
+    const items = document.querySelectorAll('ytd-macro-markers-list-item-renderer');
+    if (items.length > 1) {
+      const out = [];
+      for (const item of items) {
+        const tEl = item.querySelector('#time');
+        const hEl = item.querySelector('h4.macro-markers, #details h4');
+        const a = tEl ? parseTime(tEl.textContent) : null;
+        if (a != null) out.push({ a, title: hEl ? hEl.textContent.trim() : '' });
+      }
+      if (out.length > 1) return out;
+    }
+    const bar = p && p.querySelector('.ytp-progress-bar');
+    const segs = bar ? bar.querySelectorAll('.ytp-chapter-hover-container') : [];
+    if (segs.length > 1 && duration > 0) {
+      const br = bar.getBoundingClientRect();
+      if (br.width > 0) {
+        const curTitle = (p.querySelector('.ytp-chapter-title-content')?.textContent || '').trim();
+        const v = p.querySelector('video');
+        const now = v ? v.currentTime : -1;
+        const out = [];
+        let acc = 0;
+        for (const seg of segs) {
+          const w = seg.getBoundingClientRect().width;
+          const a = (acc / br.width) * duration;
+          const b = ((acc + w) / br.width) * duration;
+          const active = now >= a - 0.1 && now < b + 0.1;
+          out.push({ a, b, title: active ? curTitle : '' });
+          acc += w;
+        }
+        return out;
+      }
+    }
+    return [];
+  },
+
+  mediaTitle(p) {
+    const d = apiData(p);
+    if (!d || !d.title) return '';
+    return d.author && location.hostname === 'music.youtube.com' ? `${d.title} — ${d.author}` : d.title;
+  },
+
+  mediaUrl(_p, videoId) {
+    if (!videoId || !videoId.startsWith('yt:')) return '';
+    const id = videoId.slice(3);
+    return onShorts() ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`;
   },
 
   navEvents: ['yt-navigate-start', 'yt-navigate-finish', 'yt-page-data-updated', 'yt-player-updated'],

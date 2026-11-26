@@ -70,6 +70,7 @@ export function centerOn({ v0, v1 }, duration, t) {
  * @returns {number[]}
  */
 export function edgesOf(loops, skip) {
+  /** @type {number[]} */
   const out = [];
   loops.forEach((l, i) => {
     if (i === skip) return;

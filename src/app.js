@@ -20,9 +20,23 @@ import { createControls } from './app/controls.js';
 import { createLayout } from './app/layout.js';
 import { createHotkeys } from './app/hotkeys.js';
 
-export function start(adapter, store) {
+export function start(adapter, store, opts = {}) {
   // Every part adds its functions to A and reaches the others through it, once all are created.
   const A = createCore(adapter, store);
+  let lastSent = '';
+  A.notifyState = () => {
+    if (!opts.onState) return;
+    const payload = {
+      active: !!A.S.active,
+      badge: A.S.active ? (A.ui.badge && A.ui.badge.textContent) || '↻' : '',
+      statusText: A.S.active ? (A.ui.statusText && A.ui.statusText.textContent) || '' : '',
+      title: A.S.active ? A.currentTitle() : '',
+    };
+    const sig = JSON.stringify(payload);
+    if (sig === lastSent) return;
+    lastSent = sig;
+    opts.onState(payload);
+  };
   for (const make of [createTracking, createRun, createEdit, createRender, createControls, createLayout, createHotkeys]) {
     Object.assign(A, make(A));
   }
@@ -86,6 +100,9 @@ export function start(adapter, store) {
       scheduleSync();
     });
   }
+  window.addEventListener('hashchange', () => {
+    A.applySharedHash();
+  });
   store.subscribe(A.otherTab);
   let warned = false;
   store.on('error', () => {
@@ -95,7 +112,37 @@ export function start(adapter, store) {
   });
   store.on('prune', (n) => A.toast(`Saved loops for ${n === 1 ? 'one' : n} rarely used item${n === 1 ? '' : 's'} were removed (1,000 at most)`));
   window.addEventListener('keydown', onHotkey, true);
-  window.addEventListener('pagehide', () => { store.flush(); });
+  window.addEventListener('pagehide', () => {
+    store.flush();
+    if (opts.onState) opts.onState({ active: false, badge: '', statusText: '', title: '' });
+  });
 
-  return { diagnostics: A.diagnostics };
+  function status() {
+    return {
+      hasPlayer: !!(S.player && S.player.isConnected),
+      mediaOk: A.mediaOk(),
+      active: S.active,
+      loops: S.loops.length,
+      title: A.currentTitle(),
+      statusText: (A.ui.statusText && A.ui.statusText.textContent) || '',
+      badge: (A.ui.badge && A.ui.badge.textContent) || '',
+    };
+  }
+
+  function control(action, arg) {
+    ensure();
+    syncVideo();
+    if (action === 'open') {
+      if (S.open) A.closePanel();
+      else A.openPanel();
+      return;
+    }
+    if (action === 'stop') {
+      A.stopRun();
+      return;
+    }
+    A.runAction(action, arg);
+  }
+
+  return { diagnostics: A.diagnostics, status, control };
 }

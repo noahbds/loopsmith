@@ -6,9 +6,10 @@ import { pressNextKey } from '../core/nextkey.js';
 export function createRun(A) {
   const { S, P, ui, adapter, cur, describe, isAd, moreRounds, ready, rememberLoops, runOpts, skipped } = A;
 
+  // Plays the media if it is paused (or has ended).
   function play() {
     const v = S.video;
-    if (!v) return;
+    if (!v || !(v.paused || v.ended)) return;
     try {
       const p = v.play();
       if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -19,15 +20,17 @@ export function createRun(A) {
   // right after one never makes a loop "partly played" (the player may still report the old
   // position for a moment, which would stop that loop's plays from counting).
   let ownSeekAt = 0;
+  let lastCheckAt = 0;
 
   function seekTo(t) {
     const v = S.video;
     if (!v) return;
     S.lastT = null;
     S.heldT = null;
+    lastCheckAt = 0;
     ownSeekAt = Date.now();
     try {
-      // Some players (Spotify) must seek through their own controls to stay in step.
+      // Some players (YouTube Music, MusicKit sites) must seek through their own API to stay in step.
       if (adapter.seek) adapter.seek(v, t, S.player);
       else v.currentTime = t;
     } catch (_) { /* ignore */ }
@@ -66,36 +69,43 @@ export function createRun(A) {
       S.lastT = null;
       return;
     }
+    const now = Date.now();
+    const elapsed = lastCheckAt ? now - lastCheckAt : 0;
+    lastCheckAt = now;
     const t = v.currentTime;
     let prev = S.lastT;
     S.lastT = t;
     if (prev === null) {
       const held = S.heldT;
       S.heldT = null;
-      if (held !== null && t >= held - 0.3 && t - held < HOP * (v.playbackRate || 1)) {
+      const hopLimit = E.maxAdvance(v.playbackRate || 1, elapsed, document.hidden);
+      if (held !== null && t >= held - 0.3 && t - held < Math.max(HOP * (v.playbackRate || 1), document.hidden ? hopLimit : 0)) {
         // Only a small hop forward from where it was (the player skipping a gap in its buffer, a
         // moment the media wasn't ready or couldn't be identified): still the same pass.
         prev = held;
       } else {
         // The playhead just landed here (a seek, or looping was just turned on): a loop it landed
         // in after its start, from outside it, is only partly played this time.
-        if (Date.now() - ownSeekAt > 1500) E.enter(S.loops, t, S.duration, turnGuard(), held);
+        if (now - ownSeekAt > 1500) E.enter(S.loops, t, S.duration, turnGuard(), held);
         return;
       }
     }
-    // Seeks reset lastT (onSeeking), so anything left is forward playback; the bound is a sanity check.
-    if (t <= prev || t - prev > Math.max(2, v.playbackRate * 2)) {
+    // Seeks reset lastT (onSeeking), so anything left is forward playback; hidden tabs allow throttled timer intervals.
+    if (t <= prev || t - prev > E.maxAdvance(v.playbackRate || 1, elapsed, document.hidden)) {
       return;
     }
     const step = E.advance(S.loops, prev, t, runOpts(turnGuard()));
-    if (!step) {
-      return;
-    }
+    if (step) turn(step);
+  }
+
+  // Playback ran into the end of a loop: carry out what the engine decided.
+  function turn(step, andPlay = false) {
     if (step.finish) {
       finishOrAgain();
       return;
     }
     if (step.seek != null) seekTo(step.seek);
+    if (andPlay) play();
     followTurn();
     A.render();
     if (step.repeat) A.replay(ui.badge, 'lsm-pop');
@@ -108,6 +118,7 @@ export function createRun(A) {
   function hold() {
     if (S.lastT !== null) S.heldT = S.lastT;
     S.lastT = null;
+    lastCheckAt = 0;
   }
 
   // The editor follows the run: when another loop gets the turn, it becomes the selected loop
@@ -141,7 +152,7 @@ export function createRun(A) {
     S.round += 1;
     S.lastT = null;
     seekTo(first.a);
-    if (S.video && (S.video.paused || S.video.ended)) play();
+    play();
     A.render();
     A.replay(ui.badge, 'lsm-pop');
     if (!S.open) A.toast(`Round ${S.round}${P.setsForever ? '' : ` of ${P.sets}`}`);
@@ -189,14 +200,8 @@ export function createRun(A) {
     if (!S.active || !S.trusted || !S.ranged || isAd()) return;
     const guard = turnGuard();
     const step = E.advance(S.loops, S.duration - guard - 0.05, S.duration, runOpts(guard));
-    if (!step || step.seek == null) {
-      finishOrAgain();
-      return;
-    }
-    seekTo(step.seek);
-    play();
-    A.render();
-    if (step.repeat) A.replay(ui.badge, 'lsm-pop');
+    if (!step || step.seek == null) finishOrAgain();
+    else turn(step, true);
   }
 
   // Turns looping on, every count starting over. At least one loop has to be switched on:
@@ -244,10 +249,9 @@ export function createRun(A) {
   function startLoop() {
     if (!arm(true)) return;
     E.giveTurn(S.loops, cur());
-    const v = S.video;
     if (S.trusted && !isAd()) {
       seekTo(cur().a);
-      if (v.paused || v.ended) play();
+      play();
     }
     A.render();
     wake();
@@ -280,7 +284,7 @@ export function createRun(A) {
         if (S.zoom) A.fitView();
       }
     }
-    if (andPlay && S.video && (S.video.paused || S.video.ended)) play();
+    if (andPlay) play();
     A.render();
     wake();
     if (step.repeat || step.restart) A.replay(ui.badge, 'lsm-pop');
@@ -359,25 +363,49 @@ export function createRun(A) {
   }
 
   const IDLE_MS = 250;
-  const TURN_LEAD = 0.75; // seconds of real time before a loop's end at which frames take over
+  // Within this much real time of the turn-around point, a timer is set for that very moment, so
+  // a repetition turns around on time (to a few ms) instead of on the next frame or idle tick,
+  // and no animation frames run just to watch for it.
+  const TURN_AHEAD_MS = IDLE_MS + 100;
   let raf = 0;
   let idle = 0;
+  let turnTimer = 0;
 
+  // Frames only while something on screen moves with the playhead.
   function wantsFrames() {
     const v = S.video;
-    if (!v || v.paused || v.ended || document.hidden) return false;
-    if (S.open || A.stripWanted()) return true;
-    if (!S.active) return false;
-    const t = v.currentTime;
+    return !!v && !v.paused && !v.ended && !document.hidden && (S.open || A.stripWanted());
+  }
+
+  // Aims a timer at the end of the loop whose turn it is, when that end is close.
+  function armTurn() {
+    clearTimeout(turnTimer);
+    turnTimer = 0;
+    const v = S.video;
+    if (!S.active || !S.trusted || !v || v.paused || v.ended || v.seeking || v.readyState < 3) return;
+    const rate = v.playbackRate || 1;
     const guard = turnGuard();
+    const t = v.currentTime;
     const l = loopAt(t, guard);
-    return !!l && loopEnd(l, guard) - t <= TURN_LEAD * (v.playbackRate || 1);
+    if (!l) return;
+    const ms = ((loopEnd(l, guard) - t) / rate) * 1000;
+    if (ms > TURN_AHEAD_MS) return;
+    // At least a few ms: right at the end, the position may not have moved on since the last check.
+    turnTimer = setTimeout(onTurnTimer, Math.max(4, ms));
+  }
+
+  function onTurnTimer() {
+    turnTimer = 0;
+    check();
+    armTurn();
   }
 
   function kick() {
-    if (raf || idle || !(S.active || S.open)) return;
-    if (wantsFrames()) raf = requestAnimationFrame(frame);
-    else idle = setTimeout(frame, IDLE_MS);
+    if (!raf && !idle && (S.active || S.open)) {
+      if (wantsFrames()) raf = requestAnimationFrame(frame);
+      else idle = setTimeout(frame, IDLE_MS);
+    }
+    armTurn();
   }
 
   function frame() {
@@ -389,12 +417,21 @@ export function createRun(A) {
     kick();
   }
 
+  // The media's own position updates (also while the tab is hidden and no frames run).
+  function onTimeUpdate() {
+    check();
+    armTurn();
+  }
+
   // Something changed (play, pause, seek, panel opened…): don't wait for the slow timer.
   function wake() {
-    if (raf || !(S.active || S.open)) return;
+    if (raf || !(S.active || S.open)) {
+      armTurn();
+      return;
+    }
     clearTimeout(idle);
     frame();
   }
 
-  return { armRun, navigate, check, hold, kick, loopAt, loopEnd, nextLoop, onEnded, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
+  return { armRun, navigate, hold, kick, loopAt, loopEnd, nextLoop, onEnded, onTimeUpdate, seekTo, settleRun, startLoop, stopRun, turnGuard, wake };
 }

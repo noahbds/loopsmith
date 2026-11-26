@@ -64,6 +64,7 @@ export function createRender(A) {
         ui.repRestart.hidden = !l;
         ui.repSkip.hidden = !l;
         ui.badge.textContent = badge;
+        if (A.notifyState) A.notifyState();
       }
       if (S.open || stripWanted()) {
         const prog = l ? Math.round(clamp((t - l.a) / Math.max(0.01, A.loopEnd(l, guard) - l.a), 0, 1) * 500) : 0;
@@ -351,10 +352,12 @@ export function createRender(A) {
     ui.btn.classList.toggle('lsm-active', S.active);
     setAttr(ui.btn, 'aria-expanded', String(S.open));
     setAttr(ui.btn, 'aria-pressed', String(S.active));
+    if (ui.help && !ui.help.hidden && A.syncHelp) A.syncHelp();
     A.updatePill();
 
     renderLoops(ok);
     renderLive();
+    if (A.notifyState) A.notifyState();
   }
 
   function replay(node, cls) {

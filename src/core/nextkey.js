@@ -4,6 +4,7 @@
 
 export function pressNextKey() {
   const root = document.documentElement;
+  if (!root) return false;
   root.removeAttribute('data-lsm-next-done');
   document.dispatchEvent(new CustomEvent('lsm:next'));
   const done = root.hasAttribute('data-lsm-next-done');

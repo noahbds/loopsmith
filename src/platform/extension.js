@@ -6,6 +6,7 @@ const local = api.storage.local;
 
 export const backend = {
   getAll: () => local.get(null),
+  get: (keys) => local.get(keys),
   set: (obj) => local.set(obj),
   remove: (keys) => local.remove(keys),
   onChange(cb) {

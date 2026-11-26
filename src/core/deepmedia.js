@@ -4,22 +4,31 @@
 export const PLAY_EVENT = 'loopsmith-play'; // fired by the page-world hook, composed
 
 const SHADOW_EVERY = 3000; // ms: walking every element for shadow roots is the costly part
+/** @type {HTMLMediaElement[]} */
 let shadowCache = [];
 let shadowAt = -Infinity;
 
+/**
+ * @param {Document | ShadowRoot} root
+ * @param {number} depth
+ * @param {HTMLMediaElement[]} out
+ */
 function shadowMedia(root, depth, out) {
   for (const el of root.querySelectorAll('*')) {
     const sr = el.shadowRoot;
     if (!sr) continue;
-    for (const m of sr.querySelectorAll('video, audio')) out.push(m);
+    for (const m of sr.querySelectorAll('video, audio')) {
+      if (m instanceof HTMLMediaElement) out.push(m);
+    }
     if (depth < 4) shadowMedia(sr, depth + 1, out);
   }
   return out;
 }
 
 // Light-DOM media is always fresh; media in shadow roots is re-scanned every few seconds.
+/** @returns {HTMLMediaElement[]} */
 export function allMedia() {
-  const light = [...document.querySelectorAll('video, audio')];
+  const light = /** @type {HTMLMediaElement[]} */ ([...document.querySelectorAll('video, audio')]);
   const now = Date.now();
   if (now - shadowAt > SHADOW_EVERY) {
     shadowAt = now;
@@ -30,6 +39,7 @@ export function allMedia() {
 }
 
 // The media element an event came from, even across shadow boundaries (open ones).
+/** @param {Event} e @returns {HTMLMediaElement | null} */
 export function mediaOf(e) {
   const path = e.composedPath ? e.composedPath() : [];
   const t = path[0] || e.target;

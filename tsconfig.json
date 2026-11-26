@@ -8,8 +8,8 @@
     "checkJs": true,
     "noEmit": true,
     "strict": true,
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "skipLibCheck": true
   },
-  "include": ["src/core/engine.js", "src/core/store.js", "src/core/util.js", "src/core/constants.js", "src/types.js"]
+  "include": ["src/core/*.js", "src/popup/report.js", "src/adapters/press.js", "src/types.js"]
 }

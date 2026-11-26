@@ -23,14 +23,14 @@ It is made for two things: practising (a guitar riff, the hard part of a song, a
 - Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, play them all again, or go on to the next track or video).
 - The loop button sits in the site's own player controls, next to its other buttons, and your loops show on the site's own progress bar.
 - Start in one click: loop the whole video or track, or 30 seconds from where you are.
-- Your loops are saved and come back when you return. If you like, looping turns on by itself when you do.
+- Your loops are saved and come back when you return. Browse, search, export and import your saved loops from the toolbar popup, or share a link carrying your loops (`#loopsmith=…`).
 - Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
-- Zoom the slider with the mouse wheel, snap loops to each other, or tap a key while playing to mark sections.
-- Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
+- Zoom the slider with the mouse wheel, snap loops to each other or to video chapters, step a loop ahead or halve/double its length, or tap a key while playing to mark sections.
+- Keyboard shortcuts (all remappable in the popup, plus optional browser-wide shortcuts): Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
 
 **Where it works**
 
-Loopsmith works out of the box on YouTube, Spotify and other popular video and music sites. On any other website with a video or audio player, click the Loopsmith toolbar button and choose "Turn on for this site": it only runs where you allow it.
+Loopsmith works out of the box on YouTube, Spotify, Apple Music, SoundCloud, Deezer, Tidal, Amazon Music, Bandcamp and other popular video and music sites. On any other website with a video or audio player—or on local MP3/MP4 files—click the Loopsmith toolbar button and choose "Turn on for this site": it only runs where you allow it.
 
 **Private by design**
 
@@ -72,8 +72,8 @@ PERMISSIONS
 - storage: loops and preferences, stored locally only.
 - scripting: registers the content script for sites the user turns on, and starts it in tabs already open there.
 - activeTab: the popup reads the current tab's address to offer turning Loopsmith on.
-- Host permissions: a fixed list of media sites; any other site only through the optional permission above.
-- Content scripts with world "MAIN" (src/page/): youtube.js reads the YouTube player's video id, and seeks and goes to the next video through its own API; media-hook.js moves audio elements that sites never insert into the page (Spotify, SoundCloud) into a hidden element so the content script can control them; media-session-core.js (in both of those, and alone as media-session.js on the other built-in sites) records the handler the site gives navigator.mediaSession for "nexttrack" (its media-key action), so the "After the last: Next" option can call it. None of them sends data anywhere.
+- Host permissions: a fixed list of media sites; any other site or local `file://` media only through the optional permission above.
+- Content scripts with world "MAIN" (src/page/): youtube.js reads the YouTube player's video id, and seeks and goes to the next video through its own API; media-hook.js moves audio elements that sites never insert into the page (Spotify, SoundCloud, Apple Music, Deezer, Tidal, Amazon Music) into a hidden element so the content script can control them; media-session-core.js (in both of those, and alone as media-session.js on the other built-in sites) records the handlers the site gives navigator.mediaSession for "nexttrack" and "seekto" (plus MusicKit on Apple Music), so "After the last: Next" and player-synced seeks can call them. None of them sends data anywhere.
 
 The extension makes no network requests and collects no data.
 ```

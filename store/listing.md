@@ -20,13 +20,13 @@ WHAT YOU CAN DO
 • Decide what happens between loops (play on, or jump straight to the next one) and after the last one (play on, pause, play them all again, or go on to the next track or video).
 • The loop button sits in the site's own player controls, next to its other buttons, and your loops show on the site's own progress bar.
 • Start in one click: loop the whole video or track, or 30 seconds from where you are.
-• Your loops are saved and come back when you return. If you like, looping turns on by itself when you do.
+• Your loops are saved and come back when you return. Browse, search, export and import your saved loops from the toolbar popup, or share a link carrying your loops (#loopsmith=…).
 • Loops inside other loops wait for their turn. Skip to the next or previous loop, skip a repetition, or jump to any loop.
-• Zoom the slider with the mouse wheel, snap loops to each other, or tap a key while playing to mark sections.
-• Keyboard shortcuts: Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
+• Zoom the slider with the mouse wheel, snap loops to each other or to video chapters, step a loop ahead or halve/double its length, or tap a key while playing to mark sections.
+• Keyboard shortcuts (all remappable in the popup, plus optional browser-wide shortcuts): Shift+A / Shift+B set the start / end to now, Shift+S plays the loop, Shift+R turns looping on or off, Shift+] and Shift+[ go to the next or previous loop, Shift+M taps out sections while it plays.
 
 WHERE IT WORKS
-Loopsmith works out of the box on YouTube, Spotify and other popular video and music sites. On any other website with a video or audio player, click the Loopsmith icon and choose "Turn on for this site": it only runs where you allow it.
+Loopsmith works out of the box on YouTube, Spotify, Apple Music, SoundCloud, Deezer, Tidal, Amazon Music, Bandcamp and other popular video and music sites. On any other website with a video or audio player—or on local MP3/MP4 files—click the Loopsmith icon and choose "Turn on for this site": it only runs where you allow it.
 
 PRIVATE BY DESIGN
 • No account, no tracking, no analytics, no ads.
@@ -80,13 +80,13 @@ Loopsmith repeats a chosen section of the music or video playing on a web page (
   ```
   Lets the toolbar popup read the address of the current tab when the user opens it, to show whether Loopsmith runs there and offer to turn it on for that site.
   ```
-- Host permissions (built-in sites: YouTube, YouTube Music, Spotify, SoundCloud, Bandcamp, Vimeo, Twitch, Bilibili, Dailymotion)
+- Host permissions (built-in sites: YouTube, YouTube Music, Spotify, Apple Music, SoundCloud, Deezer, Tidal, Amazon Music, Bandcamp, Vimeo, Twitch, Bilibili, Dailymotion)
   ```
-  The content script adds the loop controls to the media player on these sites and controls playback (seeking back to the loop start). A small script also runs in the page itself: on every one of these sites it lets "After the last: Next" use the site's own next-track action (the one its media keys use); on YouTube, YouTube Music, Spotify and SoundCloud it also reads which track is loaded and reaches the player's audio. No page content is read or sent anywhere.
+  The content script adds the loop controls to the media player on these sites and controls playback (seeking back to the loop start). A small script also runs in the page itself: on every one of these sites it lets "After the last: Next" use the site's own next-track action (the one its media keys use); on YouTube, YouTube Music, Spotify, Apple Music, SoundCloud, Deezer, Tidal and Amazon Music it also reads which track is loaded and reaches the player's audio. No page content is read or sent anywhere.
   ```
-- Optional host permissions (`*://*/*`)
+- Optional host permissions (`*://*/*`, `file:///*`)
   ```
-  Only requested when the user clicks "Turn on for this site" (one site) or "Turn on for every website" in the popup, so Loopsmith can add its loop controls to media players on sites the user chooses. The user can turn it off again at any time.
+  Only requested when the user clicks "Turn on for this site" (one site), "Turn on for every website", or "Turn on for local files" in the popup, so Loopsmith can add its loop controls to media players on sites and local audio/video files the user chooses. The user can turn it off again at any time.
   ```
 - Remote code: **No, I am not using remote code.** (Everything is bundled in the package.)
 

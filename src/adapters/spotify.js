@@ -35,20 +35,26 @@ function nowPlaying() {
   return title ? `t:${title.trim()}|${artist.trim()}`.slice(0, 200) : null;
 }
 
-// Free-tier ads say so in the widget (or in the media session).
+// Free-tier ads say so in the widget (or in the media session). Asked every frame while the panel
+// is open, and innerText makes the browser lay the page out: the answer is kept for a moment.
 const AD = /^(advertisement|publicit[ée]|anuncio|werbung|pubblicit[àa]|reclame|reklama|annonce)\b/i;
+let adSeen = { at: -Infinity, ad: false };
 function adPlaying() {
+  const now = performance.now();
+  if (now - adSeen.at < 200) return adSeen.ad;
   const w = document.querySelector(WIDGET);
   const text = w ? w.innerText.trim() : '';
   let title = '';
   try { title = navigator.mediaSession?.metadata?.title || ''; } catch (_) { /* ignore */ }
-  return AD.test(text) || AD.test(title);
+  adSeen = { at: now, ad: AD.test(text) || AD.test(title) };
+  return adSeen.ad;
 }
 
 export default {
   ...generic,
   id: 'spotify',
   keyPrefix: 'sp',
+  shouldRun: () => window.top === window.self,
   dockOnly: true,
   dockInset: 80, // the now-playing bar
   engaged: () => true,

@@ -9,11 +9,12 @@
 
 import { mediaKey, pickMedia } from '../core/mediakey.js';
 import { allMedia, mediaOf, PLAY_EVENT } from '../core/deepmedia.js';
-import { findProgressBar } from '../core/findbar.js';
+import { findControlSlot, findProgressBar } from '../core/findbar.js';
 
 let lastPlayed = null;
 let current = null;
 const bar = { media: null, el: null, at: 0 };
+const slotCache = { media: null, slot: null, at: 0 };
 
 const snapshot = () => allMedia().map((m) => ({ m, video: m.tagName === 'VIDEO', rect: m.getBoundingClientRect() }));
 
@@ -64,10 +65,25 @@ export default {
     return m ? [m[1] + (Number(m[2]) - 1), m[1] + (Number(m[2]) + 1)] : [];
   },
 
-  // The site's own seek bar, found by looking (re-checked every 2 s: players build controls late).
+  // Custom HTML player control bar, when the page has one (falls back to floating button otherwise).
+  barSlot(p) {
+    const now = Date.now();
+    const valid = !!(slotCache.slot && slotCache.slot.host && slotCache.slot.host.isConnected);
+    const interval = valid ? 10000 : 2000;
+    if (p !== slotCache.media || now - slotCache.at > interval) {
+      slotCache.media = p;
+      slotCache.slot = findControlSlot(p);
+      slotCache.at = now;
+    }
+    return slotCache.slot;
+  },
+
+  // The site's own seek bar, found by looking (every 2 s until found, then backed off to 10 s).
   progressBar(p) {
     const now = Date.now();
-    if (p !== bar.media || (bar.el && !bar.el.isConnected) || now - bar.at > 2000) {
+    const valid = !!(bar.el && bar.el.isConnected && bar.el.getBoundingClientRect().width > 20);
+    const interval = valid ? 10000 : 2000;
+    if (p !== bar.media || now - bar.at > interval) {
       bar.media = p;
       bar.el = findProgressBar(p);
       bar.at = now;

@@ -416,6 +416,51 @@ export function moveLoop(l, start, duration, digits = 1) {
 }
 
 /**
+ * Shifts a loop backward (`dir = -1`) or forward (`dir = 1`) by its own length.
+ * @param {Loop} l
+ * @param {-1 | 1} dir
+ * @param {number} duration
+ * @param {number} [digits]
+ * @returns {{ a: number, b: number }}
+ */
+export function shiftLoop(l, dir, duration, digits = 1) {
+  return moveLoop(l, l.a + dir * (l.b - l.a), duration, digits);
+}
+
+/**
+ * Scales a loop's length by `factor` (e.g. 0.5 to halve, 2 to double), anchored at `a` unless
+ * the end of the media pushes `a` earlier so the scaled length fits.
+ * @param {Loop} l
+ * @param {number} factor
+ * @param {number} duration
+ * @param {number} [digits]
+ * @returns {{ a: number, b: number }}
+ */
+export function scaleLoop(l, factor, duration, digits = 1) {
+  const minLen = digits > 1 ? FINE_MIN_LEN : MIN_LEN;
+  const len = clamp(roundT((l.b - l.a) * factor, digits), Math.min(minLen, duration), duration);
+  const a = clamp(roundT(Math.min(l.a, duration - len), digits), 0, Math.max(0, duration - len));
+  const b = Math.min(duration, roundT(a + len, digits));
+  return { a, b };
+}
+
+/**
+ * Largest forward playhead advance (in seconds) between two checks that still counts as continuous
+ * playback rather than an unannounced seek. In hidden tabs, browser timer throttling can space
+ * checks several seconds apart while audio keeps playing.
+ * @param {number} rate
+ * @param {number} elapsedMs
+ * @param {boolean} [hidden]
+ */
+export function maxAdvance(rate, elapsedMs, hidden = false) {
+  const r = rate > 0 ? rate : 1;
+  const base = Math.max(2, r * 2);
+  if (!hidden || !(elapsedMs > 0)) return base;
+  const sec = Math.min(120, elapsedMs / 1000);
+  return Math.max(base, sec * r + 2);
+}
+
+/**
  * The loops in play order (by start; the shorter first when they start together). A new array.
  * @param {Loop[]} loops
  */

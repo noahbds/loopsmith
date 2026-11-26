@@ -9,10 +9,11 @@ import ytmusic from './adapters/ytmusic.js';
 import soundcloud from './adapters/soundcloud.js';
 import spotify from './adapters/spotify.js';
 import bandcamp from './adapters/bandcamp.js';
+import { applemusic, deezer, tidal, amazonmusic } from './adapters/music-sites.js';
 import { vimeo, twitch, bilibili, dailymotion } from './adapters/video-sites.js';
 import generic from './adapters/generic.js';
 
-const ADAPTERS = { youtube, ytmusic, soundcloud, spotify, bandcamp, vimeo, twitch, bilibili, dailymotion, generic };
+const ADAPTERS = { youtube, ytmusic, soundcloud, spotify, applemusic, deezer, tidal, amazonmusic, bandcamp, vimeo, twitch, bilibili, dailymotion, generic };
 
 // Dedicated adapters by hostname; anything else gets the generic one.
 function adapterFor(hostname) {
@@ -22,14 +23,13 @@ function adapterFor(hostname) {
 }
 
 /** Starts Loopsmith on this page. Resolves to the running app, or undefined when it has nothing to do here. */
-export async function boot(backend) {
+export async function boot(backend, opts = {}) {
   const adapter = adapterFor(location.hostname);
   if (!adapter.shouldRun()) return;
   // The marker lives in the DOM so the script never attaches twice to one page (it can be injected
   // both by the manifest and when a site is turned on in an open tab).
   const root = document.documentElement;
-  // Pages that still hold a copy from before 1.3 (it marked itself `data-ysl`) are left alone.
-  if (root.hasAttribute('data-lsm') || root.hasAttribute('data-ysl')) return;
+  if (root.hasAttribute('data-lsm')) return;
   root.setAttribute('data-lsm', '');
   if (adapter.helper) adapter.helper(); // site-specific work that runs even in frames without media
 
@@ -37,14 +37,15 @@ export async function boot(backend) {
   // (Music sites start right away: their loop button shows before anything plays.)
   if (adapter.floating && !adapter.dockOnly && !allMedia().length) await firstMedia();
 
-  const store = createStore(backend);
+  const store = createStore(backend, { lazy: !!opts.lazy });
   await store.load();
-  if (adapter.legacyStoreKey) {
+  if (adapter.legacyStoreKey && !store.getMeta('mig:v1')) {
     let raw = null;
     try { raw = JSON.parse(localStorage.getItem(adapter.legacyStoreKey)); } catch (_) { /* blocked or corrupt */ }
+    if (raw) await store.loadAll();
     migrateV1(store, raw, adapter.keyPrefix);
   }
-  return start(adapter, store);
+  return start(adapter, store, opts);
 }
 
 function firstMedia() {

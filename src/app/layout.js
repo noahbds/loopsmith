@@ -3,6 +3,7 @@
 import { visibleArea } from '../core/mediakey.js';
 import { shown } from '../core/findbar.js';
 import { clamp } from '../core/util.js';
+import { LIGHT_CSS } from '../ui/styles.js';
 
 export function createLayout(A) {
   const { S, P, ui, adapter, floating, L, engaged, focused, rememberPrefs } = A;
@@ -191,14 +192,29 @@ export function createLayout(A) {
   // Floating mode, on sites whose adapter knows a spot in the site's own control bar (barSlot): the
   // loop button sits there, next to the site's own buttons, like on YouTube. While that bar is
   // missing or off screen (SoundCloud's slides in once something plays) the button floats instead.
+  // Open shadow roots get LIGHT_CSS injected once so web-component bars style the button too.
+  function ensureRootStyle(host) {
+    const root = host.getRootNode ? host.getRootNode() : null;
+    if (!(root instanceof ShadowRoot)) return root === document;
+    if (!root.querySelector('style[data-lsm-bar-style]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-lsm-bar-style', '');
+      style.textContent = LIGHT_CSS;
+      root.appendChild(style);
+    }
+    return true;
+  }
+
   function mountButton(wanted) {
     let slot = null;
     if (wanted && adapter.barSlot) {
       try { slot = adapter.barSlot(S.player); } catch (_) { /* the site changed its markup */ }
-      if (slot && !(slot.host && slot.host.isConnected && slot.host.getBoundingClientRect().top < window.innerHeight)) slot = null;
+      if (slot && !(slot.host && slot.host.isConnected && slot.host.getBoundingClientRect().top < window.innerHeight && ensureRootStyle(slot.host))) {
+        slot = null;
+      }
     }
     if (slot) {
-      const before = slot.before || null;
+      const before = slot.before && slot.before.parentNode === slot.host ? slot.before : null;
       if (before !== ui.btn && !(ui.btn.parentNode === slot.host && ui.btn.nextSibling === before)) {
         const hadFocus = focused() === ui.btn;
         slot.host.insertBefore(ui.btn, before);
@@ -207,11 +223,15 @@ export function createLayout(A) {
     } else if (ui.btn.parentNode !== ui.shadow) {
       ui.shadow.insertBefore(ui.btn, ui.markBox);
     }
-    if (slot && adapter.barTint) {
-      let tint = null;
-      try { tint = adapter.barTint(); } catch (_) { /* ignore */ }
-      const c = tint ? getComputedStyle(tint).color : '';
+    if (slot && (slot.tint || adapter.barTint)) {
+      let tint = slot.tint || null;
+      if (!tint && adapter.barTint) {
+        try { tint = adapter.barTint(); } catch (_) { /* ignore */ }
+      }
+      const c = tint && tint.isConnected ? getComputedStyle(tint).color : '';
       if (ui.btn.style.color !== c) ui.btn.style.color = c;
+    } else if (!slot && ui.btn.style.color) {
+      ui.btn.style.color = '';
     }
     if (inBar === !!slot) return;
     inBar = !!slot;

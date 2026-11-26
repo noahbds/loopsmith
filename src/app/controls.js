@@ -2,6 +2,8 @@
 
 import { NAME_MAX } from '../core/constants.js';
 import { clamp, parseTime, segments } from '../core/util.js';
+import { chapterEdges } from '../core/chapters.js';
+import { formatBinding, specFor } from '../core/keys.js';
 import * as V from '../core/view.js';
 import { el, icon, I } from '../ui/dom.js';
 import { SHADOW_CSS } from '../ui/styles.js';
@@ -189,7 +191,7 @@ export function createControls(A) {
     };
 
     const apply = (x, alt) => {
-      const edges = V.edgesOf(S.loops, S.sel);
+      const edges = V.edgesOf(S.loops, S.sel).concat(chapterEdges(A.chapters()));
       const near = alt ? -1 : 7 * spanPerPx();
       let snapped = false;
       if (drag.whole) {
@@ -357,6 +359,7 @@ export function createControls(A) {
     if (e.key === 'Escape' || t.tagName === 'INPUT') return true;
     if (t.tagName === 'BUTTON') {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') return true;
+      if (t.closest('[role="menu"]') && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return true;
       return !!t.closest('[role="toolbar"]') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key);
     }
     if (t.getAttribute('role') === 'slider') return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key);
@@ -394,7 +397,13 @@ export function createControls(A) {
   // The "more" menu: actions that are used less often than the buttons in the panel.
   function buildMenu() {
     const item = (label, run, hint) => {
-      const b = el('button', { class: 'lsm-mi', type: 'button', role: 'menuitem' }, el('span', { text: label }), hint ? el('kbd', { text: hint }) : null);
+      const kbd = hint != null ? el('kbd', { text: hint }) : null;
+      const b = el('button', { class: 'lsm-mi', type: 'button', role: 'menuitem' }, el('span', { text: label }), kbd);
+      b.addEventListener('click', () => { A.closeMenu(); run(); });
+      return b;
+    };
+    const stepBtn = (text, label, run) => {
+      const b = el('button', { class: 'lsm-mi-step', type: 'button', role: 'menuitem', 'aria-label': label, title: label, text });
       b.addEventListener('click', () => { A.closeMenu(); run(); });
       return b;
     };
@@ -402,18 +411,41 @@ export function createControls(A) {
     ui.miFine = item('Times to hundredths of a second', () => A.setFine(!P.fine));
     ui.miStrip = item('Hide the strip while looping', () => A.setStrip(!P.strip));
     ui.miAfter = item('Add a loop right after this one', () => A.addLoopAfter());
+    ui.miChapter = item('Loop this chapter', () => A.loopChapter());
     ui.miTap = item('Tap to mark sections', () => A.tapMark(), 'Shift+M');
+    ui.miStepBack = stepBtn('⇤ −1×', 'Move loop back by its length', () => A.shiftSelected(-1));
+    ui.miStepFwd = stepBtn('+1× ⇥', 'Move loop ahead by its length', () => A.shiftSelected(1));
+    ui.miHalve = stepBtn('½×', 'Halve loop length', () => A.scaleSelected(0.5));
+    ui.miDouble = stepBtn('2×', 'Double loop length', () => A.scaleSelected(2));
+    ui.miStepRow = el('div', { class: 'lsm-mi-steps', role: 'group', 'aria-label': 'Step or resize loop' }, ui.miStepBack, ui.miStepFwd, ui.miHalve, ui.miDouble);
+    ui.miShare = item('Copy link with loops', () => A.copyShareLink());
     ui.miSort = item('Number loops by start time', () => A.sortLoops());
     ui.miClear = item('Remove all loops', () => A.clearAll());
     const menu = el('div', { class: 'lsm-menu', role: 'menu', hidden: true },
       ui.miRename,
       ui.miAfter,
+      ui.miChapter,
+      ui.miStepRow,
       ui.miTap,
+      ui.miShare,
       ui.miSort,
       ui.miFine,
       ui.miStrip,
       ui.miClear,
       item('Keyboard shortcuts', toggleHelp));
+    menu.addEventListener('keydown', (e) => {
+      if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+      const items = [...menu.querySelectorAll('[role="menuitem"]')].filter((b) => !b.hidden && !b.closest('[hidden]'));
+      const i = items.indexOf(focused());
+      if (i < 0) return;
+      e.preventDefault();
+      const next = e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? items.length - 1
+          : (i + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+      items[next].focus();
+    });
     return menu;
   }
 
@@ -440,20 +472,29 @@ export function createControls(A) {
   }
 
   // The shortcut sheet (opened from the menu).
-  function buildHelp() {
+  function syncHelp() {
+    if (!ui.helpList) return;
+    const keyOf = (action) => formatBinding(specFor(action, P.keys));
     const rows = [
-      ['Shift+A / Shift+B', 'Start / end at the current time'],
-      ['Shift+S', 'Play the selected loop'],
-      ['Shift+R', 'Looping on / off'],
-      ['Shift+]  /  Shift+[', 'Next / previous loop'],
-      ['Shift+\\', 'Skip this repetition'],
-      ['Shift+Z', 'Restart this repetition'],
-      ['Shift+M', 'Tap to mark: each press ends a section and starts the next'],
+      [`${keyOf('markA')} / ${keyOf('markB')}`, 'Start / end at the current time'],
+      [keyOf('start'), 'Play the selected loop'],
+      [keyOf('toggle'), 'Looping on / off'],
+      [`${keyOf('next')}  /  ${keyOf('prev')}`, 'Next / previous loop'],
+      [keyOf('skipRep'), 'Skip this repetition'],
+      [keyOf('restart'), 'Restart this repetition'],
+      [keyOf('tap'), 'Tap to mark: each press ends a section and starts the next'],
+      [`${keyOf('shiftBack')}  /  ${keyOf('shiftForward')}`, 'Move loop back / ahead by its length'],
+      [`${keyOf('halve')}  /  ${keyOf('double')}`, 'Halve / double loop length'],
       ['Shift+1 … 9', 'Go to loop 1 … 9 (not on AZERTY keyboards)'],
     ];
-    const list = el('div', { class: 'lsm-help-rows' });
-    for (const [k, v] of rows) list.append(el('kbd', { text: k }), el('span', { text: v }));
-    return el('div', { class: 'lsm-help', hidden: true }, el('div', { class: 'lsm-label', text: 'Keyboard shortcuts' }), list);
+    ui.helpList.replaceChildren();
+    for (const [k, v] of rows) ui.helpList.append(el('kbd', { text: k }), el('span', { text: v }));
+  }
+
+  function buildHelp() {
+    ui.helpList = el('div', { class: 'lsm-help-rows' });
+    syncHelp();
+    return el('div', { class: 'lsm-help', hidden: true }, el('div', { class: 'lsm-label', text: 'Keyboard shortcuts' }), ui.helpList);
   }
 
   // Renaming in place: the chip's label turns into a text field.
@@ -468,22 +509,23 @@ export function createControls(A) {
     chip.root.append(input);
     input.focus();
     input.select();
-    const finish = (save) => {
+    const finish = (save, restoreFocus = false) => {
       if (!chip.renaming) return;
       chip.renaming = false;
       const text = input.value;
       input.remove();
       chip.main.hidden = false;
       if (save) A.setName(ui.chips.indexOf(chip), text);
+      if (restoreFocus) chip.main.focus({ preventScroll: true });
     };
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        finish(true);
+        finish(true, true);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        finish(false);
+        finish(false, true);
       }
     });
     input.addEventListener('blur', () => finish(true));
@@ -492,7 +534,24 @@ export function createControls(A) {
   // Opens without a loop too: the settings and the shortcut sheet don't need one.
   function openMenu() {
     const has = ready();
-    for (const mi of [ui.miRename, ui.miAfter, ui.miClear]) mi.hidden = !has;
+    for (const mi of [ui.miRename, ui.miAfter, ui.miStepRow, ui.miShare, ui.miClear]) mi.hidden = !has;
+    const ch = A.currentChapter();
+    ui.miChapter.hidden = !ch;
+    if (ch) ui.miChapter.firstChild.textContent = ch.title ? `Loop chapter: ${ch.title.slice(0, 18)}` : 'Loop this chapter';
+    const tapKbd = ui.miTap.querySelector('kbd');
+    if (tapKbd) {
+      const spec = specFor('tap', P.keys);
+      tapKbd.textContent = formatBinding(spec);
+      tapKbd.hidden = !spec;
+    }
+    const hintOf = (act) => {
+      const s = specFor(act, P.keys);
+      return s ? `  (${formatBinding(s)})` : '';
+    };
+    ui.miStepBack.title = `Move loop back by its length${hintOf('shiftBack')}`;
+    ui.miStepFwd.title = `Move loop ahead by its length${hintOf('shiftForward')}`;
+    ui.miHalve.title = `Halve loop length${hintOf('halve')}`;
+    ui.miDouble.title = `Double loop length${hintOf('double')}`;
     const many = S.loops.length > 1;
     ui.miRename.firstChild.textContent = many ? `Rename loop ${S.sel + 1}` : 'Rename the loop';
     ui.miSort.hidden = !many;
@@ -510,6 +569,7 @@ export function createControls(A) {
   }
 
   function toggleHelp() {
+    if (ui.help.hidden) syncHelp();
     ui.help.hidden = !ui.help.hidden;
   }
 
@@ -538,7 +598,16 @@ export function createControls(A) {
     ui.chipRow = el('div', { class: 'lsm-chips', role: 'toolbar', 'aria-label': 'Loops' }, ui.add);
     bindToolbar(ui.chipRow);
     ui.more = el('button', { class: 'lsm-hb lsm-more', type: 'button', 'aria-label': 'More', title: 'More', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon(I.more, 16));
-    ui.more.addEventListener('click', () => (ui.menu.hidden ? A.openMenu() : A.closeMenu()));
+    ui.more.addEventListener('click', (e) => {
+      if (!ui.menu.hidden) A.closeMenu();
+      else {
+        A.openMenu();
+        if (e.detail === 0) {
+          const first = [...ui.menu.querySelectorAll('[role="menuitem"]')].find((b) => !b.hidden && !b.closest('[hidden]'));
+          if (first) first.focus({ preventScroll: true });
+        }
+      }
+    });
     const close = el('button', { class: 'lsm-hb', type: 'button', 'aria-label': 'Close', title: 'Close' }, icon(I.close, 16));
     close.addEventListener('click', A.closePanel);
     ui.grip = el('span', { class: 'lsm-grip', title: 'Drag to move (double-click: back to the usual place)' }, icon(I.grip, 14));
@@ -783,8 +852,11 @@ export function createControls(A) {
     ui.panel.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!ui.menu.hidden) A.closeMenu();
-        else A.closePanel();
+        if (!ui.menu.hidden) {
+          const hadMenuFocus = ui.menu.contains(focused());
+          A.closeMenu();
+          if (hadMenuFocus) ui.more.focus({ preventScroll: true });
+        } else A.closePanel();
       } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && !isField(e)) {
         e.preventDefault();
         A.undo();
@@ -810,5 +882,5 @@ export function createControls(A) {
     });
   }
 
-  return { buildUI, syncToolbar, startRename, openMenu, closeMenu, cancelEdits, commitEdits, editing };
+  return { buildUI, syncHelp, syncToolbar, startRename, openMenu, closeMenu, cancelEdits, commitEdits, editing };
 }

@@ -24,6 +24,21 @@ export const LIGHT_CSS = `
 .lsm-bar-spotify>svg{width:20px!important;height:20px!important}
 .lsm-bar-spotify.lsm-active>svg{color:#1ed760!important}
 .lsm-bar-spotify .lsm-badge{background:#1ed760!important}
+.lsm-bar-applemusic{width:24px!important;height:28px!important;color:inherit!important}
+.lsm-bar-applemusic>svg{width:19px!important;height:19px!important}
+.lsm-bar-applemusic.lsm-active>svg{color:#fa2d48!important}
+.lsm-bar-applemusic .lsm-badge{background:#fa2d48!important;color:#fff!important}
+.lsm-bar-deezer{width:32px!important;height:32px!important;margin-left:4px!important;color:inherit!important}
+.lsm-bar-deezer>svg{width:20px!important;height:20px!important}
+.lsm-bar-deezer:hover{background:rgba(128,128,128,.15)!important}
+.lsm-bar-deezer.lsm-active>svg{color:#a238ff!important}
+.lsm-bar-deezer .lsm-badge{background:#a238ff!important;color:#fff!important}
+.lsm-bar-tidal{width:32px!important;height:32px!important;margin-left:4px!important;color:inherit!important}
+.lsm-bar-tidal>svg{width:20px!important;height:20px!important}
+.lsm-bar-amazonmusic{width:32px!important;height:32px!important;margin-left:4px!important;color:inherit!important}
+.lsm-bar-amazonmusic>svg{width:20px!important;height:20px!important}
+.lsm-bar-generic{width:28px!important;height:28px!important;margin:0 4px!important;color:inherit!important}
+.lsm-bar-generic>svg{width:20px!important;height:20px!important}
 .lsm-bar-ytmusic{width:36px!important;height:36px!important;margin-right:8px!important}
 .lsm-bar-ytmusic>svg{width:24px!important;height:24px!important}
 .lsm-bar-ytmusic:hover{background:rgba(255,255,255,.1)!important}
@@ -121,6 +136,9 @@ transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15),visibili
 .lsm-panel .lsm-menu{position:absolute;top:40px;right:10px;z-index:6;max-height:calc(100% - 52px);overflow-y:auto;min-width:220px;padding:5px;border-radius:10px;background:rgb(40,40,45);box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--line)}
 .lsm-panel .lsm-mi{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;height:32px;padding:0 10px;border-radius:7px;text-align:left;color:#fff;font-size:12.5px}
 .lsm-panel .lsm-mi:hover,.lsm-panel .lsm-mi:focus-visible{background:rgba(255,255,255,.12)}
+.lsm-panel .lsm-mi-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:3px 4px}
+.lsm-panel .lsm-mi-step{height:28px;border-radius:6px;background:rgba(255,255,255,.08);color:#fff;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.lsm-panel .lsm-mi-step:hover,.lsm-panel .lsm-mi-step:focus-visible{background:rgba(255,255,255,.16)}
 .lsm-panel .lsm-mi kbd,.lsm-panel .lsm-help kbd{padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.12);color:var(--mute);font:600 10.5px/16px inherit;font-family:inherit;white-space:nowrap}
 .lsm-panel .lsm-help{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
 .lsm-panel .lsm-help-rows{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;align-items:center;font-size:12px}

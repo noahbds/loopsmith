@@ -66,8 +66,16 @@ async function extension(out, target) {
     version: pkg.version,
     description: DESCRIPTION,
     permissions: ['storage', 'scripting', 'activeTab'],
-    optional_host_permissions: ['*://*/*'],
+    optional_host_permissions: ['*://*/*', 'file:///*'],
     action: { default_title: 'Loopsmith', default_popup: 'popup.html' },
+    commands: {
+      'toggle-looping': { description: 'Turn looping on or off' },
+      'play-loop': { description: 'Play the selected loop from its start' },
+      'mark-start': { description: 'Set loop start (A) to the current time' },
+      'mark-end': { description: 'Set loop end (B) to the current time' },
+      'next-loop': { description: 'Skip to the next loop' },
+      'prev-loop': { description: 'Go to the previous loop' },
+    },
     content_scripts: [
       ...PAGE_WORLD.map((p) => ({ matches: p.matches, js: p.js, run_at: 'document_start', all_frames: true, world: 'MAIN' })),
       { matches: MATCHES, js: ['content.js'], run_at: 'document_idle', all_frames: true },

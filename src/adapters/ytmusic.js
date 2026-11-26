@@ -24,11 +24,13 @@ function seekViaPlayer(t) {
 export default {
   ...youtube,
   id: 'ytmusic',
-  legacyStoreKey: undefined, // version 1 never ran here
   floating: true,
   dockOnly: true,
   dockInset: 72, // ytmusic-player-bar
   endGuard: 1.5,
+  // Not inherited: the old store only exists on youtube.com, and running the one-time migration
+  // here would mark it done (the flag is shared) before youtube.com could copy anything.
+  legacyStoreKey: undefined,
   engaged: () => true,
   buttonHost: undefined,
   // The bottom bar was redesigned in 2026 (ytmusic-miniplayer); the old one is kept as a fallback.
@@ -45,5 +47,9 @@ export default {
 
   seek(v, t) {
     if (!seekViaPlayer(t)) v.currentTime = t; // no page-world helper answered: seek the element
+  },
+
+  mediaUrl(_p, videoId) {
+    return videoId && videoId.startsWith('yt:') ? `https://music.youtube.com/watch?v=${videoId.slice(3)}` : '';
   },
 };

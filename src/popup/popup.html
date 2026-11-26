@@ -8,30 +8,86 @@
 </head>
 <body>
   <header>
-    <img src="icon.svg" alt="" width="28" height="28">
-    <h1>Loopsmith</h1>
+    <div class="brand">
+      <img src="icon.svg" alt="" width="24" height="24">
+      <h1>Loopsmith</h1>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tabBtnPage" data-tab="page" aria-selected="true">Page</button>
+      <button type="button" role="tab" id="tabBtnSaved" data-tab="saved" aria-selected="false">Saved</button>
+      <button type="button" role="tab" id="tabBtnKeys" data-tab="keys" aria-selected="false">Keys</button>
+    </nav>
   </header>
 
-  <main>
+  <div id="permBanner" class="perm-banner" hidden>
+    <p class="perm-title" id="permTitle"></p>
+    <p class="perm-sub" id="permSub"></p>
+    <div class="mini-btns">
+      <button type="button" id="permAllowBtn" class="pill-btn accent">Allow new sites</button>
+      <button type="button" id="permDismissBtn" class="pill-btn" hidden>Close</button>
+    </div>
+  </div>
+
+  <section id="panePage" class="pane" role="tabpanel" aria-labelledby="tabBtnPage">
     <p class="site" id="site"></p>
     <p class="status" id="status"></p>
     <div class="actions">
       <button type="button" id="primary" class="primary" hidden></button>
       <button type="button" id="secondary" class="link" hidden></button>
     </div>
+
+    <div id="nowCard" class="card" hidden>
+      <div class="card-head">
+        <span class="dot" id="nowDot"></span>
+        <span class="card-title" id="nowTitle"></span>
+      </div>
+      <p class="card-sub" id="nowSub"></p>
+      <div class="mini-btns" id="nowBtns"></div>
+    </div>
+
+    <div id="otherCard" class="card" hidden>
+      <div class="card-head">
+        <span class="dot on"></span>
+        <span class="card-title" id="otherTitle"></span>
+      </div>
+      <p class="card-sub" id="otherSub"></p>
+      <div class="mini-btns" id="otherBtns"></div>
+    </div>
+
     <p class="note" id="note" hidden></p>
     <button type="button" id="diag" class="link">Copy diagnostics for a bug report</button>
-    <textarea id="diagText" readonly hidden rows="8" spellcheck="false" aria-label="Diagnostics"></textarea>
-  </main>
+    <textarea id="diagText" readonly hidden rows="7" spellcheck="false" aria-label="Diagnostics"></textarea>
+  </section>
 
-  <footer>
-    <p><kbd>Shift</kbd> <kbd>A</kbd> / <kbd>B</kbd> start / end at now</p>
-    <p><kbd>Shift</kbd> <kbd>S</kbd> play loop · <kbd>Shift</kbd> <kbd>R</kbd> looping on / off</p>
-    <p><kbd>Shift</kbd> <kbd>]</kbd> / <kbd>[</kbd> next / previous loop</p>
-    <p><kbd>Shift</kbd> <kbd>\</kbd> skip repetition · <kbd>Shift</kbd> <kbd>Z</kbd> restart it</p>
-    <p><kbd>Shift</kbd> <kbd>1</kbd>…<kbd>9</kbd> go to that loop</p>
-    <p><kbd>Shift</kbd> <kbd>M</kbd> tap to mark sections</p>
-  </footer>
+  <section id="paneSaved" class="pane" role="tabpanel" aria-labelledby="tabBtnSaved" hidden>
+    <div class="search-row">
+      <input type="search" id="searchInput" placeholder="Search saved tracks or videos…" autocomplete="off" spellcheck="false" aria-label="Search saved loops">
+    </div>
+    <div id="undoBar" class="undo-bar" hidden>
+      <span id="undoText"></span>
+      <button type="button" id="undoBtn" class="pill-btn">Undo</button>
+    </div>
+    <div id="savedList" class="saved-list" role="list"></div>
+    <p class="empty-msg" id="savedEmpty" hidden></p>
+    <div class="backup-bar">
+      <button type="button" id="exportBtn" class="pill-btn">Export JSON</button>
+      <button type="button" id="importBtn" class="pill-btn">Import JSON</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <p class="note" id="backupNote" hidden></p>
+  </section>
+
+  <section id="paneKeys" class="pane" role="tabpanel" aria-labelledby="tabBtnKeys" hidden>
+    <p class="keys-hint">Click a shortcut to change it (Backspace turns it off).</p>
+    <div id="keysList" class="keys-list"></div>
+    <p class="keys-foot"><kbd>Shift</kbd>+<kbd>1</kbd>…<kbd>9</kbd> jumps to loop 1…9.</p>
+    <div class="keys-actions">
+      <button type="button" id="resetKeysBtn" class="pill-btn">Reset defaults</button>
+      <button type="button" id="browserKeysBtn" class="link">Browser-wide shortcuts</button>
+    </div>
+    <p class="note" id="keysNote" hidden></p>
+  </section>
+
   <script src="popup.js"></script>
 </body>
 </html>

@@ -2,23 +2,20 @@
 
 import { MAX_COUNT, MAX_SETS, PALETTE, BETWEEN, ENDS } from '../core/constants.js';
 import { clamp, fmt } from '../core/util.js';
+import { cleanTitle, cleanUrl } from '../core/backup.js';
+import { stripShareHash } from '../core/share.js';
+import { chapterAt, mediaTrackChapters, normalizeChapters } from '../core/chapters.js';
+import { cleanKeyMap } from '../core/keys.js';
 import * as E from '../core/engine.js';
 import * as V from '../core/view.js';
-
-// Before 1.4 one "when done" choice covered both: continue = play / play, next = jump / pause,
-// pause = play / pause; and playing the set again was a separate number of rounds (1 = once).
-function legacyEnd(prefs) {
-  if (prefs.setsForever === true || Number(prefs.sets) > 1) return 'repeat';
-  return prefs.after === 'next' || prefs.after === 'pause' ? 'pause' : 'play';
-}
 
 // The settings as stored, read back with every value checked.
 function readPrefs(prefs) {
   return {
     count: clamp(Math.round(Number(prefs.count)) || 5, 1, MAX_COUNT),
     infinite: prefs.infinite === true,
-    between: BETWEEN.includes(prefs.between) ? prefs.between : prefs.after === 'next' ? 'jump' : 'play',
-    end: ENDS.includes(prefs.end) ? prefs.end : legacyEnd(prefs),
+    between: BETWEEN.includes(prefs.between) ? prefs.between : 'play',
+    end: ENDS.includes(prefs.end) ? prefs.end : 'play',
     strip: prefs.strip !== false,   // show the small strip while looping with the editor closed
     fine: prefs.fine === true,      // times to hundredths of a second
     hintSeen: prefs.hintSeen === true,
@@ -27,6 +24,7 @@ function readPrefs(prefs) {
     autoOn: prefs.autoOn === true,  // turn looping on by itself when media with saved loops loads
     autoStart: prefs.autoStart === true, // ...and play from the first loop's start
     pos: prefs.pos && typeof prefs.pos === 'object' ? prefs.pos : {}, // dragged offset of the panel, per site
+    keys: cleanKeyMap(prefs.keys),  // custom shortcut overrides, action -> spec
   };
 }
 
@@ -129,15 +127,80 @@ export function createCore(adapter, store) {
   // "video" or "track", for messages.
   const mediaWord = () => (adapter.dockOnly || (S.video && S.video.tagName === 'AUDIO') ? 'track' : 'video');
 
+  // Title of the loaded video or track, for the saved-loops library and toolbar popup.
+  function currentTitle() {
+    try {
+      if (adapter.mediaTitle) {
+        const t = cleanTitle(adapter.mediaTitle(S.player));
+        if (t) return t;
+      }
+      const md = navigator.mediaSession && navigator.mediaSession.metadata;
+      if (md && md.title) {
+        const joined = md.artist ? `${md.title} — ${md.artist}` : md.title;
+        const t = cleanTitle(joined);
+        if (t) return t;
+      }
+    } catch (_) { /* ignore */ }
+    if (typeof location !== 'undefined' && location.protocol === 'file:') {
+      const name = decodeURIComponent(location.pathname.split('/').pop() || '');
+      if (name) return cleanTitle(name);
+    }
+    const raw = (typeof document !== 'undefined' && document.title) || '';
+    const stripped = raw.replace(/\s*[-–—|·]\s*(YouTube( Music)?|Spotify|SoundCloud|Bandcamp|Vimeo|Twitch|Bilibili|Dailymotion|Apple Music|Deezer|TIDAL|Amazon Music)\s*$/i, '');
+    return cleanTitle(stripped || raw);
+  }
+
+  function currentUrl() {
+    try {
+      if (adapter.mediaUrl) {
+        const u = cleanUrl(adapter.mediaUrl(S.player, S.videoId));
+        if (u) return u;
+      }
+      if (typeof location !== 'undefined' && location.href) {
+        return cleanUrl(stripShareHash(location.href));
+      }
+    } catch (_) { /* ignore */ }
+    return '';
+  }
+
+  function chapters() {
+    if (!mediaOk()) return [];
+    let list = [];
+    if (adapter.chapters) {
+      try { list = normalizeChapters(adapter.chapters(S.player, S.duration), S.duration); } catch (_) { list = []; }
+    }
+    if (!list.length) list = mediaTrackChapters(S.video, S.duration);
+    return list;
+  }
+
+  function currentChapter() {
+    if (!S.video || !S.trusted || isAd()) return null;
+    return chapterAt(chapters(), S.video.currentTime);
+  }
+
   function rememberLoops() {
     if (!S.videoId || !S.ranged) return;
     // t: last change. No loops left: an empty entry stays, so loops saved under a nearby key
     // (see savedEntry in tracking.js) are not copied back in.
-    store.put(S.videoId, { loops: E.serializeLoops(S.loops), t: Date.now() });
+    if (!S.loops.length) {
+      store.put(S.videoId, { loops: [], t: Date.now() });
+      return;
+    }
+    const prev = store.get(S.videoId);
+    const title = currentTitle() || (prev && prev.title) || '';
+    const url = currentUrl() || (prev && prev.url) || '';
+    store.put(S.videoId, {
+      loops: E.serializeLoops(S.loops),
+      t: Date.now(),
+      ...(prev && prev.u ? { u: prev.u } : {}),
+      ...(title ? { title } : {}),
+      ...(url ? { url } : {}),
+    });
   }
 
   function rememberPrefs() {
-    store.setPrefs({ count: P.count, infinite: P.infinite, between: P.between, end: P.end, autoOn: P.autoOn, autoStart: P.autoStart, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever });
+    const keys = Object.keys(P.keys).length ? P.keys : undefined;
+    store.setPrefs({ count: P.count, infinite: P.infinite, between: P.between, end: P.end, autoOn: P.autoOn, autoStart: P.autoStart, strip: P.strip, fine: P.fine, hintSeen: P.hintSeen, pos: P.pos, sets: P.sets, setsForever: P.setsForever, ...(keys ? { keys } : {}) });
   }
 
   // What a bug report needs to know about this page. Nothing here leaves the browser unless the
@@ -174,5 +237,5 @@ export function createCore(adapter, store) {
     Object.assign(P, readPrefs(store.getPrefs()));
   }
 
-  return { adapter, store, S, P, ui, L, floating, reloadPrefs, diagnostics, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, loopLabel, mediaOk, mediaWord, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, runOpts, skipped, stripWanted, toPct, viewEnd, viewStart };
+  return { adapter, store, S, P, ui, L, floating, reloadPrefs, diagnostics, chapters, currentChapter, currentTitle, currentUrl, cur, describe, digits, fineStep, engaged, finished, fitView, setView, fmtT, focused, freeColor, fromFrac, isAd, loopLabel, mediaOk, mediaWord, moreRounds, newLoop, ready, rememberLoops, rememberPrefs, roundText, runOpts, skipped, stripWanted, toPct, viewEnd, viewStart };
 }

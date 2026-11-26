@@ -2,40 +2,41 @@
 //
 // Layout in the backend (extension storage), one key per item so that
 // tabs never overwrite each other's entries:
-//   "prefs"            { count, infinite, after }
-//   "m:<media key>"    { loops: [...], t: last change (ms), u?: last time loaded (ms) }   e.g. "m:yt:dQw4w9WgXcQ"
+//   "prefs"            { count, infinite, between, end, ... }
+//   "m:<media key>"    { loops: [...], t: last change (ms), u?: last load (ms), title?: string, url?: string }
 //   anything else      small bookkeeping values (e.g. "mig:v1")
 //
-// A backend is { getAll(): Promise<object>, set(obj): Promise, remove(keys): Promise,
-// onChange?(cb) } where cb receives { key: newValue | undefined }.
+// A backend is { getAll(): Promise<object>, get?(keys): Promise<object>, set(obj): Promise,
+// remove(keys): Promise, onChange?(cb) } where cb receives { key: newValue | undefined }.
 
 import { MAX_SAVED } from './constants.js';
 
 /**
  * @typedef {object} Backend
  * @property {() => Promise<Record<string, any>>} getAll
+ * @property {(keys: string[]) => Promise<Record<string, any>>} [get]
  * @property {(obj: Record<string, any>) => Promise<any>} set
  * @property {(keys: string[]) => Promise<any>} remove
  * @property {(cb: (changes: Record<string, any>) => void) => void} [onChange]
  */
 
-/** @typedef {{ loops: any[], t?: number, u?: number }} Entry */
+/** @typedef {{ loops: any[], t?: number, u?: number, title?: string, url?: string }} Entry */
 
 // An entry's last use: loaded or changed, whichever is later.
 /** @param {Entry | undefined} e */
-const lastUse = (e) => Math.max((e && e.t) || 0, (e && e.u) || 0);
-
+export const lastUse = (e) => Math.max((e && e.t) || 0, (e && e.u) || 0);
 
 const PREFS = 'prefs';
 const MEDIA = 'm:';
+const MIG_V1 = 'mig:v1';
 /** @param {unknown} x @returns {x is Record<string, any>} */
 const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 
 /**
  * @param {Backend} backend
- * @param {{ maxSaved?: number, delay?: number }} [opts]
+ * @param {{ maxSaved?: number, delay?: number, lazy?: boolean }} [opts]
  */
-export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {}) {
+export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300, lazy = false } = {}) {
   /** @type {Record<string, any>} */
   let prefs = {};
   /** @type {Map<string, Entry>} */
@@ -44,6 +45,12 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
   const meta = new Map();
   /** @type {Map<string, any>} */
   const pending = new Map(); // backend key -> value to write (undefined = remove)
+  /** @type {Set<string>} */
+  const loaded = new Set(); // media ids fetched in lazy mode
+  let allLoaded = false;
+  let listening = false;
+  /** @type {Promise<void> | null} */
+  let loadingAll = null;
   /** @type {ReturnType<typeof setTimeout> | 0} */
   let timer = 0;
   /** @type {((keys: string[]) => void)[]} */
@@ -57,6 +64,7 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
       prefs = isObj(value) ? value : {};
     } else if (key.startsWith(MEDIA)) {
       const id = key.slice(MEDIA.length);
+      loaded.add(id);
       if (!isObj(value)) {
         media.delete(id);
         return;
@@ -69,6 +77,16 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     } else {
       meta.set(key, value);
     }
+  }
+
+  function bindChanges() {
+    if (listening || !backend.onChange) return;
+    listening = true;
+    backend.onChange((changes) => {
+      const keys = Object.keys(changes).filter((k) => !pending.has(k));
+      for (const k of keys) take(k, changes[k]);
+      if (keys.length) for (const cb of listeners) cb(keys);
+    });
   }
 
   function schedule() {
@@ -94,6 +112,21 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     for (const cb of events.prune) cb(gone.length);
   }
 
+  async function loadAll() {
+    if (allLoaded) return;
+    if (loadingAll) return loadingAll;
+    loadingAll = (async () => {
+      let all = {};
+      try { all = (await backend.getAll()) || {}; } catch (_) { /* start clean */ }
+      for (const [k, v] of Object.entries(all)) {
+        if (!pending.has(k)) take(k, v);
+      }
+      allLoaded = true;
+      loadingAll = null;
+    })();
+    return loadingAll;
+  }
+
   function flush() {
     if (timer) clearTimeout(timer);
     timer = 0;
@@ -103,9 +136,13 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     const set = {};
     /** @type {string[]} */
     const gone = [];
+    let wroteMedia = false;
     for (const [k, v] of pending) {
       if (v === undefined) gone.push(k);
-      else set[k] = v;
+      else {
+        set[k] = v;
+        if (k.startsWith(MEDIA)) wroteMedia = true;
+      }
     }
     pending.clear();
     const jobs = [];
@@ -117,22 +154,46 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     } catch (_) {
       failed();
     }
-    return Promise.all(jobs).then(() => {}, failed);
+    // In lazy mode, load the full key set after writes settle so pruning can act if needed.
+    return Promise.all(jobs).then(() => {
+      if (wroteMedia && !allLoaded) {
+        loadAll().then(() => { if (media.size > maxSaved) flush(); }, () => {});
+      }
+    }, failed);
   }
 
   return {
     async load() {
-      let all = {};
-      try { all = (await backend.getAll()) || {}; } catch (_) { /* start clean */ }
-      for (const [k, v] of Object.entries(all)) take(k, v);
-      if (backend.onChange) {
-        backend.onChange((changes) => {
-          const keys = Object.keys(changes).filter((k) => !pending.has(k));
-          for (const k of keys) take(k, changes[k]);
-          if (keys.length) for (const cb of listeners) cb(keys);
-        });
+      if (lazy && backend.get) {
+        let init = {};
+        try { init = (await backend.get([PREFS, MIG_V1])) || {}; } catch (_) { /* start clean */ }
+        for (const [k, v] of Object.entries(init)) take(k, v);
+      } else {
+        await loadAll();
+      }
+      bindChanges();
+    },
+
+    loadAll,
+
+    // Ensures the given media ids have been fetched from storage (no-op when not in lazy mode).
+    /** @param {string[]} ids */
+    async ensure(ids) {
+      if (allLoaded || !backend.get) return;
+      const missing = ids.filter((id) => id && !loaded.has(id) && !media.has(id) && !pending.has(MEDIA + id));
+      if (!missing.length) return;
+      /** @type {Record<string, any>} */
+      let got = {};
+      try { got = (await backend.get(missing.map((id) => MEDIA + id))) || {}; } catch (_) { /* ignore */ }
+      for (const id of missing) {
+        const k = MEDIA + id;
+        loaded.add(id);
+        if (!pending.has(k) && Object.prototype.hasOwnProperty.call(got, k)) take(k, got[k]);
       }
     },
+
+    /** @param {string} id */
+    isLoaded: (id) => allLoaded || !backend.get || loaded.has(id) || media.has(id) || pending.has(MEDIA + id),
 
     /** @param {string} id */
     get: (id) => media.get(id) || null,
@@ -140,21 +201,44 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
     has: (id) => media.has(id),
     ids: () => [...media.keys()],
 
+    // Non-empty saved entries, most recently used first (for the popup library).
+    entries() {
+      /** @type {{ id: string, entry: Entry }[]} */
+      const out = [];
+      for (const [id, entry] of media) {
+        if (entry && Array.isArray(entry.loops) && entry.loops.length > 0) out.push({ id, entry });
+      }
+      out.sort((a, b) => lastUse(b.entry) - lastUse(a.entry));
+      return out;
+    },
+
     // entry = null removes it.
     /** @param {string} id @param {Entry | null} entry */
     put(id, entry) {
+      loaded.add(id);
       if (entry) media.set(id, entry);
       else media.delete(id);
       queue(MEDIA + id, entry || undefined);
     },
 
-    // The media's loops were just loaded: remember when (at most once an hour, to keep writes rare).
-    /** @param {string} id */
-    touch(id) {
+    // The media's loops were just loaded: remember when (at most once an hour, to keep writes rare),
+    // and backfill missing title/url on items saved before 1.7.
+    /** @param {string} id @param {{ title?: string, url?: string }} [info] */
+    touch(id, info) {
       const e = media.get(id);
+      if (!e) return;
       const now = Date.now();
-      if (!e || now - (e.u || 0) < 3600e3) return;
-      const next = { ...e, u: now };
+      const addTitle = !e.title && info && info.title ? info.title : '';
+      const addUrl = !e.url && info && info.url ? info.url : '';
+      const due = now - (e.u || 0) >= 3600e3;
+      if (!due && !addTitle && !addUrl) return;
+      /** @type {Entry} */
+      const next = {
+        ...e,
+        ...(due ? { u: now } : {}),
+        ...(addTitle ? { title: addTitle } : {}),
+        ...(addUrl ? { url: addUrl } : {}),
+      };
       media.set(id, next);
       queue(MEDIA + id, next);
     },
@@ -194,7 +278,7 @@ export function createStore(backend, { maxSaved = MAX_SAVED, delay = 300 } = {})
 // ("ysl:v1", the YouTube adapter's legacyStoreKey):
 // { prefs, videos: { <video id>: { loops, t } } }. Copies it over once; the old entry is left in
 // place so an older copy of the script still installed somewhere keeps working.
-const V1_DONE = 'mig:v1';
+const V1_DONE = MIG_V1;
 
 /**
  * @param {ReturnType<typeof createStore>} store
